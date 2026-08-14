@@ -1,0 +1,198 @@
+id: https://github.com/phzwart/phridge/schema/cctbx_maps
+name: phridge_cctbx_maps
+title: Canonical cctbx map types
+description: |
+  Wire types for maptbx grids, CCP4/MRC maps, and Fourier map coefficients.
+
+  Packed npz:
+    RealMap:          data float64 shape (nx, ny, nz)
+    ComplexMap:       data complex128 shape (nx, ny, nz)
+    MapCoefficients:  hkl int32[N,3], data complex128[N]
+    CrystalGridding:  JSON only (no blob)
+    EmMap:            same data as RealMap; wrapping / voxels in JSON meta
+version: "1"
+default_range: string
+prefixes:
+  phridge_maps: https://github.com/phzwart/phridge/schema/cctbx_maps/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  phridge_refl: https://github.com/phzwart/phridge/schema/cctbx_reflections/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_maps
+imports:
+  - linkml:types
+  - cctbx
+  - cctbx_reflections
+
+enums:
+  MapSpace:
+    permissible_values:
+      asu:
+        description: Asymmetric unit / symmetry-reduced grid
+      p1:
+        description: Full unit cell (P1), typical FFT real map
+  ExperimentType:
+    permissible_values:
+      xray:
+        description: MX / wrapping crystal map
+      cryo_em:
+        description: Cryo-EM / MRC map (typically non-wrapping)
+      neutron:
+      other:
+
+classes:
+  CrystalGridding:
+    is_a: CctbxObject
+    description: >
+      Canonical maptbx.crystal_gridding. JSON only.
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      n_real:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+      resolution_factor:
+        range: float
+        description: Typical FFT factor (e.g. 1/3) when known
+      d_min:
+        range: float
+        description: Resolution (Å) used to choose the grid, when known
+      space:
+        range: MapSpace
+        required: true
+
+  RealMap:
+    is_a: CctbxObject
+    description: >
+      Canonical real-space map (maptbx / iotbx.ccp4_map / flex.double 3-D).
+      Packed data.shape must equal n_real (nx, ny, nz).
+    attributes:
+      label:
+        description: Map name (2FOFCWT, FOFC, etc.)
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      origin:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+        description: Grid origin (grid units)
+      n_real:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+      space:
+        range: MapSpace
+        required: true
+      dtype:
+        required: true
+        description: Canonical store dtype; v1 is float64
+
+  ComplexMap:
+    is_a: CctbxObject
+    description: >
+      Complex grid (e.g. P1 Fourier map before taking the real part).
+      Packed data is complex128 with shape n_real.
+    attributes:
+      label:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      origin:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+      n_real:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+      space:
+        range: MapSpace
+        required: true
+      dtype:
+        required: true
+        description: Canonical store dtype; v1 is complex128
+
+  MapCoefficients:
+    is_a: CctbxObject
+    description: >
+      Complex miller array used as FFT map coefficients
+      (cctbx miller array of Fcalc / 2mFo-DFc coefficients).
+      npz: hkl int32[N,3], data complex128[N].
+    attributes:
+      label:
+      miller:
+        range: MillerArray
+        required: true
+        inlined: true
+        description: Must have observation_type complex
+
+  EmMap:
+    is_a: CctbxObject
+    description: >
+      Canonical iotbx.map_manager map (cryo-EM or wrapping MX).
+      Packed data same as RealMap. Extra metadata is EM/MRC specific
+      origin, voxel size, wrapping, and experiment_type.
+    attributes:
+      label:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      origin:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+        description: Grid origin
+      n_real:
+        range: integer
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+      space:
+        range: MapSpace
+        required: true
+      dtype:
+        required: true
+      experiment_type:
+        range: ExperimentType
+        required: true
+      wrapping:
+        range: boolean
+        required: true
+      is_mask:
+        range: boolean
+        required: true
+      pixel_sizes:
+        range: float
+        multivalued: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+        description: Voxel size (Å) along a, b, c
+      origin_cart:
+        range: float
+        multivalued: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3
+        description: Cartesian origin shift (Å), map_manager.shift_cart
+      resolution:
+        range: float
+        description: Nominal high resolution (Å) when known
+

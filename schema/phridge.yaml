@@ -1,0 +1,190 @@
+id: https://github.com/phzwart/phridge/schema/phridge
+name: phridge
+title: phridge job and Redis protocol
+description: |
+  Job envelopes and object references for the Redis object store.
+  Science types live in schema/cctbx*.yaml. Redis points at them with
+  kind=cctbx and cctbx_type set to the class name.
+version: "1"
+default_range: string
+prefixes:
+  phridge: https://github.com/phzwart/phridge/schema/phridge/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  phridge_refl: https://github.com/phzwart/phridge/schema/cctbx_reflections/
+  phridge_maps: https://github.com/phzwart/phridge/schema/cctbx_maps/
+  phridge_xyz: https://github.com/phzwart/phridge/schema/cctbx_coordinates/
+  phridge_geom: https://github.com/phzwart/phridge/schema/cctbx_geometry/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge
+imports:
+  - linkml:types
+  - cctbx
+  - cctbx_reflections
+  - cctbx_maps
+  - cctbx_coordinates
+  - cctbx_geometry
+
+enums:
+  ObjectKind:
+    permissible_values:
+      array:
+        description: Contiguous numeric buffer (raw or npy)
+      json:
+        description: UTF-8 JSON document
+      blob:
+        description: Opaque bytes plus content_type
+      cctbx:
+        description: Instance of a phridge_cctbx class; see cctbx_type
+  JobStatus:
+    permissible_values:
+      queued:
+      running:
+      done:
+      error:
+  ByteOrder:
+    permissible_values:
+      little:
+      big:
+  Compression:
+    permissible_values:
+      none:
+      gzip:
+
+classes:
+  ArrayMeta:
+    attributes:
+      dtype:
+        required: true
+        description: numpy dtype name (float64, int32, complex128, …)
+      shape:
+        range: integer
+        multivalued: true
+        required: true
+      order:
+        description: Memory order; v1 is C
+
+  BlobMeta:
+    attributes:
+      content_type:
+        required: true
+
+  ObjectRef:
+    description: >
+      Pointer at bytes in Redis plus enough metadata to decode them.
+      For kind=cctbx, meta is the inlined cctbx class (CrystalSymmetry,
+      MillerArray, or RealMap). Binary buffers for miller/map are a
+      packed npz at key.
+    attributes:
+      kind:
+        range: ObjectKind
+        required: true
+      key:
+        description: Redis key for bytes; omitted for JSON-only CrystalSymmetry
+      dtype:
+        description: Element dtype when kind=array
+      shape:
+        range: integer
+        multivalued: true
+        description: Shape when kind=array
+      byte_order:
+        range: ByteOrder
+      compression:
+        range: Compression
+      cctbx_type:
+        description: Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry)
+      meta:
+        description: Kind-specific JSON (ArrayMeta, BlobMeta, or a CctbxObject)
+    rules:
+      - title: cctbx ObjectRef names a class and carries meta
+        description: kind=cctbx requires cctbx_type and meta (JSON metadata; npz at key when needed)
+        preconditions:
+          slot_conditions:
+            kind:
+              equals_string: cctbx
+        postconditions:
+          slot_conditions:
+            cctbx_type:
+              required: true
+            meta:
+              required: true
+      - title: array ObjectRef has a Redis key
+        preconditions:
+          slot_conditions:
+            kind:
+              equals_string: array
+        postconditions:
+          slot_conditions:
+            key:
+              required: true
+
+  JobError:
+    attributes:
+      type:
+        required: true
+      message:
+        required: true
+      traceback:
+        required: false
+
+  JobEnvelope:
+    attributes:
+      job_id:
+        identifier: true
+        required: true
+      op:
+        required: true
+      schema_version:
+        range: integer
+        required: true
+        equals_number: 1
+        description: Must match this schema file version (1)
+      inputs:
+        range: ObjectRef
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        description: Map of input name to ObjectRef
+      outputs:
+        range: ObjectRef
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        description: Map of output name to ObjectRef (filled by worker)
+      status:
+        range: JobStatus
+        required: true
+      error:
+        range: JobError
+        inlined: true
+      created_at:
+        range: datetime
+      updated_at:
+        range: datetime
+
+  SlotBinding:
+    attributes:
+      name:
+        identifier: true
+        required: true
+      type:
+        required: true
+        description: Generic kind (array, json, blob) or cctbx class name
+
+  OpSpec:
+    attributes:
+      name:
+        identifier: true
+        required: true
+      schema_version:
+        range: integer
+        required: true
+      inputs:
+        range: SlotBinding
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+      outputs:
+        range: SlotBinding
+        multivalued: true
+        inlined: true
+        inlined_as_list: false

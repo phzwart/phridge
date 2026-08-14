@@ -1,0 +1,159 @@
+id: https://github.com/phzwart/phridge/schema/cctbx_coordinates
+name: phridge_cctbx_coordinates
+title: Canonical cctbx coordinate / model types
+description: |
+  Wire types for sites_cart/sites_frac, iotbx.pdb.hierarchy, and
+  cctbx.xray.structure.
+
+  Packed npz:
+    CartesianSites / FractionalSites:  xyz float64[N,3]
+    Hierarchy:  xyz, occupancy, b_iso; optional u_cart [N,6] and uij_defined
+    XrayStructure:  sites_frac, occupancy, u_iso, u_star [N,6]
+
+  Atom and scatterer labels stay in JSON (index-aligned with npz rows).
+  Large models may later need a packed label table; v1 is JSON labels.
+version: "1"
+default_range: string
+prefixes:
+  phridge_xyz: https://github.com/phzwart/phridge/schema/cctbx_coordinates/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_xyz
+imports:
+  - linkml:types
+  - cctbx
+
+classes:
+  CartesianSites:
+    is_a: CctbxObject
+    description: >
+      cctbx xrs.sites_cart() / hierarchy atoms xyz in Å.
+      npz array xyz float64[N,3].
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        inlined: true
+        description: Optional; needed to convert to fractional
+      n_sites:
+        range: integer
+        required: true
+      dtype:
+        required: true
+
+  FractionalSites:
+    is_a: CctbxObject
+    description: >
+      cctbx xrs.sites_frac(). npz array xyz float64[N,3].
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      n_sites:
+        range: integer
+        required: true
+      dtype:
+        required: true
+
+  Atom:
+    description: >
+      One iotbx.pdb.hierarchy atom label. xyz/occ/b live in the parent
+      Hierarchy npz at the same index.
+    attributes:
+      i:
+        range: integer
+        required: true
+        description: Row index into packed xyz; same i_seq as scatterers and restraints
+      name:
+        required: true
+      element:
+        required: true
+      model_id:
+        description: Model id string (usually "1")
+      chain_id:
+        required: true
+      resseq:
+        range: integer
+        required: true
+      icode:
+        description: Insertion code; empty if none
+      resname:
+        required: true
+      altloc:
+        description: Alternate conformer; empty if none
+      hetero:
+        range: boolean
+        required: true
+
+  Hierarchy:
+    is_a: CctbxObject
+    description: >
+      Canonical iotbx.pdb.hierarchy.root. Cartesian frame.
+      npz: xyz, occupancy, b_iso; optional u_cart [N,6] U in Å² and
+      uij_defined uint8 mask (PDB ANISOU).
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        inlined: true
+      n_atoms:
+        range: integer
+        required: true
+      frame:
+        range: CoordinateFrame
+        required: true
+      has_uij:
+        range: boolean
+        required: true
+        description: True if u_cart is present in the npz
+      atoms:
+        range: Atom
+        multivalued: true
+        inlined: true
+        required: true
+
+  Scatterer:
+    description: >
+      One cctbx.xray.scatterer label. Numeric site/occ/u live in the
+      parent XrayStructure npz at the same index.
+    attributes:
+      i:
+        range: integer
+        required: true
+        description: Row index into packed sites; same i_seq as Hierarchy atoms and restraints
+      scattering_type:
+        required: true
+        description: cctbx scattering type (C, N, S, AU, water, …)
+      fp:
+        range: float
+        description: f' when set
+      fdp:
+        range: float
+        description: f'' when set
+      anisotropic:
+        range: boolean
+        required: true
+        description: If true, npz u_star[i] is live (cctbx u_star, fractional)
+      use_u_iso:
+        range: boolean
+        required: true
+        description: cctbx flags.use_u_iso(); may be true together with anisotropic
+
+  XrayStructure:
+    is_a: CctbxObject
+    description: >
+      Canonical cctbx.xray.structure.
+      npz: sites_frac [N,3], occupancy [N], u_iso [N], u_star [N,6]
+      (U* fractional, adptbx.u_cart_as_u_star). Mixed iso/aniso allowed.
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      n_scatterers:
+        range: integer
+        required: true
+      scatterers:
+        range: Scatterer
+        multivalued: true
+        inlined: true
+        required: true

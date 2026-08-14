@@ -1,0 +1,1364 @@
+{
+    "$defs": {
+        "AnomalousLayout": {
+            "description": "",
+            "enum": [
+                "asu",
+                "both_hemispheres"
+            ],
+            "title": "AnomalousLayout",
+            "type": "string"
+        },
+        "ArrayMeta": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "dtype": {
+                    "description": "numpy dtype name (float64, int32, complex128, \u2026)",
+                    "type": "string"
+                },
+                "order": {
+                    "description": "Memory order; v1 is C",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "shape": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "dtype",
+                "shape"
+            ],
+            "title": "ArrayMeta",
+            "type": "object"
+        },
+        "Atom": {
+            "additionalProperties": false,
+            "description": "One iotbx.pdb.hierarchy atom label. xyz/occ/b live in the parent Hierarchy npz at the same index.",
+            "properties": {
+                "altloc": {
+                    "description": "Alternate conformer; empty if none",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "chain_id": {
+                    "type": "string"
+                },
+                "element": {
+                    "type": "string"
+                },
+                "hetero": {
+                    "type": "boolean"
+                },
+                "i": {
+                    "description": "Row index into packed xyz; same i_seq as scatterers and restraints",
+                    "type": "integer"
+                },
+                "icode": {
+                    "description": "Insertion code; empty if none",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "model_id": {
+                    "description": "Model id string (usually \"1\")",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "resname": {
+                    "type": "string"
+                },
+                "resseq": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "i",
+                "name",
+                "element",
+                "chain_id",
+                "resseq",
+                "resname",
+                "hetero"
+            ],
+            "title": "Atom",
+            "type": "object"
+        },
+        "BlobMeta": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "content_type"
+            ],
+            "title": "BlobMeta",
+            "type": "object"
+        },
+        "ByteOrder": {
+            "description": "",
+            "enum": [
+                "little",
+                "big"
+            ],
+            "title": "ByteOrder",
+            "type": "string"
+        },
+        "CartesianSites": {
+            "additionalProperties": false,
+            "description": "cctbx xrs.sites_cart() / hierarchy atoms xyz in \u00c5. npz array xyz float64[N,3].",
+            "properties": {
+                "crystal": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/CrystalSymmetry"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Optional; needed to convert to fractional"
+                },
+                "dtype": {
+                    "type": "string"
+                },
+                "n_sites": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_sites",
+                "dtype"
+            ],
+            "title": "CartesianSites",
+            "type": "object"
+        },
+        "CctbxObject": {
+            "additionalProperties": false,
+            "description": "Base for canonical phenix/cctbx types. Metadata in JSON; array buffers in a packed npz referenced by ObjectRef.key.",
+            "title": "CctbxObject",
+            "type": "object"
+        },
+        "ComplexMap": {
+            "additionalProperties": false,
+            "description": "Complex grid (e.g. P1 Fourier map before taking the real part). Packed data is complex128 with shape n_real.",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "dtype": {
+                    "description": "Canonical store dtype; v1 is complex128",
+                    "type": "string"
+                },
+                "label": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "n_real": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "origin": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "space": {
+                    "$ref": "#/$defs/MapSpace"
+                }
+            },
+            "required": [
+                "crystal",
+                "origin",
+                "n_real",
+                "space",
+                "dtype"
+            ],
+            "title": "ComplexMap",
+            "type": "object"
+        },
+        "Compression": {
+            "description": "",
+            "enum": [
+                "none",
+                "gzip"
+            ],
+            "title": "Compression",
+            "type": "string"
+        },
+        "CoordinateFrame": {
+            "description": "",
+            "enum": [
+                "cartesian",
+                "fractional"
+            ],
+            "title": "CoordinateFrame",
+            "type": "string"
+        },
+        "CrystalGridding": {
+            "additionalProperties": false,
+            "description": "Canonical maptbx.crystal_gridding. JSON only.",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "d_min": {
+                    "description": "Resolution (\u00c5) used to choose the grid, when known",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "n_real": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "resolution_factor": {
+                    "description": "Typical FFT factor (e.g. 1/3) when known",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "space": {
+                    "$ref": "#/$defs/MapSpace"
+                }
+            },
+            "required": [
+                "crystal",
+                "n_real",
+                "space"
+            ],
+            "title": "CrystalGridding",
+            "type": "object"
+        },
+        "CrystalSymmetry": {
+            "additionalProperties": false,
+            "description": "Canonical form of cctbx.crystal.symmetry. JSON only; no binary blob. v1 stores Hall + IT number and does not normalize non-standard settings or reindexing. Converters must fail loudly if crystal.symmetry cannot be reconstructed.",
+            "properties": {
+                "space_group_hall": {
+                    "description": "Hall symbol as understood by cctbx.sgtbx",
+                    "type": "string"
+                },
+                "space_group_number": {
+                    "description": "International Tables space-group number when known",
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "unit_cell": {
+                    "description": "a, b, c (\u00c5), alpha, beta, gamma (degrees)",
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 6,
+                    "minItems": 6,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "unit_cell",
+                "space_group_hall"
+            ],
+            "title": "CrystalSymmetry",
+            "type": "object"
+        },
+        "EmMap": {
+            "additionalProperties": false,
+            "description": "Canonical iotbx.map_manager map (cryo-EM or wrapping MX). Packed data same as RealMap. Extra metadata is EM/MRC specific origin, voxel size, wrapping, and experiment_type.",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "dtype": {
+                    "type": "string"
+                },
+                "experiment_type": {
+                    "$ref": "#/$defs/ExperimentType"
+                },
+                "is_mask": {
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "n_real": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "origin": {
+                    "description": "Grid origin",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "origin_cart": {
+                    "description": "Cartesian origin shift (\u00c5), map_manager.shift_cart",
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "pixel_sizes": {
+                    "description": "Voxel size (\u00c5) along a, b, c",
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "resolution": {
+                    "description": "Nominal high resolution (\u00c5) when known",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "space": {
+                    "$ref": "#/$defs/MapSpace"
+                },
+                "wrapping": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "crystal",
+                "origin",
+                "n_real",
+                "space",
+                "dtype",
+                "experiment_type",
+                "wrapping",
+                "is_mask"
+            ],
+            "title": "EmMap",
+            "type": "object"
+        },
+        "ExperimentType": {
+            "description": "",
+            "enum": [
+                "xray",
+                "cryo_em",
+                "neutron",
+                "other"
+            ],
+            "title": "ExperimentType",
+            "type": "string"
+        },
+        "FractionalSites": {
+            "additionalProperties": false,
+            "description": "cctbx xrs.sites_frac(). npz array xyz float64[N,3].",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "dtype": {
+                    "type": "string"
+                },
+                "n_sites": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "crystal",
+                "n_sites",
+                "dtype"
+            ],
+            "title": "FractionalSites",
+            "type": "object"
+        },
+        "GeometryRestraints": {
+            "additionalProperties": false,
+            "description": "Canonical cctbx.geometry_restraints.manager proxy tables. i_seq values index the corresponding Hierarchy / XrayStructure.",
+            "properties": {
+                "bond_asu_rt_mx": {
+                    "description": "sgtbx.rt_mx.as_xyz() for each ASU bond, same order as bond_asu_i_seqs",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "crystal": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/CrystalSymmetry"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "n_angles": {
+                    "type": "integer"
+                },
+                "n_bond_asu": {
+                    "type": "integer"
+                },
+                "n_bond_similarities": {
+                    "type": "integer"
+                },
+                "n_bonds": {
+                    "type": "integer"
+                },
+                "n_chiralities": {
+                    "type": "integer"
+                },
+                "n_dihedrals": {
+                    "type": "integer"
+                },
+                "n_nonbonded": {
+                    "type": "integer"
+                },
+                "n_parallelities": {
+                    "type": "integer"
+                },
+                "n_planarities": {
+                    "type": "integer"
+                },
+                "n_reference_coords": {
+                    "type": "integer"
+                },
+                "n_sites": {
+                    "description": "Atom/scatterer count in the i_seq space",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_sites",
+                "n_bonds",
+                "n_bond_asu",
+                "n_angles",
+                "n_dihedrals",
+                "n_chiralities",
+                "n_planarities",
+                "n_parallelities",
+                "n_nonbonded",
+                "n_reference_coords",
+                "n_bond_similarities"
+            ],
+            "title": "GeometryRestraints",
+            "type": "object"
+        },
+        "HendricksonLattman": {
+            "additionalProperties": false,
+            "description": "Canonical HL coefficients (cctbx miller array of hendrickson_lattman). npz arrays A,B,C,D float64[N] plus hkl.",
+            "properties": {
+                "anomalous": {
+                    "type": "boolean"
+                },
+                "anomalous_layout": {
+                    "$ref": "#/$defs/AnomalousLayout"
+                },
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "index_dtype": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "n_refl": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "crystal",
+                "anomalous",
+                "anomalous_layout",
+                "n_refl",
+                "index_dtype"
+            ],
+            "title": "HendricksonLattman",
+            "type": "object"
+        },
+        "Hierarchy": {
+            "additionalProperties": false,
+            "description": "Canonical iotbx.pdb.hierarchy.root. Cartesian frame. npz: xyz, occupancy, b_iso; optional u_cart [N,6] U in \u00c5\u00b2 and uij_defined uint8 mask (PDB ANISOU).",
+            "properties": {
+                "atoms": {
+                    "items": {
+                        "$ref": "#/$defs/Atom"
+                    },
+                    "type": "array"
+                },
+                "crystal": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/CrystalSymmetry"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "frame": {
+                    "$ref": "#/$defs/CoordinateFrame"
+                },
+                "has_uij": {
+                    "description": "True if u_cart is present in the npz",
+                    "type": "boolean"
+                },
+                "n_atoms": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_atoms",
+                "frame",
+                "has_uij",
+                "atoms"
+            ],
+            "title": "Hierarchy",
+            "type": "object"
+        },
+        "JobEnvelope": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "created_at": {
+                    "format": "date-time",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "error": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/JobError"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "inputs": {
+                    "description": "Map of input name to ObjectRef",
+                    "items": {
+                        "$ref": "#/$defs/ObjectRef"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string"
+                },
+                "outputs": {
+                    "description": "Map of output name to ObjectRef (filled by worker)",
+                    "items": {
+                        "$ref": "#/$defs/ObjectRef"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "schema_version": {
+                    "const": 1,
+                    "description": "Must match this schema file version (1)",
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/$defs/JobStatus"
+                },
+                "updated_at": {
+                    "format": "date-time",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "job_id",
+                "op",
+                "schema_version",
+                "status"
+            ],
+            "title": "JobEnvelope",
+            "type": "object"
+        },
+        "JobError": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "traceback": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "type": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type",
+                "message"
+            ],
+            "title": "JobError",
+            "type": "object"
+        },
+        "JobStatus": {
+            "description": "",
+            "enum": [
+                "queued",
+                "running",
+                "done",
+                "error"
+            ],
+            "title": "JobStatus",
+            "type": "string"
+        },
+        "MapCoefficients": {
+            "additionalProperties": false,
+            "description": "Complex miller array used as FFT map coefficients (cctbx miller array of Fcalc / 2mFo-DFc coefficients). npz: hkl int32[N,3], data complex128[N].",
+            "properties": {
+                "label": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "miller": {
+                    "$ref": "#/$defs/MillerArray",
+                    "description": "Must have observation_type complex"
+                }
+            },
+            "required": [
+                "miller"
+            ],
+            "title": "MapCoefficients",
+            "type": "object"
+        },
+        "MapSpace": {
+            "description": "",
+            "enum": [
+                "asu",
+                "p1"
+            ],
+            "title": "MapSpace",
+            "type": "string"
+        },
+        "MillerArray": {
+            "additionalProperties": false,
+            "description": "Canonical form of cctbx.miller.array. JSON metadata; buffers in one npz (hkl, data, optional sigmas).",
+            "properties": {
+                "anomalous": {
+                    "type": "boolean"
+                },
+                "anomalous_layout": {
+                    "$ref": "#/$defs/AnomalousLayout",
+                    "description": "ASU vs both hemispheres; never inferred"
+                },
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "data_dtype": {
+                    "description": "Canonical store dtype for data; v1 is float64 or complex128",
+                    "type": "string"
+                },
+                "has_sigmas": {
+                    "type": "boolean"
+                },
+                "index_dtype": {
+                    "description": "Canonical store dtype for hkl; v1 is int32",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "MTZ / miller array id (e.g. FOBS, IMEAN)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "n_refl": {
+                    "type": "integer"
+                },
+                "observation_type": {
+                    "$ref": "#/$defs/ObservationType"
+                }
+            },
+            "required": [
+                "crystal",
+                "anomalous",
+                "observation_type",
+                "anomalous_layout",
+                "n_refl",
+                "has_sigmas",
+                "index_dtype",
+                "data_dtype"
+            ],
+            "title": "MillerArray",
+            "type": "object"
+        },
+        "ModelGeometry": {
+            "additionalProperties": false,
+            "description": "Correspondence header asserting that hierarchy, xray scatterers, and restraints share one i_seq space of size n_sites. Payloads remain separate ObjectRefs (Hierarchy, XrayStructure, GeometryRestraints) with matching n_atoms / n_scatterers / n_sites.",
+            "properties": {
+                "has_hierarchy": {
+                    "type": "boolean"
+                },
+                "has_restraints": {
+                    "type": "boolean"
+                },
+                "has_xray": {
+                    "type": "boolean"
+                },
+                "i_seq_identity": {
+                    "description": "True when Hierarchy.atoms[i].i == XrayStructure.scatterers[i].i == i for all i in 0..n_sites-1, and every restraint i_seq is in that range.\n",
+                    "type": "boolean"
+                },
+                "n_sites": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_sites",
+                "has_hierarchy",
+                "has_xray",
+                "has_restraints",
+                "i_seq_identity"
+            ],
+            "title": "ModelGeometry",
+            "type": "object"
+        },
+        "MtzColumnType": {
+            "description": "CCP4 MTZ column type character (iotbx.mtz column.type()). H/K/L are indices and are not stored as ReflectionColumn rows.",
+            "enum": [
+                "F",
+                "J",
+                "D",
+                "Q",
+                "G",
+                "L",
+                "K",
+                "M",
+                "P",
+                "W",
+                "A",
+                "B",
+                "C",
+                "I",
+                "R",
+                "other"
+            ],
+            "title": "MtzColumnType",
+            "type": "string"
+        },
+        "ObjectKind": {
+            "description": "",
+            "enum": [
+                "array",
+                "json",
+                "blob",
+                "cctbx"
+            ],
+            "title": "ObjectKind",
+            "type": "string"
+        },
+        "ObjectRef": {
+            "additionalProperties": false,
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
+                                "const": "cctbx"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "cctbx_type": {},
+                            "meta": {}
+                        },
+                        "required": [
+                            "cctbx_type",
+                            "meta"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
+                                "const": "array"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "key": {}
+                        },
+                        "required": [
+                            "key"
+                        ]
+                    }
+                }
+            ],
+            "description": "Pointer at bytes in Redis plus enough metadata to decode them. For kind=cctbx, meta is the inlined cctbx class (CrystalSymmetry, MillerArray, or RealMap). Binary buffers for miller/map are a packed npz at key.",
+            "properties": {
+                "byte_order": {
+                    "$ref": "#/$defs/ByteOrder"
+                },
+                "cctbx_type": {
+                    "description": "Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "compression": {
+                    "$ref": "#/$defs/Compression"
+                },
+                "dtype": {
+                    "description": "Element dtype when kind=array",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "key": {
+                    "description": "Redis key for bytes; omitted for JSON-only CrystalSymmetry",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "kind": {
+                    "$ref": "#/$defs/ObjectKind"
+                },
+                "meta": {
+                    "description": "Kind-specific JSON (ArrayMeta, BlobMeta, or a CctbxObject)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "shape": {
+                    "description": "Shape when kind=array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "title": "ObjectRef",
+            "type": "object"
+        },
+        "ObservationType": {
+            "description": "",
+            "enum": [
+                "fobs",
+                "iobs",
+                "amplitude",
+                "intensity",
+                "complex",
+                "hl",
+                "other"
+            ],
+            "title": "ObservationType",
+            "type": "string"
+        },
+        "OpSpec": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "inputs": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/SlotBinding__identifier_optional"
+                            },
+                            {
+                                "description": "Generic kind (array, json, blob) or cctbx class name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "outputs": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/SlotBinding__identifier_optional"
+                            },
+                            {
+                                "description": "Generic kind (array, json, blob) or cctbx class name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "type": [
+                        "object",
+                        "null"
+                    ]
+                },
+                "schema_version": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "name",
+                "schema_version"
+            ],
+            "title": "OpSpec",
+            "type": "object"
+        },
+        "RealMap": {
+            "additionalProperties": false,
+            "description": "Canonical real-space map (maptbx / iotbx.ccp4_map / flex.double 3-D). Packed data.shape must equal n_real (nx, ny, nz).",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "dtype": {
+                    "description": "Canonical store dtype; v1 is float64",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "Map name (2FOFCWT, FOFC, etc.)",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "n_real": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "origin": {
+                    "description": "Grid origin (grid units)",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "space": {
+                    "$ref": "#/$defs/MapSpace"
+                }
+            },
+            "required": [
+                "crystal",
+                "origin",
+                "n_real",
+                "space",
+                "dtype"
+            ],
+            "title": "RealMap",
+            "type": "object"
+        },
+        "ReflectionColumn": {
+            "additionalProperties": false,
+            "description": "One data column in a ReflectionFile (not H/K/L).",
+            "properties": {
+                "anomalous": {
+                    "type": "boolean"
+                },
+                "data_dtype": {
+                    "type": "string"
+                },
+                "has_sigmas": {
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "mtz_type": {
+                    "$ref": "#/$defs/MtzColumnType"
+                },
+                "mtz_type_raw": {
+                    "description": "Original iotbx.mtz column.type() if not in the enum",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "npz_name": {
+                    "description": "Array name inside the packed npz (usually the label)",
+                    "type": "string"
+                },
+                "observation_type": {
+                    "$ref": "#/$defs/ObservationType"
+                }
+            },
+            "required": [
+                "label",
+                "mtz_type",
+                "observation_type",
+                "anomalous",
+                "has_sigmas",
+                "npz_name",
+                "data_dtype"
+            ],
+            "title": "ReflectionColumn",
+            "type": "object"
+        },
+        "ReflectionColumn__identifier_optional": {
+            "additionalProperties": false,
+            "description": "One data column in a ReflectionFile (not H/K/L).",
+            "properties": {
+                "anomalous": {
+                    "type": "boolean"
+                },
+                "data_dtype": {
+                    "type": "string"
+                },
+                "has_sigmas": {
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "mtz_type": {
+                    "$ref": "#/$defs/MtzColumnType"
+                },
+                "mtz_type_raw": {
+                    "description": "Original iotbx.mtz column.type() if not in the enum",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "npz_name": {
+                    "description": "Array name inside the packed npz (usually the label)",
+                    "type": "string"
+                },
+                "observation_type": {
+                    "$ref": "#/$defs/ObservationType"
+                }
+            },
+            "required": [
+                "mtz_type",
+                "observation_type",
+                "anomalous",
+                "has_sigmas",
+                "npz_name",
+                "data_dtype"
+            ],
+            "title": "ReflectionColumn",
+            "type": "object"
+        },
+        "ReflectionFile": {
+            "additionalProperties": false,
+            "description": "Canonical iotbx.mtz.object / miller array set sharing one hkl. JSON metadata; one npz with hkl plus named columns. Does not preserve MTZ batches, original-index columns, or history verbatim beyond the history strings slot.",
+            "properties": {
+                "anomalous_layout": {
+                    "$ref": "#/$defs/AnomalousLayout"
+                },
+                "columns": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/ReflectionColumn__identifier_optional"
+                    },
+                    "type": "object"
+                },
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "history": {
+                    "description": "MTZ history lines",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "index_dtype": {
+                    "type": "string"
+                },
+                "n_refl": {
+                    "type": "integer"
+                },
+                "wavelength": {
+                    "description": "Dataset wavelength (\u00c5) when known",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "crystal",
+                "n_refl",
+                "index_dtype",
+                "anomalous_layout",
+                "columns"
+            ],
+            "title": "ReflectionFile",
+            "type": "object"
+        },
+        "Scatterer": {
+            "additionalProperties": false,
+            "description": "One cctbx.xray.scatterer label. Numeric site/occ/u live in the parent XrayStructure npz at the same index.",
+            "properties": {
+                "anisotropic": {
+                    "description": "If true, npz u_star[i] is live (cctbx u_star, fractional)",
+                    "type": "boolean"
+                },
+                "fdp": {
+                    "description": "f'' when set",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "fp": {
+                    "description": "f' when set",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "i": {
+                    "description": "Row index into packed sites; same i_seq as Hierarchy atoms and restraints",
+                    "type": "integer"
+                },
+                "scattering_type": {
+                    "description": "cctbx scattering type (C, N, S, AU, water, \u2026)",
+                    "type": "string"
+                },
+                "use_u_iso": {
+                    "description": "cctbx flags.use_u_iso(); may be true together with anisotropic",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "i",
+                "scattering_type",
+                "anisotropic",
+                "use_u_iso"
+            ],
+            "title": "Scatterer",
+            "type": "object"
+        },
+        "SlotBinding": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Generic kind (array, json, blob) or cctbx class name",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "name",
+                "type"
+            ],
+            "title": "SlotBinding",
+            "type": "object"
+        },
+        "SlotBinding__identifier_optional": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Generic kind (array, json, blob) or cctbx class name",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "title": "SlotBinding",
+            "type": "object"
+        },
+        "XrayStructure": {
+            "additionalProperties": false,
+            "description": "Canonical cctbx.xray.structure. npz: sites_frac [N,3], occupancy [N], u_iso [N], u_star [N,6] (U* fractional, adptbx.u_cart_as_u_star). Mixed iso/aniso allowed.",
+            "properties": {
+                "crystal": {
+                    "$ref": "#/$defs/CrystalSymmetry"
+                },
+                "n_scatterers": {
+                    "type": "integer"
+                },
+                "scatterers": {
+                    "items": {
+                        "$ref": "#/$defs/Scatterer"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "crystal",
+                "n_scatterers",
+                "scatterers"
+            ],
+            "title": "XrayStructure",
+            "type": "object"
+        }
+    },
+    "$id": "https://github.com/phzwart/phridge/schema/phridge",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "additionalProperties": true,
+    "description": "",
+    "metamodel_version": "1.11.0",
+    "properties": {
+        "created_at": {
+            "format": "date-time",
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "error": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/JobError"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "inputs": {
+            "description": "Map of input name to ObjectRef",
+            "items": {
+                "$ref": "#/$defs/ObjectRef"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "job_id": {
+            "type": "string"
+        },
+        "op": {
+            "type": "string"
+        },
+        "outputs": {
+            "description": "Map of output name to ObjectRef (filled by worker)",
+            "items": {
+                "$ref": "#/$defs/ObjectRef"
+            },
+            "type": [
+                "array",
+                "null"
+            ]
+        },
+        "schema_version": {
+            "const": 1,
+            "description": "Must match this schema file version (1)",
+            "type": "integer"
+        },
+        "status": {
+            "$ref": "#/$defs/JobStatus"
+        },
+        "updated_at": {
+            "format": "date-time",
+            "type": [
+                "string",
+                "null"
+            ]
+        }
+    },
+    "required": [
+        "job_id",
+        "op",
+        "schema_version",
+        "status"
+    ],
+    "title": "phridge",
+    "type": "object",
+    "version": "1"
+}

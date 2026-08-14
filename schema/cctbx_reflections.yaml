@@ -1,0 +1,199 @@
+id: https://github.com/phzwart/phridge/schema/cctbx_reflections
+name: phridge_cctbx_reflections
+title: Canonical cctbx reflection / MTZ types
+description: |
+  Wire types for cctbx.miller.array and iotbx.mtz.object.
+
+  Packed npz (shared hkl plus named columns):
+    MillerArray:          hkl int32[N,3], data, optional sigmas
+    HendricksonLattman:   hkl, A, B, C, D  (float64[N])
+    ReflectionFile:       hkl plus one array per ReflectionColumn.npz_name
+                          and optional {npz_name}_sigmas
+version: "1"
+default_range: string
+prefixes:
+  phridge_refl: https://github.com/phzwart/phridge/schema/cctbx_reflections/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_refl
+imports:
+  - linkml:types
+  - cctbx
+
+enums:
+  ObservationType:
+    permissible_values:
+      fobs:
+        description: X-ray amplitude observations (F)
+      iobs:
+        description: X-ray intensity observations (I)
+      amplitude:
+        description: Amplitudes that are not tagged as F-obs
+      intensity:
+        description: Intensities that are not tagged as I-obs
+      complex:
+        description: Complex values (e.g. Fcalc, map coefficients)
+      hl:
+        description: Hendrickson–Lattman coefficients
+      other:
+        description: Unclassified or custom data
+  AnomalousLayout:
+    permissible_values:
+      asu:
+        description: Unique ASU indices only
+      both_hemispheres:
+        description: Friedel mates both present
+  MtzColumnType:
+    description: >
+      CCP4 MTZ column type character (iotbx.mtz column.type()).
+      H/K/L are indices and are not stored as ReflectionColumn rows.
+    permissible_values:
+      F:
+        description: Amplitude
+      J:
+        description: Intensity
+      D:
+        description: Anomalous difference
+      Q:
+        description: Standard deviation
+      G:
+        description: F(+)
+      L:
+        description: I(+)
+      K:
+        description: F(-)
+      M:
+        description: I(-)
+      P:
+        description: Phase (degrees)
+      W:
+        description: Weight
+      A:
+        description: Hendrickson–Lattman A (or HL group)
+      B:
+        description: Hendrickson–Lattman B
+      C:
+        description: Hendrickson–Lattman C
+      I:
+        description: Integer flag / batch
+      R:
+        description: Real (e.g. FOM)
+      other:
+        description: Anything else; see mtz_type_raw
+
+classes:
+  MillerArray:
+    is_a: CctbxObject
+    description: >
+      Canonical form of cctbx.miller.array.
+      JSON metadata; buffers in one npz (hkl, data, optional sigmas).
+    attributes:
+      label:
+        description: MTZ / miller array id (e.g. FOBS, IMEAN)
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      anomalous:
+        range: boolean
+        required: true
+      observation_type:
+        range: ObservationType
+        required: true
+      anomalous_layout:
+        range: AnomalousLayout
+        required: true
+        description: ASU vs both hemispheres; never inferred
+      n_refl:
+        range: integer
+        required: true
+      has_sigmas:
+        range: boolean
+        required: true
+      index_dtype:
+        required: true
+        description: Canonical store dtype for hkl; v1 is int32
+      data_dtype:
+        required: true
+        description: Canonical store dtype for data; v1 is float64 or complex128
+
+  HendricksonLattman:
+    is_a: CctbxObject
+    description: >
+      Canonical HL coefficients (cctbx miller array of
+      hendrickson_lattman). npz arrays A,B,C,D float64[N] plus hkl.
+    attributes:
+      label:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      anomalous:
+        range: boolean
+        required: true
+      anomalous_layout:
+        range: AnomalousLayout
+        required: true
+      n_refl:
+        range: integer
+        required: true
+      index_dtype:
+        required: true
+
+  ReflectionColumn:
+    description: One data column in a ReflectionFile (not H/K/L).
+    attributes:
+      label:
+        identifier: true
+        required: true
+      mtz_type:
+        range: MtzColumnType
+        required: true
+      mtz_type_raw:
+        description: Original iotbx.mtz column.type() if not in the enum
+      observation_type:
+        range: ObservationType
+        required: true
+      anomalous:
+        range: boolean
+        required: true
+      has_sigmas:
+        range: boolean
+        required: true
+      npz_name:
+        required: true
+        description: Array name inside the packed npz (usually the label)
+      data_dtype:
+        required: true
+
+  ReflectionFile:
+    is_a: CctbxObject
+    description: >
+      Canonical iotbx.mtz.object / miller array set sharing one hkl.
+      JSON metadata; one npz with hkl plus named columns.
+      Does not preserve MTZ batches, original-index columns, or history
+      verbatim beyond the history strings slot.
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        required: true
+        inlined: true
+      wavelength:
+        range: float
+        description: Dataset wavelength (Å) when known
+      history:
+        multivalued: true
+        description: MTZ history lines
+      n_refl:
+        range: integer
+        required: true
+      index_dtype:
+        required: true
+      anomalous_layout:
+        range: AnomalousLayout
+        required: true
+      columns:
+        range: ReflectionColumn
+        multivalued: true
+        inlined: true
+        required: true

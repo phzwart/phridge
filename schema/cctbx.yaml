@@ -1,0 +1,61 @@
+id: https://github.com/phzwart/phridge/schema/cctbx
+name: phridge_cctbx
+title: Canonical Phenix/cctbx core types
+description: |
+  Shared crystallographic identity types. Domain schemas import this
+  module:
+
+    cctbx_reflections.yaml  — miller arrays, MTZ-like reflection files
+    cctbx_maps.yaml         — real/complex maps, gridding, EmMap
+    cctbx_coordinates.yaml  — sites, PDB hierarchy, xray.structure
+    cctbx_geometry.yaml     — geometry restraints, ModelGeometry
+
+  Binary arrays are not modeled here. Buffers live in packed npz at
+  the job-layer ObjectRef.key. Do not pickle. Do not put flex or torch
+  objects in this schema.
+version: "1"
+default_range: string
+prefixes:
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_cctbx
+imports:
+  - linkml:types
+
+enums:
+  CoordinateFrame:
+    permissible_values:
+      cartesian:
+        description: Ångström orthogonal coordinates (cctbx sites_cart)
+      fractional:
+        description: Fractional crystal coordinates (cctbx sites_frac)
+
+classes:
+  CctbxObject:
+    abstract: true
+    description: >
+      Base for canonical phenix/cctbx types. Metadata in JSON; array
+      buffers in a packed npz referenced by ObjectRef.key.
+
+  CrystalSymmetry:
+    is_a: CctbxObject
+    description: >
+      Canonical form of cctbx.crystal.symmetry.
+      JSON only; no binary blob.
+      v1 stores Hall + IT number and does not normalize non-standard
+      settings or reindexing. Converters must fail loudly if
+      crystal.symmetry cannot be reconstructed.
+    attributes:
+      unit_cell:
+        range: float
+        multivalued: true
+        required: true
+        minimum_cardinality: 6
+        maximum_cardinality: 6
+        description: a, b, c (Å), alpha, beta, gamma (degrees)
+      space_group_hall:
+        required: true
+        description: Hall symbol as understood by cctbx.sgtbx
+      space_group_number:
+        range: integer
+        description: International Tables space-group number when known

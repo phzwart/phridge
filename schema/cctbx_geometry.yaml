@@ -1,0 +1,113 @@
+id: https://github.com/phzwart/phridge/schema/cctbx_geometry
+name: phridge_cctbx_geometry
+title: Canonical geometry restraints (model–geometry correspondence)
+description: |
+  Proxy tables for cctbx.geometry_restraints, indexed by i_seq into the
+  same atom order as Hierarchy.atoms[i].i and XrayStructure.scatterers[i].i.
+
+  That i_seq identity is the model–geometry–data correspondence: every
+  restraint names atoms in the packed model, never serial numbers.
+
+  Packed npz (absent arrays mean zero proxies of that kind):
+    bond_i_seqs int32[M,2], bond_distance_ideal, bond_weight, bond_slack,
+      bond_origin_id
+    bond_asu_i_seqs int32[K,2], bond_asu_distance_ideal, bond_asu_weight,
+      bond_asu_rt_mx (UTF-8 JSON list of sgtbx xyz strings, stored in meta)
+    angle_i_seqs int32[A,3], angle_ideal, angle_weight, angle_origin_id
+    dihedral_i_seqs int32[D,4], dihedral_angle_ideal, dihedral_weight,
+      dihedral_periodicity, dihedral_origin_id
+    chirality_i_seqs int32[C,4], chirality_volume_ideal, chirality_weight,
+      chirality_both_signs uint8, chirality_origin_id
+    planarity_i_seqs int32[Pflat], planarity_offsets int32[P+1] (CSR),
+      planarity_weight float64[P], planarity_origin_id int32[P]
+    parallelity_i_seqs / j_seqs CSR + weight + origin_id + target_angle_deg
+    nonbonded_i_seqs int32[N,2], nonbonded_vdw float64[N]
+    refcoord_i_seq int32[R], refcoord_xyz float64[R,3], refcoord_weight float64[R]
+    bondsim_pair_i_seqs int32[F,2], bondsim_offsets int32[S+1], bondsim_weight float64[F]
+    model_indices int32[n_sites], conformer_indices int32[n_sites] (optional)
+version: "1"
+default_range: string
+prefixes:
+  phridge_geom: https://github.com/phzwart/phridge/schema/cctbx_geometry/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  phridge_xyz: https://github.com/phzwart/phridge/schema/cctbx_coordinates/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_geom
+imports:
+  - linkml:types
+  - cctbx
+
+classes:
+  GeometryRestraints:
+    is_a: CctbxObject
+    description: >
+      Canonical cctbx.geometry_restraints.manager proxy tables.
+      i_seq values index the corresponding Hierarchy / XrayStructure.
+    attributes:
+      crystal:
+        range: CrystalSymmetry
+        inlined: true
+      n_sites:
+        range: integer
+        required: true
+        description: Atom/scatterer count in the i_seq space
+      n_bonds:
+        range: integer
+        required: true
+      n_bond_asu:
+        range: integer
+        required: true
+      n_angles:
+        range: integer
+        required: true
+      n_dihedrals:
+        range: integer
+        required: true
+      n_chiralities:
+        range: integer
+        required: true
+      n_planarities:
+        range: integer
+        required: true
+      n_parallelities:
+        range: integer
+        required: true
+      n_nonbonded:
+        range: integer
+        required: true
+      n_reference_coords:
+        range: integer
+        required: true
+      n_bond_similarities:
+        range: integer
+        required: true
+      bond_asu_rt_mx:
+        multivalued: true
+        description: sgtbx.rt_mx.as_xyz() for each ASU bond, same order as bond_asu_i_seqs
+
+  ModelGeometry:
+    is_a: CctbxObject
+    description: >
+      Correspondence header asserting that hierarchy, xray scatterers,
+      and restraints share one i_seq space of size n_sites.
+      Payloads remain separate ObjectRefs (Hierarchy, XrayStructure,
+      GeometryRestraints) with matching n_atoms / n_scatterers / n_sites.
+    attributes:
+      n_sites:
+        range: integer
+        required: true
+      has_hierarchy:
+        range: boolean
+        required: true
+      has_xray:
+        range: boolean
+        required: true
+      has_restraints:
+        range: boolean
+        required: true
+      i_seq_identity:
+        range: boolean
+        required: true
+        description: >
+          True when Hierarchy.atoms[i].i == XrayStructure.scatterers[i].i == i
+          for all i in 0..n_sites-1, and every restraint i_seq is in that range.

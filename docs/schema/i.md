@@ -1,0 +1,82 @@
+---
+search:
+  boost: 5.0
+---
+
+# Slot: i 
+
+<div data-search-exclude markdown="1">
+
+
+
+URI: [phridge:i](https://github.com/phzwart/phridge/schema/phridge/i)
+<!-- no inheritance hierarchy -->
+
+
+
+
+
+## Applicable Classes
+
+| Name | Description | Modifies Slot |
+| --- | --- | --- |
+| [Atom](Atom.md) | One iotbx |  no  |
+| [Scatterer](Scatterer.md) | One cctbx |  no  |
+
+
+
+
+
+
+## Properties
+
+### Type and Range
+
+| Property | Value |
+| --- | --- |
+| Range | [String](String.md) |
+| Domain Of | [Atom](Atom.md), [Scatterer](Scatterer.md) |
+
+### Cardinality and Requirements
+
+| Property | Value |
+| --- | --- |
+
+
+
+
+
+
+
+
+
+
+## Identifier and Mapping Information
+
+
+
+
+
+
+## Mappings
+
+| Mapping Type | Mapped Value |
+| ---  | ---  |
+| self | phridge:i |
+| native | phridge:i |
+
+
+
+
+## LinkML Source
+
+<details>
+```yaml
+name: i
+domain_of:
+- Atom
+- Scatterer
+range: string
+
+```
+</details></div>
