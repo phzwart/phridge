@@ -169,10 +169,12 @@ Use a real Redis to verify `XREADGROUP`. Torch worker tests skip unless
 ```bash
 make example-restraints
 # or: python examples/restraint_minimization.py
+# → examples/restraint_minimization.md  (code demo + checks)
 ```
 
-See [examples/README.md](examples/README.md) — cctbx objects in, phridge
-pack/unpack, cctbx objects out (geometry-restraint minimization).
+See [examples/README.md](examples/README.md) — cctbx packs restraints, the
+phridge worker runs torch LBFGS/Adam/SGD, the client gets a cctbx hierarchy
+back from `RemoteGeometry.minimize(...)`.
 
 ## Layout
 

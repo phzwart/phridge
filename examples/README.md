@@ -1,38 +1,44 @@
 # Examples
 
-Runnable scripts that start from **live cctbx objects**, pack them through
-**phridge** (LinkML metadata + npz tables), and convert back to **cctbx**.
+Runnable demos: **cctbx** packs molecule + restraints into Redis, the
+**phridge worker** runs torch `LBFGS` / `Adam` / `SGD`, the client blocks and
+converts results back to cctbx.
 
 ## Environment
 
-Use the conda env with `cctbx-base` and the monomer library (`chem_data`):
-
 ```bash
-conda activate phridge-cctbx          # or: ~/miniforge3/envs/phridge-cctbx/bin/python
-cd /path/to/phridge
-pip install -e ".[dev]"               # once
+conda activate phridge-cctbx
+pip install -e ".[dev]"
+make chem-data   # once — monomer library for the peptide demo
 ```
 
-If `chem_data` is missing:
+Production path also needs Redis + a worker:
 
 ```bash
-make chem-data
-# or: conda install -n phridge-cctbx -c chem_data chem_data
+redis-server
+phridge-worker --redis-url redis://localhost:6379/0 --device cuda
 ```
 
-## Restraint minimization (cctbx → phridge → cctbx)
+The example below uses an **in-process** worker loopback (fakeredis) so you
+can run without a live Redis.
+
+## Restraint minimization
 
 ```bash
 make example-restraints
 # or:
 python examples/restraint_minimization.py
+python examples/restraint_minimization.py --optimizer adam --max-iterations 500
 ```
 
-Flow:
+Writes [`restraint_minimization.md`](restraint_minimization.md) (code bits + checks).
 
-1. Build an `mmtbx.model` (cctbx hierarchy + `geometry_restraints.manager`)
-2. Pack with `to_canonical` / `restraints_from_cctbx` / `hierarchy_from_cctbx`
-3. Optional wire bytes via `packed.pack()` / `unpack_restraints`
-4. Restore cctbx with `from_canonical(..., prefer_cctbx=True)` and
-   `restraints_to_proxies` → rebuilt manager
-5. Run `cctbx.geometry_restraints.lbfgs` on the restored objects
+Phenix-facing API:
+
+```python
+from phridge.client import Bridge, RemoteGeometry
+
+bridge = Bridge("redis://localhost:6379/0")
+geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
+hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")  # blocks
+```

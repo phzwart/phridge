@@ -98,6 +98,15 @@ register(
     )
 )
 
+register(
+    OpSpec(
+        name="geometry_minimize",
+        schema_version=SCHEMA_VERSION,
+        inputs={"sites": "CartesianSites", "restraints": "GeometryRestraints", "params": "json"},
+        outputs={"sites": "CartesianSites", "target": "json"},
+    )
+)
+
 
 def main(argv: Iterable[str] | None = None) -> None:
     _ = argv

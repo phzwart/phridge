@@ -16,6 +16,8 @@ side only. Passing a cctbx object into `call`/`submit` goes through
 
 ## Geometry
 
+Converters:
+
 ```python
 from phridge.client.geometry import model_geometry, restraints_from_cctbx, restraints_to_proxies
 
@@ -26,6 +28,25 @@ header = model_geometry(hierarchy=hier, xray=xrs, restraints=packed)
 
 `restraints_to_proxies` rebuilds bond/angle/dihedral/chirality/planarity/parallelity
 proxies. It does not reconstruct `bond_params_table` or a live manager.
+
+### RemoteGeometry.minimize
+
+Phenix-facing manager: pack hierarchy + restraints to Redis, block until the
+worker finishes a **torch** optimizer (`lbfgs`, `adam`, or `sgd`), convert
+sites back to a cctbx hierarchy.
+
+```python
+from phridge.client import Bridge, RemoteGeometry
+
+bridge = Bridge("redis://gpu-box:6379/0")
+geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
+hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")
+# geo.energy()              # remote eval, no steps
+# geo.last_target           # {"before", "after", "n_iter", "optimizer"}
+```
+
+v1 worker energy uses packed bonds / angles / dihedrals only (no nonbonded /
+ASU / planarity). See `examples/restraint_minimization.py`.
 
 ## EM maps
 
