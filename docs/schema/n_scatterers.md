@@ -21,6 +21,7 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 | Name | Description | Modifies Slot |
 | --- | --- | --- |
 | [XrayStructure](XrayStructure.md) | Canonical cctbx |  no  |
+| [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |  no  |
 
 
 
@@ -33,21 +34,13 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 
 | Property | Value |
 | --- | --- |
-| Range | [Integer](Integer.md) |
-| Domain Of | [XrayStructure](XrayStructure.md) |
+| Range | [String](String.md) |
+| Domain Of | [XrayStructure](XrayStructure.md), [SfGradients](SfGradients.md) |
 
 ### Cardinality and Requirements
 
 | Property | Value |
 | --- | --- |
-| Required | Yes |
-### Slot Characteristics
-
-| Property | Value |
-| --- | --- |
-| Owner | [XrayStructure](XrayStructure.md) |
-
-
 
 
 
@@ -61,13 +54,6 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 ## Identifier and Mapping Information
 
 
-
-
-
-### Schema Source
-
-
-* from schema: https://github.com/phzwart/phridge/schema/phridge
 
 
 
@@ -87,13 +73,10 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 <details>
 ```yaml
 name: n_scatterers
-from_schema: https://github.com/phzwart/phridge/schema/phridge
-rank: 1000
-owner: XrayStructure
 domain_of:
 - XrayStructure
-range: integer
-required: true
+- SfGradients
+range: string
 
 ```
 </details></div>

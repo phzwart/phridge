@@ -1,31 +1,52 @@
 ---
 search:
-  boost: 2.0
+  boost: 5.0
 ---
 
-
-# Enum: Compression 
-
-
+# Slot: compression 
 
 <div data-search-exclude markdown="1">
 
-URI: [phridge:Compression](https://github.com/phzwart/phridge/schema/phridge/Compression)
 
-## Permissible Values
-| Value | Meaning | Description |
+
+URI: [phridge:compression](https://github.com/phzwart/phridge/schema/phridge/compression)
+<!-- no inheritance hierarchy -->
+
+
+
+
+
+## Applicable Classes
+
+| Name | Description | Modifies Slot |
 | --- | --- | --- |
-| none | None |  |
-| gzip | None |  |
+| [ObjectRef](ObjectRef.md) | Pointer at bytes in Redis plus enough metadata to decode them |  no  |
 
 
 
 
-## Slots
 
-| Name | Description |
-| ---  | --- |
-| [compression](compression.md) |  |
+
+## Properties
+
+### Type and Range
+
+| Property | Value |
+| --- | --- |
+| Range | [Compression](Compression.md) |
+| Domain Of | [ObjectRef](ObjectRef.md) |
+
+### Cardinality and Requirements
+
+| Property | Value |
+| --- | --- |
+### Slot Characteristics
+
+| Property | Value |
+| --- | --- |
+| Owner | [ObjectRef](ObjectRef.md) |
+
+
 
 
 
@@ -50,22 +71,27 @@ URI: [phridge:Compression](https://github.com/phzwart/phridge/schema/phridge/Com
 
 
 
+## Mappings
+
+| Mapping Type | Mapped Value |
+| ---  | ---  |
+| self | phridge:compression |
+| native | phridge:compression |
+
+
 
 
 ## LinkML Source
 
 <details>
 ```yaml
-name: Compression
+name: compression
 from_schema: https://github.com/phzwart/phridge/schema/phridge
 rank: 1000
-permissible_values:
-  none:
-    text: none
-  gzip:
-    text: gzip
+owner: ObjectRef
+domain_of:
+- ObjectRef
+range: Compression
 
 ```
-</details>
-
-</div>
+</details></div>

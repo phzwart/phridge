@@ -6,7 +6,15 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.models import AnomalousLayout, CrystalGridding, CrystalSymmetry, ModelGeometry, ObservationType
+from phridge.models import (
+    AnomalousLayout,
+    CrystalGridding,
+    CrystalSymmetry,
+    ModelGeometry,
+    ObservationType,
+    SfEngineParams,
+    SymOp,
+)
 from phridge.packing import PackedMap, PackedMiller
 from phridge.packing_xtal import (
     PackedCartesian,
@@ -20,6 +28,7 @@ from phridge.packing_xtal import (
     PackedXray,
 )
 from phridge.packing_geometry import PackedRestraints
+from phridge.packing_scattering import PackedScatteringTable, PackedSfGradients, PackedTargetResult
 
 def has_cctbx() -> bool:
     try:
@@ -51,9 +60,13 @@ def to_canonical(value: Any) -> Any:
         PackedXray,
         PackedEmMap,
         PackedRestraints,
+        PackedScatteringTable,
+        PackedSfGradients,
+        PackedTargetResult,
         ModelGeometry,
         CrystalGridding,
         CrystalSymmetry,
+        SfEngineParams,
         np.ndarray,
     )
     if isinstance(value, packed):
@@ -113,6 +126,8 @@ def _cctbx_to_canonical(value: Any) -> Any:
     from cctbx.geometry_restraints.manager import manager as restraints_manager
     from iotbx.map_manager import map_manager
 
+    if isinstance(value, xray.structure):  # subclass of crystal.symmetry: test first
+        return xtal.xray_from_cctbx(value)
     if isinstance(value, crystal.symmetry):
         return crystal_from_cctbx(value)
     if isinstance(value, miller.array):
@@ -138,13 +153,20 @@ def _cctbx_to_canonical(value: Any) -> Any:
     raise TypeError(f"no cctbx converter for {type(value)!r}")
 
 
-def crystal_from_cctbx(sym: Any) -> CrystalSymmetry:
+def crystal_from_cctbx(sym: Any, *, with_symops: bool = True) -> CrystalSymmetry:
     info = sym.space_group_info()
     hall = str(info.type().hall_symbol())
+    symops = None
+    if with_symops:
+        symops = [
+            SymOp(r=[float(x) for x in op.r().as_double()], t=[float(x) for x in op.t().as_double()])
+            for op in sym.space_group()
+        ]
     return CrystalSymmetry(
         unit_cell=[float(x) for x in sym.unit_cell().parameters()],
         space_group_hall=hall,
         space_group_number=int(info.type().number()),
+        symops=symops,
     )
 
 

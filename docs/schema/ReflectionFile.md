@@ -194,6 +194,7 @@ attributes:
     - MillerArray
     - HendricksonLattman
     - ReflectionFile
+    - TargetResult
     range: integer
     required: true
   index_dtype:
@@ -288,6 +289,7 @@ attributes:
     - MillerArray
     - HendricksonLattman
     - ReflectionFile
+    - TargetResult
     range: integer
     required: true
   index_dtype:

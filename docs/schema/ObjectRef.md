@@ -202,6 +202,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
   shape:
     name: shape
     description: Shape when kind=array
@@ -315,6 +316,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     range: string
   shape:
     name: shape

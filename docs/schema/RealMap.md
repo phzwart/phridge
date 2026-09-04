@@ -192,6 +192,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -219,6 +220,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     required: true
 
 ```
@@ -295,6 +297,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -324,6 +327,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     range: string
     required: true
 

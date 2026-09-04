@@ -122,6 +122,7 @@ attributes:
     - SlotBinding
     - OpSpec
     - Atom
+    - TargetResult
     required: true
   schema_version:
     name: schema_version
@@ -172,6 +173,7 @@ attributes:
     - SlotBinding
     - OpSpec
     - Atom
+    - TargetResult
     range: string
     required: true
   schema_version:

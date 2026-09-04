@@ -277,6 +277,16 @@
                         "null"
                     ]
                 },
+                "symops": {
+                    "description": "Optional full list of symmetry operators (centering included), x' = r @ x + t in fractional coordinates. Exported by the client from sgtbx so a worker without cctbx can expand to P1.\n",
+                    "items": {
+                        "$ref": "#/$defs/SymOp"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
                 "unit_cell": {
                     "description": "a, b, c (\u00c5), alpha, beta, gamma (degrees)",
                     "items": {
@@ -1224,6 +1234,114 @@
             "title": "Scatterer",
             "type": "object"
         },
+        "ScatteringTable": {
+            "additionalProperties": false,
+            "description": "Gaussian form-factor coefficients per scattering type (cctbx scattering_type_registry, e.g. wk1995 / it1992 / n_gaussian). npz: gauss_a [T,K], gauss_b [T,K], gauss_c [T]; unused terms zero.",
+            "properties": {
+                "labels": {
+                    "description": "Scattering type label per row (C, N, O, S, Se, water, ...)",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "n_terms": {
+                    "description": "K, number of Gaussian terms per row",
+                    "type": "integer"
+                },
+                "table": {
+                    "description": "Registry table name (wk1995, it1992, n_gaussian, ...)",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "table",
+                "labels",
+                "n_terms"
+            ],
+            "title": "ScatteringTable",
+            "type": "object"
+        },
+        "SfEngineParams": {
+            "additionalProperties": false,
+            "description": "Gridding / accuracy controls for the FFT structure-factor engine. JSON only. Mirrors cctbx structure_factors.from_scatterers FFT settings (grid_resolution_factor, quality_factor, wing_cutoff).",
+            "properties": {
+                "d_min": {
+                    "type": "number"
+                },
+                "dtype": {
+                    "description": "Compute dtype, float64 (default) or float32",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "grid_resolution_factor": {
+                    "description": "Grid spacing = d_min * factor (default 1/3)",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "n_real": {
+                    "description": "Explicit FFT gridding (nx, ny, nz); derived from d_min if absent",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "quality_factor": {
+                    "description": "cctbx quality_factor for u_base (default 100)",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "u_extra": {
+                    "description": "Override the extra isotropic U added before sampling",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "wing_cutoff": {
+                    "description": "Relative density at the sampling cutoff radius (default 1e-4)",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "d_min"
+            ],
+            "title": "SfEngineParams",
+            "type": "object"
+        },
+        "SfGradients": {
+            "additionalProperties": false,
+            "description": "d(target)/d(scatterer parameters), index-aligned with the XrayStructure the gradients were computed for. All arrays are present; entries for inactive parameters (u_iso of an anisotropic scatterer, u_star of an isotropic one) are zero. npz: d_site_frac [N,3], d_occupancy [N], d_u_iso [N], d_u_star [N,6], d_fp [N], d_fdp [N].",
+            "properties": {
+                "n_scatterers": {
+                    "type": "integer"
+                },
+                "target": {
+                    "description": "Target value when the gradients came from a target op",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "n_scatterers"
+            ],
+            "title": "SfGradients",
+            "type": "object"
+        },
         "SlotBinding": {
             "additionalProperties": false,
             "description": "",
@@ -1259,6 +1377,76 @@
                 "type"
             ],
             "title": "SlotBinding",
+            "type": "object"
+        },
+        "SymOp": {
+            "additionalProperties": false,
+            "description": "One symmetry operator in fractional coordinates. r is row-major 3x3 (9 values), t is 3 values. Rational parts are stored as floats.",
+            "properties": {
+                "r": {
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 9,
+                    "minItems": 9,
+                    "type": "array"
+                },
+                "t": {
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "r",
+                "t"
+            ],
+            "title": "SymOp",
+            "type": "object"
+        },
+        "TargetResult": {
+            "additionalProperties": false,
+            "description": "Evaluation of a reciprocal-space target on a reflection list. npz: per_reflection [N], d_target_d_f_calc complex128[N] (cctbx convention dQ/dA + i dQ/dB, zero on free reflections), optional curv_radial [N] (d2g/d|F|2) and curv_tangential [N] ((dg/d|F|)/|F|) for amplitude-only targets.",
+            "properties": {
+                "has_curvature": {
+                    "type": "boolean"
+                },
+                "n_refl": {
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Registered target name (ls, ml_f, ...)",
+                    "type": "string"
+                },
+                "scale_factor": {
+                    "description": "Scale used or fitted by the target",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "value": {
+                    "description": "Target on the work set",
+                    "type": "number"
+                },
+                "value_test": {
+                    "description": "Target on the test set when r_free flags were given",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "value",
+                "n_refl",
+                "has_curvature"
+            ],
+            "title": "TargetResult",
             "type": "object"
         },
         "XrayStructure": {
@@ -1301,6 +1489,16 @@
             "description": "International Tables space-group number when known",
             "type": [
                 "integer",
+                "null"
+            ]
+        },
+        "symops": {
+            "description": "Optional full list of symmetry operators (centering included), x' = r @ x + t in fractional coordinates. Exported by the client from sgtbx so a worker without cctbx can expand to P1.\n",
+            "items": {
+                "$ref": "#/$defs/SymOp"
+            },
+            "type": [
+                "array",
                 "null"
             ]
         },

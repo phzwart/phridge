@@ -2,6 +2,7 @@
 
 - [Types, packing, and i_seq correspondence](types.md)
 - [Client converters, geometry, and EM maps](client.md)
+- [Torch structure-factor engine, targets, and the Phenix drop-in](engine.md)
 - [Generated LinkML class catalog](schema/index.md) (`make schema-docs`)
 
 JSON Schema for metadata is under [`schema/generated/`](../schema/generated/).

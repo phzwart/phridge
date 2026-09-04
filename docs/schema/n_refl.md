@@ -23,6 +23,7 @@ URI: [phridge:n_refl](https://github.com/phzwart/phridge/schema/phridge/n_refl)
 | [MillerArray](MillerArray.md) | Canonical form of cctbx |  no  |
 | [HendricksonLattman](HendricksonLattman.md) | Canonical HL coefficients (cctbx miller array of hendrickson_lattman) |  no  |
 | [ReflectionFile](ReflectionFile.md) | Canonical iotbx |  no  |
+| [TargetResult](TargetResult.md) | Evaluation of a reciprocal-space target on a reflection list |  no  |
 
 
 
@@ -36,7 +37,7 @@ URI: [phridge:n_refl](https://github.com/phzwart/phridge/schema/phridge/n_refl)
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [MillerArray](MillerArray.md), [HendricksonLattman](HendricksonLattman.md), [ReflectionFile](ReflectionFile.md) |
+| Domain Of | [MillerArray](MillerArray.md), [HendricksonLattman](HendricksonLattman.md), [ReflectionFile](ReflectionFile.md), [TargetResult](TargetResult.md) |
 
 ### Cardinality and Requirements
 
@@ -78,6 +79,7 @@ domain_of:
 - MillerArray
 - HendricksonLattman
 - ReflectionFile
+- TargetResult
 range: string
 
 ```

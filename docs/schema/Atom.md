@@ -149,6 +149,7 @@ attributes:
     - SlotBinding
     - OpSpec
     - Atom
+    - TargetResult
     required: true
   element:
     name: element
@@ -243,6 +244,7 @@ attributes:
     - SlotBinding
     - OpSpec
     - Atom
+    - TargetResult
     range: string
     required: true
   element:
