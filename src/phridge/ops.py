@@ -40,6 +40,64 @@ register(
     )
 )
 
+_XRAY_INPUTS = {"xray": "XrayStructure", "table": "ScatteringTable", "params": "SfEngineParams"}
+_TARGET_INPUTS = {
+    "f_obs": "MillerArray",
+    "target": "json",
+    "weights": "array",
+    "r_free": "array",
+    "alpha": "array",
+    "beta": "array",
+    "epsilon": "array",
+    "centric": "array",
+    "compute_curvature": "json",
+}
+
+register(
+    OpSpec(
+        name="sf_calc",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, "hkl": "MillerArray"},
+        outputs={"f_calc": "MillerArray"},
+    )
+)
+
+register(
+    OpSpec(
+        name="sf_gradients",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, "d_target_d_f_calc": "MillerArray"},
+        outputs={"gradients": "SfGradients"},
+    )
+)
+
+register(
+    OpSpec(
+        name="target_eval",
+        schema_version=SCHEMA_VERSION,
+        inputs={"f_calc": "MillerArray", **_TARGET_INPUTS},
+        outputs={"target": "TargetResult"},
+    )
+)
+
+register(
+    OpSpec(
+        name="refine_gradients",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, **_TARGET_INPUTS},
+        outputs={"f_calc": "MillerArray", "target": "TargetResult", "gradients": "SfGradients"},
+    )
+)
+
+register(
+    OpSpec(
+        name="gauss_newton_hvp",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, "target": "TargetResult", "hkl": "MillerArray", "v": "SfGradients"},
+        outputs={"hv": "SfGradients"},
+    )
+)
+
 
 def main(argv: Iterable[str] | None = None) -> None:
     _ = argv

@@ -495,3 +495,33 @@ def density_at_sites(packed_em: Any, sites_cart: np.ndarray) -> np.ndarray:
     mm = em_map_to_map_manager(packed_em)
     sites = flex.vec3_double([tuple(float(x) for x in row) for row in np.asarray(sites_cart)])
     return np.asarray(list(mm.density_at_sites_cart(sites)), dtype=np.float64)
+
+
+def scattering_table_from_cctbx(structure: Any, table: Optional[str] = None) -> Any:
+    """Gaussian form factors for every scattering type in an xray.structure.
+
+    Uses the structure's existing scattering_type_registry when ``table``
+    is None (falling back to wk1995 if none was set up yet).
+    """
+    from phridge.packing_scattering import PackedScatteringTable
+
+    if table is not None:
+        structure.scattering_type_registry(table=table)
+    try:
+        reg = structure.scattering_type_registry()
+    except Exception:  # registry not set up yet
+        table = table or "wk1995"
+        structure.scattering_type_registry(table=table)
+        reg = structure.scattering_type_registry()
+    labels = sorted(reg.type_index_pairs_as_dict().keys())
+    k = max(reg.gaussian(t).n_terms() for t in labels) if labels else 0
+    gauss_a = np.zeros((len(labels), k), dtype=np.float64)
+    gauss_b = np.zeros((len(labels), k), dtype=np.float64)
+    gauss_c = np.zeros(len(labels), dtype=np.float64)
+    for i, label in enumerate(labels):
+        g = reg.gaussian(label)
+        n = g.n_terms()
+        gauss_a[i, :n] = list(g.array_of_a())
+        gauss_b[i, :n] = list(g.array_of_b())
+        gauss_c[i] = g.c()
+    return PackedScatteringTable(labels, gauss_a, gauss_b, gauss_c, table=str(table or "cctbx"))

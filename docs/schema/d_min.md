@@ -5,11 +5,6 @@ search:
 
 # Slot: d_min 
 
-
-_Resolution (Å) used to choose the grid, when known_
-
-
-
 <div data-search-exclude markdown="1">
 
 
@@ -26,6 +21,7 @@ URI: [phridge:d_min](https://github.com/phzwart/phridge/schema/phridge/d_min)
 | Name | Description | Modifies Slot |
 | --- | --- | --- |
 | [CrystalGridding](CrystalGridding.md) | Canonical maptbx |  no  |
+| [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |  no  |
 
 
 
@@ -38,20 +34,13 @@ URI: [phridge:d_min](https://github.com/phzwart/phridge/schema/phridge/d_min)
 
 | Property | Value |
 | --- | --- |
-| Range | [Float](Float.md) |
-| Domain Of | [CrystalGridding](CrystalGridding.md) |
+| Range | [String](String.md) |
+| Domain Of | [CrystalGridding](CrystalGridding.md), [SfEngineParams](SfEngineParams.md) |
 
 ### Cardinality and Requirements
 
 | Property | Value |
 | --- | --- |
-### Slot Characteristics
-
-| Property | Value |
-| --- | --- |
-| Owner | [CrystalGridding](CrystalGridding.md) |
-
-
 
 
 
@@ -65,13 +54,6 @@ URI: [phridge:d_min](https://github.com/phzwart/phridge/schema/phridge/d_min)
 ## Identifier and Mapping Information
 
 
-
-
-
-### Schema Source
-
-
-* from schema: https://github.com/phzwart/phridge/schema/phridge
 
 
 
@@ -91,13 +73,10 @@ URI: [phridge:d_min](https://github.com/phzwart/phridge/schema/phridge/d_min)
 <details>
 ```yaml
 name: d_min
-description: Resolution (Å) used to choose the grid, when known
-from_schema: https://github.com/phzwart/phridge/schema/phridge
-rank: 1000
-owner: CrystalGridding
 domain_of:
 - CrystalGridding
-range: float
+- SfEngineParams
+range: string
 
 ```
 </details></div>

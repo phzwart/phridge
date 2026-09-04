@@ -106,6 +106,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     required: true
   shape:
     name: shape
@@ -150,6 +151,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     range: string
     required: true
   shape:

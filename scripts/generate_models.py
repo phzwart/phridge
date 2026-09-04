@@ -37,6 +37,11 @@ REQUIRED_CLASSES = {
     "ModelGeometry",
     "EmMap",
     "OpSpec",
+    "SymOp",
+    "ScatteringTable",
+    "SfEngineParams",
+    "SfGradients",
+    "TargetResult",
 }
 
 JSONSCHEMA_CLASSES = ("JobEnvelope", "CrystalSymmetry", "ObjectRef", "ModelGeometry")

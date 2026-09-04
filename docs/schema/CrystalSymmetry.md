@@ -33,6 +33,17 @@ URI: [phridge:CrystalSymmetry](https://github.com/phzwart/phridge/schema/phridge
         
       CrystalSymmetry : space_group_number
         
+      CrystalSymmetry : symops
+        
+          
+    
+        
+        
+        CrystalSymmetry --> "*" SymOp : symops
+        click SymOp href "../SymOp/"
+    
+
+        
       CrystalSymmetry : unit_cell
         
       
@@ -54,6 +65,7 @@ URI: [phridge:CrystalSymmetry](https://github.com/phzwart/phridge/schema/phridge
 | [unit_cell](unit_cell.md) | 1..* <br/> [Float](Float.md) | a, b, c (Å), alpha, beta, gamma (degrees) | direct |
 | [space_group_hall](space_group_hall.md) | 1 <br/> [String](String.md) | Hall symbol as understood by cctbx | direct |
 | [space_group_number](space_group_number.md) | 0..1 <br/> [Integer](Integer.md) | International Tables space-group number when known | direct |
+| [symops](symops.md) | * <br/> [SymOp](SymOp.md) | Optional full list of symmetry operators (centering included), x' = r @ x + t... | direct |
 
 
 
@@ -159,6 +171,21 @@ attributes:
     domain_of:
     - CrystalSymmetry
     range: integer
+  symops:
+    name: symops
+    description: 'Optional full list of symmetry operators (centering included), x''
+      = r @ x + t in fractional coordinates. Exported by the client from sgtbx so
+      a worker without cctbx can expand to P1.
+
+      '
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx
+    rank: 1000
+    domain_of:
+    - CrystalSymmetry
+    range: SymOp
+    multivalued: true
+    inlined: true
+    inlined_as_list: true
 
 ```
 </details>
@@ -209,6 +236,22 @@ attributes:
     domain_of:
     - CrystalSymmetry
     range: integer
+  symops:
+    name: symops
+    description: 'Optional full list of symmetry operators (centering included), x''
+      = r @ x + t in fractional coordinates. Exported by the client from sgtbx so
+      a worker without cctbx can expand to P1.
+
+      '
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx
+    rank: 1000
+    owner: CrystalSymmetry
+    domain_of:
+    - CrystalSymmetry
+    range: SymOp
+    multivalued: true
+    inlined: true
+    inlined_as_list: true
 
 ```
 </details></div>

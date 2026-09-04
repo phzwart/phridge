@@ -235,6 +235,7 @@ attributes:
     - MillerArray
     - HendricksonLattman
     - ReflectionFile
+    - TargetResult
     range: integer
     required: true
   has_sigmas:
@@ -360,6 +361,7 @@ attributes:
     - MillerArray
     - HendricksonLattman
     - ReflectionFile
+    - TargetResult
     range: integer
     required: true
   has_sigmas:

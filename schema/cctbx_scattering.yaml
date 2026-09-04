@@ -1,0 +1,123 @@
+id: https://github.com/phzwart/phridge/schema/cctbx_scattering
+name: phridge_cctbx_scattering
+title: Structure-factor engine and refinement-target types
+description: |
+  Wire types for the torch structure-factor / gradient engine and the
+  reciprocal-space refinement targets.
+
+  Packed npz:
+    ScatteringTable:  gauss_a float64[T,K], gauss_b float64[T,K], gauss_c float64[T]
+    SfGradients:      d_site_frac [N,3], d_occupancy [N], d_u_iso [N],
+                      d_u_star [N,6], d_fp [N], d_fdp [N]
+    TargetResult:     per_reflection [N], d_target_d_f_calc complex128[N],
+                      optional curv_radial [N], curv_tangential [N]
+    SfEngineParams:   JSON only
+
+  Gaussian form factors follow eltbx: f(stol^2) = sum_k a_k exp(-b_k stol^2) + c.
+  Rows of ScatteringTable are indexed by ``labels``; XrayStructure
+  scatterers select a row by ``scattering_type``.
+version: "1"
+default_range: string
+prefixes:
+  phridge_scat: https://github.com/phzwart/phridge/schema/cctbx_scattering/
+  phridge_cctbx: https://github.com/phzwart/phridge/schema/cctbx/
+  linkml: https://w3id.org/linkml/
+default_prefix: phridge_scat
+imports:
+  - linkml:types
+  - cctbx
+
+classes:
+  ScatteringTable:
+    is_a: CctbxObject
+    description: >
+      Gaussian form-factor coefficients per scattering type (cctbx
+      scattering_type_registry, e.g. wk1995 / it1992 / n_gaussian).
+      npz: gauss_a [T,K], gauss_b [T,K], gauss_c [T]; unused terms zero.
+    attributes:
+      table:
+        required: true
+        description: Registry table name (wk1995, it1992, n_gaussian, ...)
+      labels:
+        multivalued: true
+        required: true
+        description: Scattering type label per row (C, N, O, S, Se, water, ...)
+      n_terms:
+        range: integer
+        required: true
+        description: K, number of Gaussian terms per row
+
+  SfEngineParams:
+    is_a: CctbxObject
+    description: >
+      Gridding / accuracy controls for the FFT structure-factor engine.
+      JSON only. Mirrors cctbx structure_factors.from_scatterers FFT
+      settings (grid_resolution_factor, quality_factor, wing_cutoff).
+    attributes:
+      d_min:
+        range: float
+        required: true
+      grid_resolution_factor:
+        range: float
+        description: Grid spacing = d_min * factor (default 1/3)
+      quality_factor:
+        range: float
+        description: cctbx quality_factor for u_base (default 100)
+      wing_cutoff:
+        range: float
+        description: Relative density at the sampling cutoff radius (default 1e-4)
+      u_extra:
+        range: float
+        description: Override the extra isotropic U added before sampling
+      n_real:
+        range: integer
+        multivalued: true
+        description: Explicit FFT gridding (nx, ny, nz); derived from d_min if absent
+      dtype:
+        description: Compute dtype, float64 (default) or float32
+
+  SfGradients:
+    is_a: CctbxObject
+    description: >
+      d(target)/d(scatterer parameters), index-aligned with the
+      XrayStructure the gradients were computed for. All arrays are
+      present; entries for inactive parameters (u_iso of an anisotropic
+      scatterer, u_star of an isotropic one) are zero.
+      npz: d_site_frac [N,3], d_occupancy [N], d_u_iso [N], d_u_star [N,6],
+      d_fp [N], d_fdp [N].
+    attributes:
+      n_scatterers:
+        range: integer
+        required: true
+      target:
+        range: float
+        description: Target value when the gradients came from a target op
+
+  TargetResult:
+    is_a: CctbxObject
+    description: >
+      Evaluation of a reciprocal-space target on a reflection list.
+      npz: per_reflection [N], d_target_d_f_calc complex128[N]
+      (cctbx convention dQ/dA + i dQ/dB, zero on free reflections),
+      optional curv_radial [N] (d2g/d|F|2) and curv_tangential [N]
+      ((dg/d|F|)/|F|) for amplitude-only targets.
+    attributes:
+      name:
+        required: true
+        description: Registered target name (ls, ml_f, ...)
+      value:
+        range: float
+        required: true
+        description: Target on the work set
+      value_test:
+        range: float
+        description: Target on the test set when r_free flags were given
+      n_refl:
+        range: integer
+        required: true
+      scale_factor:
+        range: float
+        description: Scale used or fitted by the target
+      has_curvature:
+        range: boolean
+        required: true

@@ -39,8 +39,9 @@ def process_envelope(
         if impl is None:
             raise UnknownOpError(f"no worker implementation for {envelope.op}")
         native: dict[str, Any] = {}
+        compute_dtype = _compute_dtype(impl)
         for name, ref in envelope.inputs.items():
-            native[name] = to_torch(decode_ref(store, ref), device)
+            native[name] = to_torch(decode_ref(store, ref), device, compute_dtype)
         kwargs = _bind_kwargs(impl, native)
         result = impl(**kwargs)
         if not isinstance(result, dict):
@@ -65,6 +66,18 @@ def process_envelope(
     return envelope
 
 
+def _compute_dtype(impl: Any) -> Any:
+    """Ops may declare ``impl.compute_dtype = "float64"`` to keep full precision."""
+    name = getattr(impl, "compute_dtype", None)
+    if name is None:
+        return None
+    try:
+        import torch
+    except ImportError:
+        return None
+    return {"float64": torch.float64, "float32": torch.float32}[name]
+
+
 def _bind_kwargs(impl: Any, native: dict[str, Any]) -> dict[str, Any]:
     signature = inspect.signature(impl)
     kwargs = {}
@@ -84,6 +97,7 @@ def consume_one(
     block_ms: int = 1000,
 ) -> Optional[JobEnvelope]:
     store.ensure_consumer_group()
+    _set_op_device(device)
     messages = store.client.xreadgroup(
         WORKER_GROUP,
         consumer,
@@ -113,6 +127,7 @@ def consume_forever(
 ) -> None:
     store.ensure_consumer_group()
     device = resolve_device(device)
+    _set_op_device(device)
     consumer = consumer or socket.gethostname()
     while True:
         messages = store.client.xreadgroup(
@@ -133,6 +148,12 @@ def consume_forever(
                     continue
                 process_envelope(store, envelope, device=device)
                 store.client.xack(JOBS_STREAM, WORKER_GROUP, message_id)
+
+
+def _set_op_device(device: str) -> None:
+    from phridge.worker.ops import xtal_ops
+
+    xtal_ops.set_device(device)
 
 
 def _field(fields: dict, key: str) -> str:

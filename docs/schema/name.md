@@ -23,6 +23,7 @@ URI: [phridge:name](https://github.com/phzwart/phridge/schema/phridge/name)
 | [SlotBinding](SlotBinding.md) |  |  no  |
 | [OpSpec](OpSpec.md) |  |  no  |
 | [Atom](Atom.md) | One iotbx |  no  |
+| [TargetResult](TargetResult.md) | Evaluation of a reciprocal-space target on a reflection list |  no  |
 
 
 
@@ -36,7 +37,7 @@ URI: [phridge:name](https://github.com/phzwart/phridge/schema/phridge/name)
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [SlotBinding](SlotBinding.md), [OpSpec](OpSpec.md), [Atom](Atom.md) |
+| Domain Of | [SlotBinding](SlotBinding.md), [OpSpec](OpSpec.md), [Atom](Atom.md), [TargetResult](TargetResult.md) |
 
 ### Cardinality and Requirements
 
@@ -78,6 +79,7 @@ domain_of:
 - SlotBinding
 - OpSpec
 - Atom
+- TargetResult
 range: string
 
 ```

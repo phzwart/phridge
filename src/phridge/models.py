@@ -102,12 +102,38 @@ class Compression(str, Enum):
     gzip = "gzip"
 
 
+class SymOp(_Strict):
+    """One symmetry operator, x' = r @ x + t (fractional). r row-major 3x3."""
+
+    r: list[float]
+    t: list[float]
+
+    @field_validator("r")
+    @classmethod
+    def _nine(cls, value: list[float]) -> list[float]:
+        if len(value) != 9:
+            raise ValueError("r must have 9 values")
+        return [float(x) for x in value]
+
+    @field_validator("t")
+    @classmethod
+    def _three(cls, value: list[float]) -> list[float]:
+        if len(value) != 3:
+            raise ValueError("t must have 3 values")
+        return [float(x) for x in value]
+
+
 class CrystalSymmetry(_Strict):
-    """Canonical cctbx.crystal.symmetry. JSON only; no binary blob."""
+    """Canonical cctbx.crystal.symmetry. JSON only; no binary blob.
+
+    ``symops`` (optional) is the full operator list so a worker without
+    sgtbx can expand to P1.
+    """
 
     unit_cell: list[float]
     space_group_hall: str
     space_group_number: Optional[int] = None
+    symops: Optional[list[SymOp]] = None
 
     @field_validator("unit_cell")
     @classmethod
@@ -307,6 +333,44 @@ class GeometryRestraints(_Strict):
     bond_asu_rt_mx: list[str] = Field(default_factory=list)
 
 
+class ScatteringTable(_Strict):
+    """Gaussian form factors per scattering type. npz: gauss_a, gauss_b, gauss_c."""
+
+    table: str
+    labels: list[str]
+    n_terms: int
+
+
+class SfEngineParams(_Strict):
+    """FFT structure-factor engine controls. JSON only."""
+
+    d_min: float
+    grid_resolution_factor: float = 1.0 / 3.0
+    quality_factor: float = 100.0
+    wing_cutoff: float = 1e-4
+    u_extra: Optional[float] = None
+    n_real: Optional[list[int]] = None
+    dtype: str = "float64"
+
+
+class SfGradients(_Strict):
+    """d target / d scatterer parameters. npz: d_site_frac, d_occupancy, d_u_iso, d_u_star, d_fp, d_fdp."""
+
+    n_scatterers: int
+    target: Optional[float] = None
+
+
+class TargetResult(_Strict):
+    """Target evaluation. npz: per_reflection, d_target_d_f_calc, optional curv_radial, curv_tangential."""
+
+    name: str
+    value: float
+    value_test: Optional[float] = None
+    n_refl: int
+    scale_factor: Optional[float] = None
+    has_curvature: bool
+
+
 class ModelGeometry(_Strict):
     n_sites: int
     has_hierarchy: bool = False
@@ -331,6 +395,10 @@ CCTBX_TYPES = {
     "XrayStructure": XrayStructure,
     "GeometryRestraints": GeometryRestraints,
     "ModelGeometry": ModelGeometry,
+    "ScatteringTable": ScatteringTable,
+    "SfEngineParams": SfEngineParams,
+    "SfGradients": SfGradients,
+    "TargetResult": TargetResult,
 }
 
 

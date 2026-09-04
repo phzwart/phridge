@@ -163,6 +163,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -183,6 +184,7 @@ attributes:
     rank: 1000
     domain_of:
     - CrystalGridding
+    - SfEngineParams
     range: float
   space:
     name: space
@@ -241,6 +243,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -263,6 +266,7 @@ attributes:
     owner: CrystalGridding
     domain_of:
     - CrystalGridding
+    - SfEngineParams
     range: float
   space:
     name: space

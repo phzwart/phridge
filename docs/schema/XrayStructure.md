@@ -156,6 +156,7 @@ attributes:
     rank: 1000
     domain_of:
     - XrayStructure
+    - SfGradients
     range: integer
     required: true
   scatterers:
@@ -213,6 +214,7 @@ attributes:
     owner: XrayStructure
     domain_of:
     - XrayStructure
+    - SfGradients
     range: integer
     required: true
   scatterers:

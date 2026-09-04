@@ -218,6 +218,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -244,6 +245,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     required: true
   experiment_type:
     name: experiment_type
@@ -373,6 +375,7 @@ attributes:
     - RealMap
     - ComplexMap
     - EmMap
+    - SfEngineParams
     range: integer
     required: true
     multivalued: true
@@ -401,6 +404,7 @@ attributes:
     - EmMap
     - CartesianSites
     - FractionalSites
+    - SfEngineParams
     range: string
     required: true
   experiment_type:

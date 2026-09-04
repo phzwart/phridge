@@ -27,6 +27,7 @@ URI: [phridge:dtype](https://github.com/phzwart/phridge/schema/phridge/dtype)
 | [EmMap](EmMap.md) | Canonical iotbx |  no  |
 | [CartesianSites](CartesianSites.md) | cctbx xrs |  no  |
 | [FractionalSites](FractionalSites.md) | cctbx xrs |  no  |
+| [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |  no  |
 
 
 
@@ -40,7 +41,7 @@ URI: [phridge:dtype](https://github.com/phzwart/phridge/schema/phridge/dtype)
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [ArrayMeta](ArrayMeta.md), [ObjectRef](ObjectRef.md), [RealMap](RealMap.md), [ComplexMap](ComplexMap.md), [EmMap](EmMap.md), [CartesianSites](CartesianSites.md), [FractionalSites](FractionalSites.md) |
+| Domain Of | [ArrayMeta](ArrayMeta.md), [ObjectRef](ObjectRef.md), [RealMap](RealMap.md), [ComplexMap](ComplexMap.md), [EmMap](EmMap.md), [CartesianSites](CartesianSites.md), [FractionalSites](FractionalSites.md), [SfEngineParams](SfEngineParams.md) |
 
 ### Cardinality and Requirements
 
@@ -86,6 +87,7 @@ domain_of:
 - EmMap
 - CartesianSites
 - FractionalSites
+- SfEngineParams
 range: string
 
 ```

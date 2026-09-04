@@ -4,7 +4,10 @@ Bridge between Phenix/cctbx and a PyTorch worker. Redis is the only shared
 store: blobs, a job stream, and a per-job ready list. The client never
 imports torch. The worker never imports cctbx.
 
-More detail: [docs/README.md](docs/README.md).
+More detail: [docs/README.md](docs/README.md). The worker also carries a
+differentiable FFT structure-factor engine and ML / least-squares
+targets that drop in for `cctbx.xray.structure_factors` on the Phenix
+side: [docs/engine.md](docs/engine.md).
 
 ## Contract
 
@@ -18,6 +21,7 @@ LinkML schemas are the source of truth (`schema_version` / LinkML `version` = `1
 | [`schema/cctbx_maps.yaml`](schema/cctbx_maps.yaml) | real/complex maps, gridding, `EmMap` |
 | [`schema/cctbx_coordinates.yaml`](schema/cctbx_coordinates.yaml) | sites, `Hierarchy`, `XrayStructure` |
 | [`schema/cctbx_geometry.yaml`](schema/cctbx_geometry.yaml) | `GeometryRestraints`, `ModelGeometry` |
+| [`schema/cctbx_scattering.yaml`](schema/cctbx_scattering.yaml) | `ScatteringTable`, `SfEngineParams`, `SfGradients`, `TargetResult` |
 
 Redis stores science objects with `kind=cctbx` and `cctbx_type` set to the
 class name. There is no `sparse_miller` or `map_grid` kind.
@@ -33,6 +37,10 @@ class name. There is no `sparse_miller` or `map_grid` kind.
 | `XrayStructure` | coordinates | npz `sites_frac`, `occupancy`, `u_iso`, `u_star` (`N×6` fractional) |
 | `GeometryRestraints` | geometry | npz proxy tables keyed by `i_seq` |
 | `ModelGeometry` | geometry | JSON correspondence header |
+| `ScatteringTable` | scattering | npz Gaussian form-factor coefficients per type |
+| `SfEngineParams` | scattering | JSON: d_min, gridding, quality factor |
+| `SfGradients` | scattering | npz per-scatterer gradients (site, occ, u_iso, u_star, fp, fdp) |
+| `TargetResult` | scattering | npz per-reflection target, `d_target_d_f_calc`, curvatures |
 
 LinkML holds metadata. Multi-buffer objects are **one packed npz** at
 `ObjectRef.key`. Do not pickle. Do not store flex or torch objects.

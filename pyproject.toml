@@ -25,6 +25,7 @@ dev = [
     "fakeredis>=2.23",
     "linkml>=1.8",
     "cctbx-base",
+    "torch",
 ]
 
 [project.scripts]

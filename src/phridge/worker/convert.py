@@ -42,7 +42,8 @@ def to_torch(value: Any, device: str, compute_dtype: Any = None) -> Any:
 
 def from_torch(value: Any) -> Any:
     if isinstance(value, PackedMiller):
-        value.data = _torch_to_canonical(value.data)
+        if _is_torch(value.data):
+            value.data = _torch_to_canonical(value.data)
         if value.sigmas is not None and _is_torch(value.sigmas):
             value.sigmas = _torch_to_canonical(value.sigmas)
         value.meta.data_dtype = (
@@ -50,7 +51,8 @@ def from_torch(value: Any) -> Any:
         )
         return value
     if isinstance(value, PackedMap):
-        value.data = _torch_to_canonical(value.data)
+        if _is_torch(value.data):
+            value.data = _torch_to_canonical(value.data)
         return value
     if _is_torch(value):
         return _torch_to_canonical(value)

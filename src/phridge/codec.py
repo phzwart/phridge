@@ -12,6 +12,7 @@ from phridge.models import (
     ModelGeometry,
     ObjectKind,
     ObjectRef,
+    SfEngineParams,
 )
 from phridge.packing import (
     PackedMap,
@@ -44,6 +45,14 @@ from phridge.packing_xtal import (
     unpack_xray,
 )
 from phridge.packing_geometry import PackedRestraints, unpack_restraints
+from phridge.packing_scattering import (
+    PackedScatteringTable,
+    PackedSfGradients,
+    PackedTargetResult,
+    unpack_scattering_table,
+    unpack_sf_gradients,
+    unpack_target_result,
+)
 from phridge.redis_store import RedisStore
 
 _PACKED_TYPES: list[tuple[type, str]] = [
@@ -59,12 +68,16 @@ _PACKED_TYPES: list[tuple[type, str]] = [
     (PackedXray, "XrayStructure"),
     (PackedEmMap, "EmMap"),
     (PackedRestraints, "GeometryRestraints"),
+    (PackedScatteringTable, "ScatteringTable"),
+    (PackedSfGradients, "SfGradients"),
+    (PackedTargetResult, "TargetResult"),
 ]
 
 _JSON_ONLY = {
     CrystalSymmetry: "CrystalSymmetry",
     CrystalGridding: "CrystalGridding",
     ModelGeometry: "ModelGeometry",
+    SfEngineParams: "SfEngineParams",
 }
 
 _UNPACK: dict[str, Callable[[bytes, Any], Any]] = {
@@ -80,6 +93,9 @@ _UNPACK: dict[str, Callable[[bytes, Any], Any]] = {
     "XrayStructure": unpack_xray,
     "EmMap": unpack_em_map,
     "GeometryRestraints": unpack_restraints,
+    "ScatteringTable": unpack_scattering_table,
+    "SfGradients": unpack_sf_gradients,
+    "TargetResult": unpack_target_result,
 }
 
 

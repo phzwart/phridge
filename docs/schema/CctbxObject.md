@@ -58,6 +58,14 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
         click GeometryRestraints href "../GeometryRestraints/"
       CctbxObject <|-- ModelGeometry
         click ModelGeometry href "../ModelGeometry/"
+      CctbxObject <|-- ScatteringTable
+        click ScatteringTable href "../ScatteringTable/"
+      CctbxObject <|-- SfEngineParams
+        click SfEngineParams href "../SfEngineParams/"
+      CctbxObject <|-- SfGradients
+        click SfGradients href "../SfGradients/"
+      CctbxObject <|-- TargetResult
+        click TargetResult href "../TargetResult/"
       
       
 ```
@@ -83,6 +91,10 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
     * [XrayStructure](XrayStructure.md)
     * [GeometryRestraints](GeometryRestraints.md)
     * [ModelGeometry](ModelGeometry.md)
+    * [ScatteringTable](ScatteringTable.md)
+    * [SfEngineParams](SfEngineParams.md)
+    * [SfGradients](SfGradients.md)
+    * [TargetResult](TargetResult.md)
 
 
 ## Slots

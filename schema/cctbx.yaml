@@ -59,3 +59,30 @@ classes:
       space_group_number:
         range: integer
         description: International Tables space-group number when known
+      symops:
+        range: SymOp
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
+        description: >
+          Optional full list of symmetry operators (centering included),
+          x' = r @ x + t in fractional coordinates. Exported by the client
+          from sgtbx so a worker without cctbx can expand to P1.
+
+  SymOp:
+    description: >
+      One symmetry operator in fractional coordinates. r is row-major
+      3x3 (9 values), t is 3 values. Rational parts are stored as floats.
+    attributes:
+      r:
+        range: float
+        multivalued: true
+        required: true
+        minimum_cardinality: 9
+        maximum_cardinality: 9
+      t:
+        range: float
+        multivalued: true
+        required: true
+        minimum_cardinality: 3
+        maximum_cardinality: 3

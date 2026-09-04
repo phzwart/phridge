@@ -24,6 +24,7 @@ URI: [phridge:n_real](https://github.com/phzwart/phridge/schema/phridge/n_real)
 | [RealMap](RealMap.md) | Canonical real-space map (maptbx / iotbx |  no  |
 | [ComplexMap](ComplexMap.md) | Complex grid (e |  no  |
 | [EmMap](EmMap.md) | Canonical iotbx |  no  |
+| [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |  no  |
 
 
 
@@ -37,7 +38,7 @@ URI: [phridge:n_real](https://github.com/phzwart/phridge/schema/phridge/n_real)
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [CrystalGridding](CrystalGridding.md), [RealMap](RealMap.md), [ComplexMap](ComplexMap.md), [EmMap](EmMap.md) |
+| Domain Of | [CrystalGridding](CrystalGridding.md), [RealMap](RealMap.md), [ComplexMap](ComplexMap.md), [EmMap](EmMap.md), [SfEngineParams](SfEngineParams.md) |
 
 ### Cardinality and Requirements
 
@@ -80,6 +81,7 @@ domain_of:
 - RealMap
 - ComplexMap
 - EmMap
+- SfEngineParams
 range: string
 
 ```
