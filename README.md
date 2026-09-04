@@ -62,8 +62,22 @@ pip install -e ".[cctbx]"        # pip cctbx-base only (not a Phenix bundle)
 pip install -e ".[worker]"       # torch worker
 ```
 
+On aarch64 (and generally for real geometry restraints), prefer a conda
+env with `cctbx-base` plus the monomer library package:
+
+```bash
+conda create -n phridge-cctbx -c conda-forge python=3.13 cctbx-base
+conda install -n phridge-cctbx -c chem_data chem_data   # ~5 GB; mon_lib + geostd
+conda run -n phridge-cctbx pip install -e ".[dev]"
+```
+
+`chem_data` lands in `site-packages/chem_data`; mmtbx finds it without
+extra env vars. (`MMTBX_CCP4_MONOMER_LIB` still works if you point at
+`…/chem_data/geostd` from a Phenix tree instead.)
+
 `cctbx-base` on PyPI is the library, not Phenix. A Phenix install cannot
-be assumed to `pip install` into the bundle.
+be assumed to `pip install` into the bundle. Pip has no aarch64
+`cctbx-base` wheel.
 
 Runtime needs `numpy`, `redis`, and `pydantic` v2. `linkml-runtime` is
 not required at runtime; [`src/phridge/models.py`](src/phridge/models.py)
@@ -150,11 +164,22 @@ uses fakeredis; if consumer groups are incomplete the stream test skips.
 Use a real Redis to verify `XREADGROUP`. Torch worker tests skip unless
 `phridge[worker]` is installed.
 
+## Examples
+
+```bash
+make example-restraints
+# or: python examples/restraint_minimization.py
+```
+
+See [examples/README.md](examples/README.md) — cctbx objects in, phridge
+pack/unpack, cctbx objects out (geometry-restraint minimization).
+
 ## Layout
 
 ```
 schema/                      LinkML (source of truth)
 docs/                        Contract, packing, client helpers
+examples/                    cctbx → phridge → cctbx demos
 src/phridge/models.py        committed pydantic
 src/phridge/packing*.py      npz encode/decode
 src/phridge/client/          Bridge, converters, EM + geometry helpers
