@@ -68,6 +68,32 @@ geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
 sites = geo.minimize(max_iterations=80, optimizer="lbfgs", update_hierarchy=False)
 ```
 
+## Structure-factor server (cctbx-feel → remote GPU)
+
+```bash
+make example-sf-server
+# or:
+python examples/sf_server_demo.py
+```
+
+Writes [`sf_server_demo.md`](sf_server_demo.md). Documents the architecture
+where **Phenix stays on the CPU host** and
+[`StructureFactorServer`](../docs/sf_server.md) sends \(F_\mathrm{calc}\) /
+gradients to a **GPU worker that can live on another machine**. The demo
+itself uses `memory=True` (no Redis); production uses
+`StructureFactorServer("redis://gpu-host:6379/0")`.
+
+```python
+from phridge.client import StructureFactorServer
+
+sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
+f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)
+grads = sf.gradients(xray_structure, miller_set, d_target_d_f_calc, d_min=2.0)
+target, packed = sf.target_and_gradients(
+    xray_structure, f_obs, {"name": "ls", "obs_type": "F"}, d_min=2.0
+)
+```
+
 ## Structure-factor gradients (GPU)
 
 ```bash

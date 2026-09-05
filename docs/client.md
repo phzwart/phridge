@@ -89,3 +89,17 @@ ASU / planarity). See `examples/restraint_minimization.py`.
 | `density_at_hierarchy` | sample at packed hierarchy xyz (i_seq order) |
 
 Cryo-EM maps are typically `wrapping=False`. Crystal maps may wrap.
+
+## Structure-factor server (remote GPU)
+
+`StructureFactorServer` is the cctbx-feel handle for \(F_\mathrm{calc}\) and
+parameter derivatives when compute runs on a **torch GPU worker** — often on
+**another machine**. Full guide: [sf_server.md](sf_server.md).
+
+```python
+from phridge.client import StructureFactorServer
+
+sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
+f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)
+grads = sf.gradients(xray_structure, miller_set, d_target_d_f_calc, d_min=2.0)
+```

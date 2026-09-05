@@ -241,6 +241,27 @@ def test_crystal_symmetry_carries_symops():
     assert cs.model_dump()["symops"][0]["r"] == [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
 
 
+def test_structure_factor_server_f_calc_and_gradients():
+    """cctbx-feel StructureFactorServer façade (memory Bridge)."""
+    from phridge.client import StructureFactorServer
+
+    sf = StructureFactorServer(memory=True, device="cpu")
+    xs = _structure("P21", n_repeat=1, seed=11)
+    d_min = 2.0
+    ref_fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    params = SfEngineParams(d_min=d_min, quality_factor=1000)
+    fc = sf.f_calc(xs, ref_fc, params=params)
+    assert _rel(np.array(ref_fc.data()), np.array(fc.data())) < 3e-3
+    rng = np.random.default_rng(0)
+    dtdf = flex.complex_double(rng.normal(size=fc.size()) + 1j * rng.normal(size=fc.size()))
+    grads = sf.gradients(xs, ref_fc, dtdf, params=params)
+    assert grads.packed().size() == xs.n_parameters()
+    f_obs = ref_fc.amplitudes()
+    target, packed = sf.target_and_gradients(xs, f_obs, {"name": "ls", "obs_type": "F"}, params=params)
+    assert target >= 0.0
+    assert packed.size() == xs.n_parameters()
+
+
 def test_remote_structure_factors_drop_in():
     bridge = _bridge()
     xs = _structure("P21", aniso=True, anomalous=True)

@@ -108,6 +108,25 @@ type, `scattering_table_from_cctbx(xray_structure)`), and
 
 ## Phenix side
 
+Prefer the **structure-factor server** façade when FFT work should run on a
+**GPU box that may be a different machine** than Phenix — see
+[sf_server.md](sf_server.md):
+
+```python
+from phridge.client import StructureFactorServer
+
+# GPU server Redis (often another host):
+sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
+f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)
+grads = sf.gradients(xray_structure, miller_set, d_target_d_f_calc, d_min=2.0)
+target, packed = sf.target_and_gradients(
+    xray_structure, f_obs, {"name": "ls", "obs_type": "F"}, d_min=2.0
+)
+```
+
+Lower-level drop-ins (`RemoteStructureFactors`, `RemoteRefinementTarget`) take
+an explicit `Bridge`:
+
 ```python
 from phridge.client import Bridge
 from phridge.client.xtal_engine import RemoteStructureFactors, RemoteTargetFunctor, RemoteRefinementTarget

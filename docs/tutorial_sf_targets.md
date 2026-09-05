@@ -2,7 +2,8 @@
 
 Super short guide to calling phridge’s FFT structure-factor target / gradient
 path from Phenix, then plugging in a custom likelihood. Details and math live
-in [engine.md](engine.md); Redis / workers in [redis.md](redis.md).
+in [engine.md](engine.md); the **remote GPU “structure-factor server”** story
+in [sf_server.md](sf_server.md); Redis / workers in [redis.md](redis.md).
 
 ## 0. Setup
 
@@ -10,24 +11,21 @@ in [engine.md](engine.md); Redis / workers in [redis.md](redis.md).
 conda activate phridge-cctbx
 pip install -e ".[dev]"
 
-# optional (GPU worker):
+# On the GPU machine (can be a different host than Phenix):
 redis-server
-phridge-worker --redis-url redis://localhost:6379/0 --device cuda
+phridge-worker --redis-url redis://0.0.0.0:6379/0 --device cuda
 ```
 
 ```python
 # import cctbx before torch in one process
-from phridge.client import Bridge
-from phridge.client.xtal_engine import (
-    RemoteStructureFactors,
-    RemoteRefinementTarget,
-)
+from phridge.client import StructureFactorServer
 from phridge.models import SfEngineParams
 
-# local / demo (no Redis):
-bridge = Bridge(memory=True, device="cuda")  # or "cpu"
-# production:
-# bridge = Bridge("redis://localhost:6379/0")
+# production: Redis on the GPU server (other machine OK)
+sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
+
+# local / demo (no Redis; in-process worker):
+# sf = StructureFactorServer(memory=True, device="cuda")  # or "cpu"
 ```
 
 You need a cctbx `xray_structure` and an `f_obs` miller array (amplitudes).
@@ -43,15 +41,12 @@ gradients for `scitbx.lbfgs`.
 ```python
 params = SfEngineParams(d_min=2.0, quality_factor=100)  # raise quality for tighter F
 
-refiner = RemoteRefinementTarget(
-    bridge,
+target, packed = sf.target_and_gradients(
     xray_structure,
     f_obs,
     {"name": "ls", "obs_type": "F"},   # built-in least squares
     params=params,
 )
-
-target, packed = refiner.target_and_gradients(xray_structure)
 # target: float (work-set)
 # packed: flex.double — sites (cart), U, occ, … per grad flags
 ```
@@ -66,14 +61,13 @@ Built-in targets:
 ML example:
 
 ```python
-refiner = RemoteRefinementTarget(
-    bridge, xray_structure, f_obs,
+target, packed = sf.target_and_gradients(
+    xray_structure, f_obs,
     {"name": "ml_f"},
     params=params,
     alpha=alpha, beta=beta,           # flex or numpy, one per reflection
     r_free_flags=r_free_flags,        # optional
 )
-target, packed = refiner.target_and_gradients()
 ```
 
 ---
@@ -84,10 +78,8 @@ If you already have `d_target_d_f_calc` (cctbx convention:
 \(G_h = \partial Q/\partial A_h + i\,\partial Q/\partial B_h\)):
 
 ```python
-engine = RemoteStructureFactors(bridge, xray_structure, miller_set, params=params)
-
-f_calc = engine.f_calc()                          # miller.array (complex)
-grads = engine.gradients(d_target_d_f_calc)       # flex or numpy OK
+f_calc = sf.f_calc(xray_structure, miller_set, params=params)   # miller.array
+grads = sf.gradients(xray_structure, miller_set, d_target_d_f_calc, params=params)
 
 sites = grads.d_target_d_site_frac()              # or .d_target_d_site_cart()
 packed = grads.packed()                           # for LBFGS
@@ -96,9 +88,7 @@ packed = grads.packed()                           # for LBFGS
 Or evaluate a registered target on a given `f_calc` without re-running the FFT:
 
 ```python
-from phridge.client.xtal_engine import RemoteTargetFunctor
-
-functor = RemoteTargetFunctor(bridge, f_obs, {"name": "ls", "obs_type": "F"})
+functor = sf.target_functor(f_obs, {"name": "ls", "obs_type": "F"})
 res = functor(f_calc)
 print(res.target_work(), res.d_target_d_f_calc())
 ```
@@ -143,7 +133,7 @@ def register():
 
 ```bash
 phridge-worker --preload mypkg.my_likelihood --device cuda
-# or with Bridge(memory=True): import mypkg.my_likelihood before the call
+# or with StructureFactorServer(memory=True): import mypkg.my_likelihood before the call
 ```
 
 2. Client uses the same name in the target spec (no torch on the Phenix side):
@@ -151,12 +141,11 @@ phridge-worker --preload mypkg.my_likelihood --device cuda
 ```python
 import mypkg.my_likelihood  # only needed for memory Bridge / same-process demos
 
-refiner = RemoteRefinementTarget(
-    bridge, xray_structure, f_obs,
+target, packed = sf.target_and_gradients(
+    xray_structure, f_obs,
     {"name": "my_nll", "sigma": 2.5},
     params=SfEngineParams(d_min=2.0),
 )
-target, packed = refiner.target_and_gradients()
 ```
 
 Tips:
@@ -164,7 +153,7 @@ Tips:
 - Put anything that needs torch in `per_reflection` / `prepare` / `reduce`.
 - Use `obs.data`, `obs.weights`, `obs.r_free`, `obs.alpha`, `obs.beta`, …
   (see `Observations` in `phridge.worker.targets`). Pass extras through
-  `RemoteRefinementTarget(..., alpha=..., beta=..., weights=...)`.
+  `sf.target_and_gradients(..., alpha=..., beta=..., weights=...)`.
 - Override `reduce` if you do not want the default mean over work reflections.
 - Set `amplitude_only = False` if your loss uses the complex \(F_h\) (phase),
   not only \(|F_h|\).
@@ -180,19 +169,17 @@ For registering brand-new **ops** (not just targets), see
 import scitbx.lbfgs
 from cctbx.array_family import flex
 
-refiner = RemoteRefinementTarget(
-    bridge, xs, f_obs, {"name": "ls", "obs_type": "F"},
-    params=SfEngineParams(d_min=2.0),
-)
-
 class Minimizer:
     def __init__(self, xs):
         self.xs = xs
         self.x = xs.sites_cart().as_double()
 
-    def compute(self):
+    def compute_functional_and_gradients(self):
         self.xs.set_sites_cart(flex.vec3_double(self.x))
-        self.f, self.g = refiner.target_and_gradients(self.xs)
+        return sf.target_and_gradients(
+            self.xs, f_obs, {"name": "ls", "obs_type": "F"},
+            params=SfEngineParams(d_min=2.0),
+        )
 
 m = Minimizer(xs)
 scitbx.lbfgs.run(target_evaluator=m)
@@ -204,8 +191,10 @@ scitbx.lbfgs.run(target_evaluator=m)
 
 | Want | Call |
 |------|------|
-| \(F_\mathrm{calc}\) only | `RemoteStructureFactors(...).f_calc()` |
-| Grads given \(G_h\) | `RemoteStructureFactors(...).gradients(dtdf)` |
-| Target on fixed \(F_c\) | `RemoteTargetFunctor(...)(f_calc)` |
-| Full step (FFT + target + grads) | `RemoteRefinementTarget(...).target_and_gradients()` |
+| Remote GPU handle | `StructureFactorServer("redis://gpu-host:6379/0")` |
+| \(F_\mathrm{calc}\) only | `sf.f_calc(xs, miller_set, ...)` |
+| Grads given \(G_h\) | `sf.gradients(xs, miller_set, dtdf, ...)` |
+| Target on fixed \(F_c\) | `sf.target_functor(...)(f_calc)` |
+| Full step (FFT + target + grads) | `sf.target_and_gradients(...)` |
 | Custom likelihood | `@register_target("name")` + `{"name": "name", ...}` |
+| Architecture write-up | [sf_server.md](sf_server.md) |

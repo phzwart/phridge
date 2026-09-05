@@ -95,10 +95,15 @@ all go through `bridge.call`. See [client.md](client.md) and
 
 Registered ops include `scale_array`, `sf_calc`, `sf_gradients`,
 `target_eval`, `refine_gradients`, `gauss_newton_hvp`,
+`gauss_newton_diagonal`, `gauss_newton_blocks`,
 `geometry_minimize` (torch), and `build_geometry_restraints` (cctbx).
 Unknown ops fail on the client before enqueue. Third-party packages can
 add more via `register_op(..., runtime=...)` and
 `phridge-worker --preload` — see [extending.md](extending.md).
+
+For structure factors on a **remote GPU host**, prefer
+[`StructureFactorServer`](sf_server.md)
+(`StructureFactorServer("redis://gpu-host:6379/0")`) over raw `Bridge.call`.
 
 ## Running with a server
 

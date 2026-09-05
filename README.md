@@ -10,7 +10,9 @@ More detail: [docs/README.md](docs/README.md) (including
 [Redis / `Bridge(memory=True)`](docs/redis.md)). The torch worker also
 carries a differentiable FFT structure-factor engine and ML /
 least-squares targets that drop in for `cctbx.xray.structure_factors` on
-the Phenix side: [docs/engine.md](docs/engine.md). Short how-to:
+the Phenix side — often on a **separate GPU machine** via
+[`StructureFactorServer`](docs/sf_server.md):
+[docs/engine.md](docs/engine.md). Short how-to:
 [docs/tutorial_sf_targets.md](docs/tutorial_sf_targets.md).
 
 ## Contract
@@ -196,6 +198,9 @@ installed. Large-N GPU SF gradient checks are marked `gpu`/`slow` — see
 ```bash
 make example-restraints
 # → examples/restraint_minimization.md  (torch LBFGS/Adam/SGD)
+
+make example-sf-server
+# → examples/sf_server_demo.md  (cctbx-feel SF server → remote GPU)
 
 make example-sf-gradients
 # → examples/sf_gradient_benchmark.md  (CUDA SF grads vs CCTBX)

@@ -566,3 +566,166 @@ def _optional_array(value: Any, dtype) -> Optional[np.ndarray]:
     if isinstance(value, np.ndarray):
         return value.astype(dtype)
     return np.asarray(list(value), dtype=dtype)
+
+
+class StructureFactorServer:
+    """cctbx-feel structure-factor client backed by a remote GPU worker.
+
+    Phenotype / Phenix stays on the CPU machine and never imports torch.
+    Structure factors and their derivatives are computed on whatever host
+    runs ``phridge-worker --device cuda`` — typically a **separate GPU
+    server** reached through Redis.
+
+    This is the drop-in that replaces
+    ``cctbx.xray.structure_factors.from_scatterers`` /
+    ``gradients_direct`` when the heavy FFT work should live elsewhere::
+
+        # On the Phenix workstation (no CUDA required):
+        sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
+
+        f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)
+        grads = sf.gradients(xray_structure, miller_set, d_target_d_f_calc, d_min=2.0)
+        target, packed = sf.target_and_gradients(
+            xray_structure, f_obs, {"name": "ls", "obs_type": "F"}, d_min=2.0
+        )
+
+    Local demos can use ``StructureFactorServer(memory=True, device="cuda")``
+    (in-process; no Redis). Production always points ``redis_url`` at the
+    GPU box's Redis.
+    """
+
+    def __init__(
+        self,
+        redis_url: Optional[str] = None,
+        *,
+        bridge: Any = None,
+        memory: bool = False,
+        device: str = "cpu",
+        timeout: float = 3600.0,
+        table: Optional[str] = None,
+        default_params: Optional[SfEngineParams] = None,
+    ) -> None:
+        if bridge is not None and (redis_url is not None or memory):
+            raise ValueError("pass bridge= or redis_url=/memory=, not both")
+        if bridge is not None:
+            self.bridge = bridge
+        else:
+            from phridge.client import Bridge
+
+            if memory:
+                self.bridge = Bridge(memory=True, device=device, timeout=timeout)
+            else:
+                url = redis_url or "redis://localhost:6379/0"
+                self.bridge = Bridge(url, timeout=timeout)
+        self.table = table
+        self.default_params = default_params
+
+    def _params(self, d_min: Optional[float], params: Optional[SfEngineParams], miller_like: Any) -> SfEngineParams:
+        if params is not None:
+            return params
+        if self.default_params is not None and d_min is None:
+            return self.default_params
+        d = d_min if d_min is not None else float(miller_like.d_min())
+        if self.default_params is not None:
+            data = self.default_params.model_dump()
+            data["d_min"] = d
+            return SfEngineParams.model_validate(data)
+        return SfEngineParams(d_min=d)
+
+    def from_scatterers(
+        self,
+        xray_structure: Any,
+        miller_set: Any,
+        *,
+        d_min: Optional[float] = None,
+        params: Optional[SfEngineParams] = None,
+        table: Optional[str] = None,
+    ) -> RemoteStructureFactors:
+        """Like ``cctbx.xray.structure_factors.from_scatterers`` (remote FFT)."""
+        return RemoteStructureFactors(
+            self.bridge,
+            xray_structure,
+            miller_set,
+            params=self._params(d_min, params, miller_set),
+            table=table if table is not None else self.table,
+        )
+
+    def f_calc(
+        self,
+        xray_structure: Any,
+        miller_set: Any,
+        *,
+        d_min: Optional[float] = None,
+        params: Optional[SfEngineParams] = None,
+        table: Optional[str] = None,
+    ):
+        """Complex miller.array of F_calc from the SF server."""
+        return self.from_scatterers(xray_structure, miller_set, d_min=d_min, params=params, table=table).f_calc()
+
+    def gradients(
+        self,
+        xray_structure: Any,
+        miller_set: Any,
+        d_target_d_f_calc: Any,
+        *,
+        d_min: Optional[float] = None,
+        params: Optional[SfEngineParams] = None,
+        table: Optional[str] = None,
+    ) -> RemoteGradients:
+        """``dQ/d(params)`` given cctbx-convention ``d_target_d_f_calc`` (remote)."""
+        return self.from_scatterers(xray_structure, miller_set, d_min=d_min, params=params, table=table).gradients(
+            d_target_d_f_calc
+        )
+
+    def refinement_target(
+        self,
+        xray_structure: Any,
+        f_obs: Any,
+        target_spec: dict,
+        *,
+        d_min: Optional[float] = None,
+        params: Optional[SfEngineParams] = None,
+        table: Optional[str] = None,
+        **functor_kwargs: Any,
+    ) -> RemoteRefinementTarget:
+        """Bound target + gradient evaluator (one round trip per minimizer step)."""
+        return RemoteRefinementTarget(
+            self.bridge,
+            xray_structure,
+            f_obs,
+            target_spec,
+            params=self._params(d_min, params, f_obs),
+            table=table if table is not None else self.table,
+            **functor_kwargs,
+        )
+
+    def target_and_gradients(
+        self,
+        xray_structure: Any,
+        f_obs: Any,
+        target_spec: dict,
+        *,
+        d_min: Optional[float] = None,
+        params: Optional[SfEngineParams] = None,
+        table: Optional[str] = None,
+        **functor_kwargs: Any,
+    ):
+        """``(target_work, packed flex.double gradients)`` for ``scitbx.lbfgs``."""
+        return self.refinement_target(
+            xray_structure,
+            f_obs,
+            target_spec,
+            d_min=d_min,
+            params=params,
+            table=table,
+            **functor_kwargs,
+        ).target_and_gradients(xray_structure)
+
+    def target_functor(
+        self,
+        f_obs: Any,
+        target_spec: dict,
+        **functor_kwargs: Any,
+    ) -> RemoteTargetFunctor:
+        """Evaluate a registered target on a given ``f_calc`` (remote)."""
+        return RemoteTargetFunctor(self.bridge, f_obs, target_spec, **functor_kwargs)
