@@ -71,6 +71,8 @@ they pack cctbx objects to Redis and wait for the torch worker. See
 Registered ops include `scale_array`, `sf_calc`, `sf_gradients`,
 `target_eval`, `refine_gradients`, `gauss_newton_hvp`, and
 `geometry_minimize`. Unknown ops fail on the client before enqueue.
+Third-party packages can add more via `register_op` and
+`phridge-worker --preload` — see [extending.md](extending.md).
 
 ## Running with a server
 
@@ -79,6 +81,8 @@ Start Redis and a worker that shares the same URL:
 ```bash
 redis-server
 phridge-worker --redis-url redis://localhost:6379/0 --device cuda
+# with an external op package:
+phridge-worker --preload mypkg.plugin --device cuda
 ```
 
 Worker flags (env overrides in parentheses):
@@ -89,6 +93,8 @@ Worker flags (env overrides in parentheses):
 | `--device` | `PHRIDGE_DEVICE` | `auto` |
 | `--consumer` | `PHRIDGE_CONSUMER` | hostname |
 | `--max-object-bytes` | `PHRIDGE_MAX_OBJECT_BYTES` | 64 MiB |
+| `--preload MOD` | `PHRIDGE_PRELOAD` | (none) |
+| `--no-entry-points` | | load `phridge.ops` entry points |
 
 `Bridge` takes `redis_url` (or an injected `store`); it does not read
 `PHRIDGE_REDIS_URL` itself. Point both sides at the same instance so the

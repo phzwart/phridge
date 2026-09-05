@@ -37,7 +37,11 @@ include = ["schema", "src/phridge", "README.md", "docs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
+markers = [
+    "gpu: requires CUDA torch worker",
+    "slow: large-N / long-running",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "schema" = "phridge/schema"

@@ -2,7 +2,8 @@
 
 Runnable demos: **cctbx** packs molecule + restraints into Redis, the
 **phridge worker** runs torch `LBFGS` / `Adam` / `SGD`, the client blocks and
-converts results back to cctbx.
+converts results back to cctbx. A separate demo compares large-N CUDA
+structure-factor gradients to CCTBX.
 
 ## Environment
 
@@ -19,7 +20,7 @@ redis-server
 phridge-worker --redis-url redis://localhost:6379/0 --device cuda
 ```
 
-The example below uses **`Bridge(memory=True)`** (in-process store + worker)
+The examples below use **`Bridge(memory=True)`** (in-process store + worker)
 so you can run without a live Redis server.
 
 ## Restraint minimization
@@ -43,3 +44,17 @@ bridge = Bridge(memory=True)  # or Bridge("redis://localhost:6379/0") + worker
 geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
 hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")  # blocks
 ```
+
+## Structure-factor gradients (GPU)
+
+```bash
+make example-sf-gradients
+# or:
+python examples/sf_gradient_benchmark.py
+# pytest: make test-sf-gpu
+```
+
+Writes [`sf_gradient_benchmark.md`](sf_gradient_benchmark.md): ~1000-atom
+structures over several space groups, F_obs from a known model, small
+Gaussian site shake, then CCTBX `gradients_direct` vs phridge CUDA site
+gradients (cosine / length ratio + timings). Requires CUDA.

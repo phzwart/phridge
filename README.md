@@ -4,7 +4,8 @@ Bridge between Phenix/cctbx and a PyTorch worker. Redis is mandatory and
 the only shared store: blobs, a job stream, and a per-job ready list. The
 client never imports torch. The worker never imports cctbx.
 
-More detail: [docs/README.md](docs/README.md). The worker also carries a
+More detail: [docs/README.md](docs/README.md) (including
+[Redis / `Bridge(memory=True)`](docs/redis.md)). The worker also carries a
 differentiable FFT structure-factor engine and ML / least-squares
 targets that drop in for `cctbx.xray.structure_factors` on the Phenix
 side: [docs/engine.md](docs/engine.md).
@@ -112,6 +113,7 @@ that talks to the same Redis.
 ```bash
 redis-server
 phridge-worker --redis-url redis://localhost:6379/0
+phridge-worker --preload mypkg.plugin   # third-party ops
 phridge-ops   # dump OpSpec JSON
 ```
 
@@ -129,12 +131,22 @@ bridge = Bridge(redis_url="redis://localhost:6379/0")
 out = bridge.call("scale_array", array=np.arange(4, dtype=np.float64), scale=2.0)
 ```
 
+Without a Redis server, use explicit **memory mode** (same protocol,
+in-process store + worker; still needs the `redis` package):
+
+```python
+bridge = Bridge(memory=True)
+out = bridge.call("scale_array", array=np.arange(4, dtype=np.float64), scale=2.0)
+```
+
 `call` blocks until `done` or `error` (envelope poll / `BLPOP` on
 `phridge:job:{id}:ready`, not Pub/Sub). `submit` / `result` are the
-non-blocking pair.
+non-blocking pair. Full Redis / memory-mode notes:
+[docs/redis.md](docs/redis.md).
 
-v1 ships one dummy op, `scale_array`. No science kernels. Client
-converters and EM helpers are documented in [docs/client.md](docs/client.md).
+Built-in ops cover SF / targets / geometry minimize; add your own with
+`register_op` and `--preload` ([docs/extending.md](docs/extending.md)).
+Client converters and EM helpers are in [docs/client.md](docs/client.md).
 
 ## Redis
 
@@ -152,17 +164,24 @@ Real maps will exceed this. Raise the cap or plan a later filesystem/S3
 blob backend behind the same `ObjectRef.key`. Set Redis `maxmemory`
 accordingly; Redis is a poor store for hundreds of MB.
 
+`Bridge(memory=True)` skips `redis-server` / `phridge-worker` for local
+work; it does not replace the `redis` Python dependency and cannot reach
+a remote worker. See [docs/redis.md](docs/redis.md).
+
 ## Tests
 
 ```bash
-make test    # uses .venv
+make test         # excludes gpu/slow markers
+make test-sf-gpu  # ~1000-atom CUDA SF gradients vs CCTBX (needs CUDA)
 pytest
 ```
 
-cctbx converter tests skip unless `cctbx` is importable. Stream loopback
-uses fakeredis; if consumer groups are incomplete the stream test skips.
-Use a real Redis to verify `XREADGROUP`. Torch worker tests skip unless
-`phridge[worker]` is installed.
+cctbx converter tests skip unless `cctbx` is importable. Round-trips use
+`Bridge(memory=True)`. Stream loopback tests may use fakeredis; if
+consumer groups are incomplete the stream test skips. Use a real Redis to
+verify `XREADGROUP`. Torch worker tests skip unless `phridge[worker]` is
+installed. Large-N GPU SF gradient checks are marked `gpu`/`slow` — see
+[docs/engine.md](docs/engine.md).
 
 ## Examples
 
@@ -170,11 +189,17 @@ Use a real Redis to verify `XREADGROUP`. Torch worker tests skip unless
 make example-restraints
 # or: python examples/restraint_minimization.py
 # → examples/restraint_minimization.md  (code demo + checks)
+
+make example-sf-gradients
+# → examples/sf_gradient_benchmark.md  (CUDA SF grads vs CCTBX)
 ```
 
 See [examples/README.md](examples/README.md) — cctbx packs restraints, the
-phridge worker runs torch LBFGS/Adam/SGD, the client gets a cctbx hierarchy
-back from `RemoteGeometry.minimize(...)`.
+worker runs torch LBFGS/Adam/SGD (via `Bridge(memory=True)` in the demo,
+or a live Redis + `phridge-worker`), and the client gets a cctbx hierarchy
+back from `RemoteGeometry.minimize(...)`. The SF gradient example compares
+phridge CUDA site gradients to CCTBX `gradients_direct` on ~1000-atom
+structures across several space groups.
 
 ## Layout
 

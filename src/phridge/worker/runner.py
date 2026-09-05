@@ -11,10 +11,9 @@ from typing import Any, Optional
 
 from phridge.codec import decode_ref, encode_value
 from phridge.models import JobEnvelope, JobError, JobStatus, utcnow
-from phridge.ops import get_op
+from phridge.ops import _parse_preload_arg, bootstrap_plugins, get_implementation, get_op
 from phridge.redis_store import JOBS_STREAM, WORKER_GROUP, RedisStore
 from phridge.worker.convert import from_torch, resolve_device, to_torch
-from phridge.worker.ops import IMPLEMENTATIONS
 
 
 class UnknownOpError(KeyError):
@@ -35,7 +34,7 @@ def process_envelope(
             spec = get_op(envelope.op)
         except KeyError as exc:
             raise UnknownOpError(str(exc)) from exc
-        impl = IMPLEMENTATIONS.get(envelope.op)
+        impl = get_implementation(envelope.op)
         if impl is None:
             raise UnknownOpError(f"no worker implementation for {envelope.op}")
         native: dict[str, Any] = {}
@@ -178,6 +177,25 @@ def main(argv: Optional[list[str]] = None) -> None:
         type=int,
         default=int(os.environ.get("PHRIDGE_MAX_OBJECT_BYTES", 64 * 1024 * 1024)),
     )
+    parser.add_argument(
+        "--preload",
+        action="append",
+        default=[],
+        help=(
+            "Import module(s) that call phridge.ops.register_op before serving "
+            "(repeatable; comma-separated ok). Also reads PHRIDGE_PRELOAD."
+        ),
+    )
+    parser.add_argument(
+        "--no-entry-points",
+        action="store_true",
+        help="Skip loading the phridge.ops setuptools entry-point group",
+    )
     args = parser.parse_args(argv)
+    env_preload = os.environ.get("PHRIDGE_PRELOAD", "")
+    bootstrap_plugins(
+        preload=_parse_preload_arg([*args.preload, env_preload]),
+        load_eps=not args.no_entry_points,
+    )
     store = RedisStore.from_url(args.redis_url, max_object_bytes=args.max_object_bytes)
     consume_forever(store, device=args.device, consumer=args.consumer)

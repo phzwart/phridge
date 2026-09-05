@@ -101,6 +101,7 @@ from phridge.client import Bridge
 from phridge.client.xtal_engine import RemoteStructureFactors, RemoteTargetFunctor, RemoteRefinementTarget
 
 bridge = Bridge("redis://gpu-box:6379/0")
+# bridge = Bridge(memory=True)  # no redis-server; runs ops in-process
 
 # like xray.structure_factors.from_scatterers(...).f_calc() / .gradients(...)
 engine = RemoteStructureFactors(bridge, xray_structure, miller_set, d_min=2.0)
@@ -138,6 +139,18 @@ Gaussian quadratic forms are written out elementwise: with the torch
 batched GEMM backward returned wrong results intermittently once other
 parallel kernels had run in the process. Both workarounds are exact and
 cost nothing on CUDA, which uses cuFFT.
+
+### Large-N GPU check
+
+For a ~1000-atom end-to-end check against CCTBX `gradients_direct` (F_obs
+from a known model, Gaussian site perturbation, site-gradient cosine and
+length ratio, several space groups, timings)::
+
+    make test-sf-gpu
+    # or: make example-sf-gradients   # writes examples/sf_gradient_benchmark.md
+
+Uses `Bridge(memory=True, device="cuda")` (no Redis required). Marked
+`pytest.mark.gpu` / `slow` so default `make test` stays fast on CPU-only CI.
 
 Note: in one process, import cctbx before torch. Importing torch first
 crashes cctbx's Boost.Python extensions, which is one more reason the

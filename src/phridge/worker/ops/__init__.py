@@ -1,4 +1,9 @@
-"""Worker implementations keyed by op name from phridge.ops."""
+"""Worker implementations keyed by op name from phridge.ops.
+
+Built-ins live in ``IMPLEMENTATIONS``. Third-party packages should prefer
+``phridge.ops.register_op`` (see ``docs/extending.md``) rather than mutating
+this dict.
+"""
 
 from __future__ import annotations
 
