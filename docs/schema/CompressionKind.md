@@ -4,13 +4,13 @@ search:
 ---
 
 
-# Enum: Compression 
+# Enum: CompressionKind 
 
 
 
 <div data-search-exclude markdown="1">
 
-URI: [phridge:Compression](https://github.com/phzwart/phridge/schema/phridge/Compression)
+URI: [phridge:CompressionKind](https://github.com/phzwart/phridge/schema/phridge/Compression)
 
 ## Permissible Values
 | Value | Meaning | Description |
@@ -56,7 +56,7 @@ URI: [phridge:Compression](https://github.com/phzwart/phridge/schema/phridge/Com
 
 <details>
 ```yaml
-name: Compression
+name: CompressionKind
 from_schema: https://github.com/phzwart/phridge/schema/phridge
 rank: 1000
 permissible_values:

@@ -167,7 +167,7 @@ Name: phridge
 | --- | --- |
 | [AnomalousLayout](AnomalousLayout.md) |  |
 | [ByteOrder](ByteOrder.md) |  |
-| [Compression](Compression.md) |  |
+| [CompressionKind](CompressionKind.md) |  |
 | [CoordinateFrame](CoordinateFrame.md) |  |
 | [ExperimentType](ExperimentType.md) |  |
 | [JobStatus](JobStatus.md) |  |
