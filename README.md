@@ -116,15 +116,17 @@ that talks to the same Redis.
 
 ```bash
 redis-server
-phridge-worker --redis-url redis://localhost:6379/0
-phridge-worker --preload mypkg.plugin   # third-party ops
+phridge-worker --redis-url redis://localhost:6379/0 --device cuda
+phridge-cctbx-worker --redis-url redis://localhost:6379/0
+phridge-worker --preload mypkg.plugin   # third-party torch ops
 phridge-ops   # dump OpSpec JSON
 ```
 
-The worker creates the consumer group on startup:
+Workers create per-runtime consumer groups on startup:
 
 ```text
-XGROUP CREATE phridge:jobs phridge-workers 0 MKSTREAM
+XGROUP CREATE phridge:jobs:torch phridge-workers:torch 0 MKSTREAM
+XGROUP CREATE phridge:jobs:cctbx phridge-workers:cctbx 0 MKSTREAM
 ```
 
 ```python
@@ -148,9 +150,10 @@ out = bridge.call("scale_array", array=np.arange(4, dtype=np.float64), scale=2.0
 non-blocking pair. Full Redis / memory-mode notes:
 [docs/redis.md](docs/redis.md).
 
-Built-in ops cover SF / targets / geometry minimize; add your own with
-`register_op` and `--preload` ([docs/extending.md](docs/extending.md)).
-Client converters and EM helpers are in [docs/client.md](docs/client.md).
+Built-in ops cover SF / targets / geometry minimize (torch) and
+`build_geometry_restraints` (cctbx); add your own with `register_op` and
+`--preload` ([docs/extending.md](docs/extending.md)). Client converters
+and EM helpers are in [docs/client.md](docs/client.md).
 
 ## Redis
 
@@ -158,7 +161,8 @@ Client converters and EM helpers are in [docs/client.md](docs/client.md).
 |-----|------|
 | `phridge:job:{id}` | `JobEnvelope` JSON |
 | `phridge:obj:{id}:{name}` | raw bytes (npy / npz / JSON) |
-| `phridge:jobs` | Redis Stream |
+| `phridge:jobs:torch` | Redis Stream (torch-runtime ops) |
+| `phridge:jobs:cctbx` | Redis Stream (cctbx-runtime ops) |
 | `phridge:job:{id}:ready` | list; worker `RPUSH`, client `BLPOP` |
 
 Keys expire after 1 hour by default.
@@ -168,9 +172,9 @@ Real maps will exceed this. Raise the cap or plan a later filesystem/S3
 blob backend behind the same `ObjectRef.key`. Set Redis `maxmemory`
 accordingly; Redis is a poor store for hundreds of MB.
 
-`Bridge(memory=True)` skips `redis-server` / `phridge-worker` for local
-work; it does not replace the `redis` Python dependency and cannot reach
-a remote worker. See [docs/redis.md](docs/redis.md).
+`Bridge(memory=True)` skips `redis-server` / workers for local work; it
+does not replace the `redis` Python dependency and cannot reach a remote
+worker. See [docs/redis.md](docs/redis.md).
 
 ## Tests
 

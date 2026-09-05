@@ -6,7 +6,6 @@ from typing import Any, Optional
 
 from phridge.client.convert_geometry import model_geometry, restraints_from_cctbx
 from phridge.client.convert_xtal import hierarchy_from_cctbx, hierarchy_to_cctbx
-from phridge.packing_geometry import PackedRestraints
 from phridge.packing_xtal import PackedHierarchy
 
 

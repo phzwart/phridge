@@ -82,7 +82,7 @@ class RemoteGeometry:
         self._packed_hier = _as_packed_hierarchy(hierarchy)
         self._packed_restr = _as_packed_restraints(restraints, n_sites=self._packed_hier.meta.n_atoms)
         self._header = model_geometry(hierarchy=self._packed_hier, restraints=self._packed_restr)
-        self.last_target = None  # type: Optional[dict[str, Any]]
+        self.last_target: Optional[dict[str, Any]] = None
 
     @property
     def n_sites(self) -> int:
