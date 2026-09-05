@@ -133,12 +133,13 @@ few hundred million fused exp evaluations. `SfEngineParams.wing_cutoff`
 (default 1e-4; cctbx uses 1e-3) and `quality_factor` trade accuracy for
 box size and grid size.
 
-On CPU the FFT goes through numpy (`EngineParams.cpu_numpy_fft`) and the
-Gaussian quadratic forms are written out elementwise: with the torch
-2.14 / MKL build used for development, multi-threaded `torch.fft` and
-batched GEMM backward returned wrong results intermittently once other
-parallel kernels had run in the process. Both workarounds are exact and
-cost nothing on CUDA, which uses cuFFT.
+The FFT is always `torch.fft.fftn` by default (CUDA cuFFT / CPU torch), so
+the density → FFT → gather graph stays in PyTorch and per-atom gradients
+come from the same autograd path. Gaussian quadratic forms are written out
+elementwise (no batched GEMM on the hot path). If a CPU torch/MKL build
+misbehaves on `torch.fft`, set `EngineParams.cpu_numpy_fft=True` to opt into
+a numpy FFT custom Function; that escape hatch is off by default and unused
+on CUDA.
 
 ### Large-N GPU check
 

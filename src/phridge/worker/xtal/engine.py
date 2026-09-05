@@ -91,7 +91,10 @@ class EngineParams:
     n_real: Optional[tuple] = None  # override gridding
     max_chunk_points: int = 8_000_000  # atoms x box points per chunk
     dtype: str = "float64"
-    cpu_numpy_fft: bool = True  # route CPU FFTs through numpy (torch/MKL threading bug workaround)
+    # Default: torch.fft.fftn everywhere (CUDA cuFFT / CPU pocketfft via torch) so the
+    # density→FFT→gather graph stays in PyTorch and per-atom grads use autograd.
+    # Opt-in numpy FFT only for rare CPU torch/MKL threading bugs (see docs/engine.md).
+    cpu_numpy_fft: bool = False
     n_radius_buckets: int = 4  # group expanded atoms by cutoff radius to shrink sampling boxes
 
 
@@ -161,15 +164,12 @@ def _np_ifftn_unnormalized(t):
 
 
 def _make_numpy_fftn():
-    """fftn on CPU through numpy (pocketfft), as a pair of autograd Functions.
+    """Optional CPU fftn via numpy (pocketfft), as a pair of autograd Functions.
 
-    torch.fft on CPU with intra-op threads > 1 was observed to return
-    garbage intermittently (torch 2.14 / MKL) once other parallel ops had
-    run in the process. numpy's FFT is single-threaded and reliable; the
-    cost is negligible next to the density sampling. Only used for CPU
-    tensors; CUDA goes through cuFFT. Forward and unnormalized inverse are
-    each other's adjoints, so backward-of-backward works (needed for the
-    Gauss-Newton Hessian-vector product).
+    Only used when ``EngineParams.cpu_numpy_fft`` is True. Default path is
+    ``torch.fft.fftn``. Kept for rare torch 2.x / MKL CPU builds where
+    multi-threaded ``torch.fft`` returned garbage intermittently. Forward and
+    unnormalized inverse are each other's adjoints (Gauss-Newton HVP).
     """
     import torch
 
@@ -197,7 +197,8 @@ def _make_numpy_fftn():
 _NUMPY_FFTN = None
 
 
-def _fftn(x, cpu_numpy: bool):
+def _fftn(x, cpu_numpy: bool = False):
+    """3D FFT of the density grid. Default: ``torch.fft.fftn`` (keeps autograd)."""
     import torch
 
     global _NUMPY_FFTN
@@ -458,7 +459,8 @@ class StructureFactorEngine:
         """Directional derivative (dF/dp) . v as a complex tensor (N_refl,).
 
         Uses the double-vjp identity jvp(v) = d/du [ v . vjp(u) ] so that no
-        functorch transform is needed (the CPU FFT is a custom Function).
+        functorch transform is needed (also works if the optional numpy FFT
+        custom Function is enabled).
         """
         torch = self.torch
         params = self.tensors(requires_grad=True) if params is None else params
