@@ -51,6 +51,12 @@ enums:
     permissible_values:
       none:
       gzip:
+  WorkerRuntime:
+    permissible_values:
+      torch:
+        description: PyTorch worker (GPU/CPU science kernels; never imports cctbx)
+      cctbx:
+        description: CCTBX/mmtbx worker (packing, restraints build; never imports torch)
 
 classes:
   ArrayMeta:
@@ -180,6 +186,11 @@ classes:
       schema_version:
         range: integer
         required: true
+      runtime:
+        range: WorkerRuntime
+        required: true
+        ifabsent: string(torch)
+        description: Which worker stream consumes this op (torch vs cctbx)
       inputs:
         range: SlotBinding
         multivalued: true

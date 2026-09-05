@@ -1,14 +1,16 @@
 # phridge
 
-Bridge between Phenix/cctbx and a PyTorch worker. Redis is mandatory and
-the only shared store: blobs, a job stream, and a per-job ready list. The
-client never imports torch. The worker never imports cctbx.
+Bidirectional bridge between Phenix/cctbx and PyTorch via Redis. Redis is
+mandatory and the only shared store: blobs, per-runtime job streams
+(`phridge:jobs:torch` / `phridge:jobs:cctbx`), and a per-job ready list.
+Phenix never imports torch; the torch worker never imports cctbx; the
+CCTBX worker never imports torch.
 
 More detail: [docs/README.md](docs/README.md) (including
-[Redis / `Bridge(memory=True)`](docs/redis.md)). The worker also carries a
-differentiable FFT structure-factor engine and ML / least-squares
-targets that drop in for `cctbx.xray.structure_factors` on the Phenix
-side: [docs/engine.md](docs/engine.md). Short how-to:
+[Redis / `Bridge(memory=True)`](docs/redis.md)). The torch worker also
+carries a differentiable FFT structure-factor engine and ML /
+least-squares targets that drop in for `cctbx.xray.structure_factors` on
+the Phenix side: [docs/engine.md](docs/engine.md). Short how-to:
 [docs/tutorial_sf_targets.md](docs/tutorial_sf_targets.md).
 
 ## Contract
@@ -23,7 +25,7 @@ LinkML schemas are the source of truth (`schema_version` / LinkML `version` = `1
 | [`schema/cctbx_maps.yaml`](schema/cctbx_maps.yaml) | real/complex maps, gridding, `EmMap` |
 | [`schema/cctbx_coordinates.yaml`](schema/cctbx_coordinates.yaml) | sites, `Hierarchy`, `XrayStructure` |
 | [`schema/cctbx_geometry.yaml`](schema/cctbx_geometry.yaml) | `GeometryRestraints`, `ModelGeometry` |
-| [`schema/cctbx_scattering.yaml`](schema/cctbx_scattering.yaml) | `ScatteringTable`, `SfEngineParams`, `SfGradients`, `TargetResult` |
+| [`schema/cctbx_scattering.yaml`](schema/cctbx_scattering.yaml) | `ScatteringTable`, `SfEngineParams`, `SfGradients`, `SfCurvatures`, `TargetResult` |
 
 Redis stores science objects with `kind=cctbx` and `cctbx_type` set to the
 class name. There is no `sparse_miller` or `map_grid` kind.
@@ -42,6 +44,7 @@ class name. There is no `sparse_miller` or `map_grid` kind.
 | `ScatteringTable` | scattering | npz Gaussian form-factor coefficients per type |
 | `SfEngineParams` | scattering | JSON: d_min, gridding, quality factor |
 | `SfGradients` | scattering | npz per-scatterer gradients (site, occ, u_iso, u_star, fp, fdp) |
+| `SfCurvatures` | scattering | npz per-atom GN blocks (site 3×3, u_star 6×6, occ/u_iso/fp/fdp) |
 | `TargetResult` | scattering | npz per-reflection target, `d_target_d_f_calc`, curvatures |
 
 LinkML holds metadata. Multi-buffer objects are **one packed npz** at

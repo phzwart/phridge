@@ -41,6 +41,7 @@ REQUIRED_CLASSES = {
     "ScatteringTable",
     "SfEngineParams",
     "SfGradients",
+    "SfCurvatures",
     "TargetResult",
 }
 

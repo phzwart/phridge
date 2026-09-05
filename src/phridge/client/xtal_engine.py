@@ -25,7 +25,7 @@ from phridge.client.convert import crystal_from_cctbx, miller_from_cctbx
 from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
 from phridge.models import SfEngineParams
 from phridge.packing import PackedMiller
-from phridge.packing_scattering import PackedSfGradients, PackedTargetResult
+from phridge.packing_scattering import PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 
 
 def _flex():
@@ -129,6 +129,19 @@ class RemoteGradients:
             if any_fdp:
                 out.append(float(self.raw.d_fdp[i]))
         return flex.double(out)
+
+
+def _pack_diagonal_like_gradients(xray_structure: Any, packed: PackedSfGradients):
+    """Pack a Hessian diagonal (SfGradients layout) like RemoteGradients.packed()."""
+    return RemoteGradients(xray_structure, packed).packed()
+
+
+def _invert_diag(curvatures, floor: float = 1e-8):
+    """Inverse-Hessian diagonal for L-BFGS Hk0; clamp to keep entries positive."""
+    flex = _flex()
+    arr = np.asarray(list(curvatures), dtype=np.float64)
+    inv = np.where(arr > floor, 1.0 / arr, 1.0 / floor)
+    return flex.double(inv.tolist())
 
 
 class RemoteStructureFactors:
@@ -323,6 +336,228 @@ class RemoteRefinementTarget:
         if self.last is None:
             self.compute()
         return RemoteTargetResult(self.last["target"], self.functor.arrays["r_free"])
+
+    def curvatures(self, xray_structure: Optional[Any] = None) -> PackedSfCurvatures:
+        """Exact per-atom Gauss-Newton blocks (SfCurvatures)."""
+        xs = xray_structure if xray_structure is not None else self.xray_structure
+        out = self.compute(xs)
+        xray, table = _packed_xray(xs, self.table)
+        return self.bridge.call(
+            "gauss_newton_blocks",
+            xray=xray,
+            table=table,
+            params=self.params,
+            target=out["target"],
+            hkl=_miller_template(self.functor.f_obs),
+        )
+
+    def diagonal(
+        self,
+        xray_structure: Optional[Any] = None,
+        *,
+        method: str = "blocks",
+        n_probes: int = 8,
+        seed: int = 0,
+        as_inverse: bool = True,
+        floor: float = 1e-8,
+    ):
+        """Packed GN Hessian diagonal in cctbx packing order.
+
+        ``method="blocks"`` uses exact per-atom blocks (site / U* transformed
+        to cartesian); ``method="hutchinson"`` uses Rademacher probes.
+        When ``as_inverse`` (default) the result is the L-BFGS Hk0 diagonal.
+        """
+        xs = xray_structure if xray_structure is not None else self.xray_structure
+        out = self.compute(xs)
+        xray, table = _packed_xray(xs, self.table)
+        hkl = _miller_template(self.functor.f_obs)
+        if method == "blocks":
+            curv = self.bridge.call(
+                "gauss_newton_blocks",
+                xray=xray,
+                table=table,
+                params=self.params,
+                target=out["target"],
+                hkl=hkl,
+            )
+            packed_curv = _pack_block_diagonal(xs, curv)
+        elif method == "hutchinson":
+            diag = self.bridge.call(
+                "gauss_newton_diagonal",
+                xray=xray,
+                table=table,
+                params=self.params,
+                target=out["target"],
+                hkl=hkl,
+                n_probes=n_probes,
+                seed=seed,
+            )
+            packed_curv = _pack_diagonal_like_gradients(xs, diag)
+        else:
+            raise ValueError("method must be 'blocks' or 'hutchinson'")
+        return _invert_diag(packed_curv, floor=floor) if as_inverse else packed_curv
+
+    def newton_cg(
+        self,
+        xray_structure: Optional[Any] = None,
+        *,
+        max_iterations: int = 20,
+        cg_max_iter: int = 20,
+        damping: float = 1e-3,
+        step_max: float = 0.05,
+    ) -> dict:
+        """Damped Newton–CG on sites: solve (J^T H J + λ D) p = -∇Q.
+
+        Uses ``gauss_newton_hvp`` inside CG and the block diagonal as Jacobi
+        preconditioner D. Fractional site updates use backtracking line
+        search. Returns diagnostics; ``xray_structure`` on the result is a
+        refined deep copy.
+        """
+        from cctbx.array_family import flex
+
+        xs = (xray_structure if xray_structure is not None else self.xray_structure).deep_copy_scatterers()
+        for sc in xs.scatterers():
+            sc.flags.set_grad_site(True)
+        history = []
+        for it in range(int(max_iterations)):
+            out = self.compute(xs)
+            target = float(out["target"].meta.value)
+            grads = RemoteGradients(xs, out["gradients"])
+            g_frac = np.asarray(grads.raw.d_site_frac, dtype=np.float64)
+            xray, table = _packed_xray(xs, self.table)
+            curv = self.bridge.call(
+                "gauss_newton_blocks",
+                xray=xray,
+                table=table,
+                params=self.params,
+                target=out["target"],
+                hkl=_miller_template(self.functor.f_obs),
+            )
+            D = np.diagonal(curv.site_frac, axis1=1, axis2=2).copy()
+            D = np.maximum(D, 1e-8)
+            g_flat = g_frac.reshape(-1)
+            D_flat = D.reshape(-1)
+            n = xs.scatterers().size()
+
+            def hvp_flat(v_flat):
+                v_site = v_flat.reshape(n, 3)
+                v = PackedSfGradients(
+                    d_site_frac=v_site,
+                    d_occupancy=np.zeros(n),
+                    d_u_iso=np.zeros(n),
+                    d_u_star=np.zeros((n, 6)),
+                    d_fp=np.zeros(n),
+                    d_fdp=np.zeros(n),
+                )
+                xray, table = _packed_xray(xs, self.table)
+                hv = self.bridge.call(
+                    "gauss_newton_hvp",
+                    xray=xray,
+                    table=table,
+                    params=self.params,
+                    target=out["target"],
+                    hkl=_miller_template(self.functor.f_obs),
+                    v=v,
+                )
+                return np.asarray(hv.d_site_frac, dtype=np.float64).reshape(-1) + float(damping) * D_flat * v_flat
+
+            p_flat = _preconditioned_cg(hvp_flat, -g_flat, D_flat, max_iter=int(cg_max_iter))
+            p = p_flat.reshape(n, 3)
+            step_norm = float(np.linalg.norm(p))
+            if step_norm > step_max:
+                p *= step_max / max(step_norm, 1e-300)
+                step_norm = float(np.linalg.norm(p))
+
+            sites0 = np.asarray(list(xs.sites_frac()), dtype=np.float64).reshape(n, 3)
+            alpha = 1.0
+            accepted = False
+            new_target = target
+            for _ in range(8):
+                trial = sites0 + alpha * p
+                xs.set_sites_frac(flex.vec3_double([tuple(r) for r in trial]))
+                new_target = float(self.compute(xs)["target"].meta.value)
+                if new_target < target:
+                    accepted = True
+                    break
+                alpha *= 0.5
+            if not accepted:
+                xs.set_sites_frac(flex.vec3_double([tuple(r) for r in sites0]))
+                history.append({"iteration": it, "target": target, "step_norm": 0.0, "alpha": 0.0})
+                break
+            history.append(
+                {"iteration": it, "target": target, "step_norm": step_norm * alpha, "alpha": alpha, "target_after": new_target}
+            )
+            if step_norm * alpha < 1e-6 or new_target < 1e-12:
+                break
+        self.xray_structure = xs
+        final = self.compute(xs)
+        return {
+            "xray_structure": xs,
+            "target": float(final["target"].meta.value),
+            "history": history,
+            "n_iterations": len(history),
+        }
+
+
+def _pack_block_diagonal(xray_structure: Any, curv: PackedSfCurvatures):
+    """Pack per-atom GN block diagonals in cartesian packing order."""
+    from cctbx import adptbx
+
+    flex = _flex()
+    xs = xray_structure
+    uc = xs.unit_cell()
+    F = np.asarray(uc.fractionalization_matrix(), dtype=np.float64).reshape(3, 3)
+    scatterers = xs.scatterers()
+    any_fp = any(sc.flags.grad_fp() for sc in scatterers)
+    any_fdp = any(sc.flags.grad_fdp() for sc in scatterers)
+    out: list[float] = []
+    for i, sc in enumerate(scatterers):
+        fl = sc.flags
+        if fl.grad_site():
+            H_cart = F.T @ curv.site_frac[i] @ F
+            out.extend(np.diag(H_cart).tolist())
+        if fl.use_u_iso() and fl.grad_u_iso():
+            out.append(float(curv.u_iso[i]))
+        if fl.use_u_aniso() and fl.grad_u_aniso():
+            J = np.zeros((6, 6), dtype=np.float64)
+            for mu in range(6):
+                e = [0.0] * 6
+                e[mu] = 1.0
+                J[:, mu] = adptbx.grad_u_star_as_u_cart(uc, tuple(e))
+            H_cart = J @ curv.u_star[i] @ J.T
+            out.extend(np.diag(H_cart).tolist())
+        if fl.grad_occupancy():
+            out.append(float(curv.occupancy[i]))
+        if any_fp:
+            out.append(float(curv.fp[i]))
+        if any_fdp:
+            out.append(float(curv.fdp[i]))
+    return flex.double(out)
+
+
+def _preconditioned_cg(hvp, b, M_diag, max_iter=20, tol=1e-6):
+    """Solve H p = b with Jacobi-preconditioned CG; M_diag ≈ diag(H)."""
+    x = np.zeros_like(b)
+    r = b.copy()
+    z = r / M_diag
+    p = z.copy()
+    rz = float(np.dot(r, z))
+    bnorm = max(float(np.linalg.norm(b)), 1e-300)
+    for _ in range(max_iter):
+        Hp = hvp(p)
+        denom = float(np.dot(p, Hp))
+        if abs(denom) < 1e-300:
+            break
+        alpha = rz / denom
+        x = x + alpha * p
+        r = r - alpha * Hp
+        if float(np.linalg.norm(r)) / bnorm < tol:
+            break
+        z = r / M_diag
+        rz_new = float(np.dot(r, z))
+        p = z + (rz_new / rz) * p
+        rz = rz_new
+    return x
 
 
 def _optional_array(value: Any, dtype) -> Optional[np.ndarray]:

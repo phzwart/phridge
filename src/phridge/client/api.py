@@ -1,4 +1,4 @@
-"""Phenix-facing Bridge: convert, enqueue, wait, convert back."""
+"""Phenix / torch-facing Bridge: convert, enqueue, wait, convert back."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from phridge.client.convert import from_canonical, is_cctbx_object, to_canonical
 from phridge.codec import decode_ref, encode_value
-from phridge.models import JobEnvelope, JobStatus, utcnow
+from phridge.models import JobEnvelope, JobStatus, WorkerRuntime, utcnow
 from phridge.ops import get_op
 from phridge.protocol import Protocol
 from phridge.redis_store import (
@@ -78,13 +78,21 @@ class Bridge:
         )
         self.protocol.enqueue(envelope)
         if self.memory:
+            self._process_memory(envelope.job_id, WorkerRuntime(spec.runtime))
+        return job_id
+
+    def _process_memory(self, job_id: str, runtime: WorkerRuntime) -> None:
+        loaded = self.store.get_envelope(job_id)
+        if loaded is None:
+            raise RuntimeError(f"memory store lost envelope {job_id}")
+        if runtime == WorkerRuntime.cctbx:
+            from phridge.cctbx_worker.runner import process_envelope
+
+            process_envelope(self.store, loaded)
+        else:
             from phridge.worker.runner import process_envelope
 
-            loaded = self.store.get_envelope(job_id)
-            if loaded is None:
-                raise RuntimeError(f"memory store lost envelope {job_id}")
             process_envelope(self.store, loaded, device=self.device)
-        return job_id
 
     def result(self, job_id: str, timeout: Optional[float] = None) -> Any:
         envelope = self.protocol.wait(job_id, timeout if timeout is not None else self.timeout)

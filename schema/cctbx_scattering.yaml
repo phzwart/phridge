@@ -5,10 +5,12 @@ description: |
   Wire types for the torch structure-factor / gradient engine and the
   reciprocal-space refinement targets.
 
-  Packed npz:
+    Packed npz:
     ScatteringTable:  gauss_a float64[T,K], gauss_b float64[T,K], gauss_c float64[T]
     SfGradients:      d_site_frac [N,3], d_occupancy [N], d_u_iso [N],
                       d_u_star [N,6], d_fp [N], d_fdp [N]
+    SfCurvatures:     site_frac [N,3,3], occupancy [N], u_iso [N],
+                      u_star [N,6,6], fp [N], fdp [N]
     TargetResult:     per_reflection [N], d_target_d_f_calc complex128[N],
                       optional curv_radial [N], curv_tangential [N]
     SfEngineParams:   JSON only
@@ -92,6 +94,18 @@ classes:
       target:
         range: float
         description: Target value when the gradients came from a target op
+
+  SfCurvatures:
+    is_a: CctbxObject
+    description: >
+      Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J,
+      index-aligned with the XrayStructure. npz: site_frac [N,3,3],
+      occupancy [N], u_iso [N], u_star [N,6,6], fp [N], fdp [N].
+      Inactive ADP entries are zero.
+    attributes:
+      n_scatterers:
+        range: integer
+        required: true
 
   TargetResult:
     is_a: CctbxObject

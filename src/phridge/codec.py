@@ -47,9 +47,11 @@ from phridge.packing_xtal import (
 from phridge.packing_geometry import PackedRestraints, unpack_restraints
 from phridge.packing_scattering import (
     PackedScatteringTable,
+    PackedSfCurvatures,
     PackedSfGradients,
     PackedTargetResult,
     unpack_scattering_table,
+    unpack_sf_curvatures,
     unpack_sf_gradients,
     unpack_target_result,
 )
@@ -70,6 +72,7 @@ _PACKED_TYPES: list[tuple[type, str]] = [
     (PackedRestraints, "GeometryRestraints"),
     (PackedScatteringTable, "ScatteringTable"),
     (PackedSfGradients, "SfGradients"),
+    (PackedSfCurvatures, "SfCurvatures"),
     (PackedTargetResult, "TargetResult"),
 ]
 
@@ -95,6 +98,7 @@ _UNPACK: dict[str, Callable[[bytes, Any], Any]] = {
     "GeometryRestraints": unpack_restraints,
     "ScatteringTable": unpack_scattering_table,
     "SfGradients": unpack_sf_gradients,
+    "SfCurvatures": unpack_sf_curvatures,
     "TargetResult": unpack_target_result,
 }
 

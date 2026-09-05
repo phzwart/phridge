@@ -43,6 +43,17 @@ URI: [phridge:OpSpec](https://github.com/phzwart/phridge/schema/phridge/OpSpec)
     
 
         
+      OpSpec : runtime
+        
+          
+    
+        
+        
+        OpSpec --> "1" WorkerRuntime : runtime
+        click WorkerRuntime href "../WorkerRuntime/"
+    
+
+        
       OpSpec : schema_version
         
       
@@ -59,6 +70,7 @@ URI: [phridge:OpSpec](https://github.com/phzwart/phridge/schema/phridge/OpSpec)
 | ---  | --- | --- | --- |
 | [name](name.md) | 1 <br/> [String](String.md) |  | direct |
 | [schema_version](schema_version.md) | 1 <br/> [Integer](Integer.md) |  | direct |
+| [runtime](runtime.md) | 1 <br/> [WorkerRuntime](WorkerRuntime.md) | Which worker stream consumes this op (torch vs cctbx) | direct |
 | [inputs](inputs.md) | * <br/> [SlotBinding](SlotBinding.md) |  | direct |
 | [outputs](outputs.md) | * <br/> [SlotBinding](SlotBinding.md) |  | direct |
 
@@ -132,6 +144,16 @@ attributes:
     - OpSpec
     range: integer
     required: true
+  runtime:
+    name: runtime
+    description: Which worker stream consumes this op (torch vs cctbx)
+    from_schema: https://github.com/phzwart/phridge/schema/phridge
+    rank: 1000
+    ifabsent: string(torch)
+    domain_of:
+    - OpSpec
+    range: WorkerRuntime
+    required: true
   inputs:
     name: inputs
     from_schema: https://github.com/phzwart/phridge/schema/phridge
@@ -184,6 +206,17 @@ attributes:
     - JobEnvelope
     - OpSpec
     range: integer
+    required: true
+  runtime:
+    name: runtime
+    description: Which worker stream consumes this op (torch vs cctbx)
+    from_schema: https://github.com/phzwart/phridge/schema/phridge
+    rank: 1000
+    ifabsent: string(torch)
+    owner: OpSpec
+    domain_of:
+    - OpSpec
+    range: WorkerRuntime
     required: true
   inputs:
     name: inputs

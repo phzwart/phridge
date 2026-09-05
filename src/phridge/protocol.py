@@ -6,7 +6,8 @@ import time
 from typing import Optional
 
 from phridge.models import JobEnvelope, JobStatus
-from phridge.redis_store import JOBS_STREAM, RedisStore
+from phridge.ops import get_op
+from phridge.redis_store import RedisStore, jobs_stream
 
 
 class JobTimeoutError(TimeoutError):
@@ -19,7 +20,8 @@ class Protocol:
 
     def enqueue(self, envelope: JobEnvelope) -> str:
         self.store.put_envelope(envelope)
-        self.store.client.xadd(JOBS_STREAM, {"job_id": envelope.job_id})
+        stream = jobs_stream(get_op(envelope.op).runtime)
+        self.store.client.xadd(stream, {"job_id": envelope.job_id})
         return envelope.job_id
 
     def wait(self, job_id: str, timeout: float) -> JobEnvelope:

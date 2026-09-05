@@ -47,3 +47,19 @@ def test_agentsg_plugin_accepts_six_list():
     out = agentsg_niggli_reduce(list(INPUT))
     direct, _ = niggli_reduce(*INPUT)
     assert out["unit_cell"] == pytest.approx(list(direct), abs=1e-9)
+
+
+def test_niggli_cell_cctbx_wrapper():
+    cctbx = pytest.importorskip("cctbx")
+    from cctbx import uctbx
+    from plugins.agentsg_niggli import niggli_cell
+
+    direct, _ = niggli_reduce(*INPUT)
+    bridge = Bridge(memory=True, timeout=5)
+    uc = uctbx.unit_cell(INPUT)
+    uc_red = niggli_cell(uc, bridge=bridge)
+    assert isinstance(uc_red, uctbx.unit_cell)
+    assert list(uc_red.parameters()) == pytest.approx(list(direct), abs=1e-9)
+    uc_red2, cb_op = niggli_cell(uc, bridge=bridge, return_change_of_basis=True)
+    assert list(uc_red2.parameters()) == pytest.approx(list(direct), abs=1e-9)
+    assert hasattr(cb_op, "as_xyz")

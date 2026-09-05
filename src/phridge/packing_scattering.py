@@ -6,7 +6,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.models import ScatteringTable, SfGradients, TargetResult
+from phridge.models import ScatteringTable, SfCurvatures, SfGradients, TargetResult
 from phridge.packing import as_canonical_complex, as_canonical_float
 from phridge.packing_xtal import _load_npz, _savez
 
@@ -88,6 +88,57 @@ class PackedSfGradients:
 def unpack_sf_gradients(blob: bytes, meta: SfGradients) -> PackedSfGradients:
     with _load_npz(blob) as zf:
         packed = PackedSfGradients(**{k: zf[k] for k in PackedSfGradients.FIELDS}, target=meta.target)
+    if packed.meta.n_scatterers != meta.n_scatterers:
+        raise ValueError("n_scatterers mismatch")
+    return packed
+
+
+class PackedSfCurvatures:
+    FIELDS = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+
+    def __init__(
+        self,
+        site_frac: np.ndarray,
+        occupancy: np.ndarray,
+        u_iso: np.ndarray,
+        u_star: np.ndarray,
+        fp: np.ndarray,
+        fdp: np.ndarray,
+    ) -> None:
+        self.site_frac = as_canonical_float(np.asarray(site_frac))
+        n = self.site_frac.shape[0]
+        if self.site_frac.shape != (n, 3, 3):
+            raise ValueError("site_frac must be (N, 3, 3)")
+        self.occupancy = as_canonical_float(np.asarray(occupancy))
+        self.u_iso = as_canonical_float(np.asarray(u_iso))
+        self.u_star = as_canonical_float(np.asarray(u_star))
+        self.fp = as_canonical_float(np.asarray(fp))
+        self.fdp = as_canonical_float(np.asarray(fdp))
+        for name in ("occupancy", "u_iso", "fp", "fdp"):
+            if getattr(self, name).shape != (n,):
+                raise ValueError(f"{name} must be (N,)")
+        if self.u_star.shape != (n, 6, 6):
+            raise ValueError("u_star must be (N, 6, 6)")
+        self.meta = SfCurvatures(n_scatterers=int(n))
+
+    def pack(self) -> bytes:
+        return _savez(**{k: getattr(self, k) for k in self.FIELDS})
+
+    def diagonal_as_gradients(self) -> PackedSfGradients:
+        """Extract the parameter-wise diagonal into SfGradients layout."""
+        return PackedSfGradients(
+            d_site_frac=np.diagonal(self.site_frac, axis1=1, axis2=2).copy(),
+            d_occupancy=self.occupancy,
+            d_u_iso=self.u_iso,
+            d_u_star=np.diagonal(self.u_star, axis1=1, axis2=2).copy(),
+            d_fp=self.fp,
+            d_fdp=self.fdp,
+        )
+
+
+def unpack_sf_curvatures(blob: bytes, meta: SfCurvatures) -> PackedSfCurvatures:
+    with _load_npz(blob) as zf:
+        packed = PackedSfCurvatures(**{k: zf[k] for k in PackedSfCurvatures.FIELDS})
     if packed.meta.n_scatterers != meta.n_scatterers:
         raise ValueError("n_scatterers mismatch")
     return packed

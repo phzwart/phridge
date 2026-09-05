@@ -204,7 +204,50 @@ out = bridge.call(
         f"source={remote.get('source')}"
     )
 
-    log.heading("4. Checks")
+    log.heading("4. Phenix-facing wrapper (cctbx in / cctbx out)")
+    log.code(
+        """\
+from cctbx import uctbx
+from plugins.agentsg_niggli import niggli_cell
+from phridge.client import Bridge
+
+bridge = Bridge(memory=True)
+uc = uctbx.unit_cell((9, 5, 7, 80, 100, 95))
+uc_red = niggli_cell(uc, bridge=bridge)                 # uctbx.unit_cell
+uc_red, cb_op = niggli_cell(uc, bridge=bridge, return_change_of_basis=True)
+"""
+    )
+    from cctbx import uctbx
+    from plugins.agentsg_niggli import niggli_cell
+
+    uc_in = uctbx.unit_cell(INPUT_CELL)
+    uc_red = niggli_cell(uc_in, bridge=bridge)
+    uc_red2, cb_op = niggli_cell(uc_in, bridge=bridge, return_change_of_basis=True)
+    log.output(
+        f"type(uc_red)={type(uc_red).__module__}.{type(uc_red).__name__}\n"
+        f"parameters={tuple(uc_red.parameters())}\n"
+        f"cb_op.as_xyz()={cb_op.as_xyz()}"
+    )
+    log.check(
+        isinstance(uc_red, uctbx.unit_cell),
+        "niggli_cell returns uctbx.unit_cell",
+        type(uc_red).__name__,
+    )
+    wrap_err = max(
+        abs(float(a) - float(b))
+        for a, b in zip(uc_red.parameters(), direct_cell)
+    )
+    log.check(
+        wrap_err < 1e-9,
+        "wrapper matches agentsg oracle",
+        f"max|Δ|={wrap_err:.3g}",
+    )
+    log.check(
+        tuple(uc_red2.parameters()) == tuple(uc_red.parameters()),
+        "return_change_of_basis keeps same cell",
+    )
+
+    log.heading("5. Checks")
     log.check(remote.get("source") == "agentsg", "result.source is agentsg")
     remote_cell = [float(x) for x in remote["unit_cell"]]
     oracle = [float(x) for x in direct_cell]
@@ -223,14 +266,16 @@ out = bridge.call(
         [
             ["input", *[f"{x:.4g}" for x in INPUT_CELL]],
             ["agentsg direct", *[f"{x:.4g}" for x in oracle]],
-            ["via phridge", *[f"{x:.4g}" for x in remote_cell]],
+            ["via phridge JSON", *[f"{x:.4g}" for x in remote_cell]],
+            ["via niggli_cell()", *[f"{x:.4g}" for x in uc_red.parameters()]],
         ],
     )
 
     log.heading("Done")
     log.para(
-        "No edits to `src/phridge` were required. The plugin lives under "
-        "`examples/plugins/` and uses `register_op` + JSON payloads — see "
+        "Worker stays JSON-only (no cctbx). The Phenix-facing `niggli_cell` "
+        "wrapper in `examples/plugins/agentsg_niggli.py` converts "
+        "`uctbx.unit_cell` ↔ JSON around `Bridge.call`. See "
         "[docs/extending.md](../docs/extending.md)."
     )
     log.write(args.output)

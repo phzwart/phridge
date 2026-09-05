@@ -33,6 +33,7 @@ dev = [
 
 [project.scripts]
 phridge-worker = "phridge.worker.runner:main"
+phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"
 
 [tool.hatch.build.targets.sdist]

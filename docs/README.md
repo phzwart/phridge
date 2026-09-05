@@ -15,5 +15,6 @@ only; packed npz and i_seq identity stay in Python.
 The job protocol lives in [`schema/phridge.yaml`](../schema/phridge.yaml).
 Science types live in `schema/cctbx*.yaml`. Redis is mandatory for
 cross-process jobs; use `Bridge(memory=True)` when you do not want a
-server. The Phenix client never imports torch; the worker never imports
-cctbx. See [redis.md](redis.md).
+server. Drivers and workers are peer processes on separate streams:
+Phenix never imports torch; the torch worker never imports cctbx; the
+CCTBX worker never imports torch. See [redis.md](redis.md).

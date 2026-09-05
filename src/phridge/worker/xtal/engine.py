@@ -539,34 +539,6 @@ class StructureFactorEngine:
         return out
 
 
-    def _atomic_sf_no_phase(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
-        """Complex atomic SF without the exp(2πi h·x) phase, shape (N, N_refl).
-
-        Matches the continuum (direct) model; u_extra cancels with the engine's
-        reciprocal-space correction. Used by the Tronrud/REFMAC block formulae.
-        """
-        m = self.model
-        h = self.hkl.astype(np.float64)
-        dstar = reciprocal_cartesian(m.unit_cell, h)
-        dstar2 = np.sum(dstar**2, axis=1)  # (H,)
-        stol2 = dstar2 / 4.0
-        n = sites_frac.shape[0]
-        out = np.zeros((n, h.shape[0]), dtype=np.complex128)
-        for j in range(n):
-            a = m.gauss_a[m.type_index[j]]
-            b = m.gauss_b[m.type_index[j]]
-            c = float(m.gauss_c[m.type_index[j]])
-            ff = c + float(fp[j]) + np.sum(a[:, None] * np.exp(-b[:, None] * stol2[None, :]), axis=0)
-            if m.anisotropic[j]:
-                u_mat = sym6_to_mat(np.asarray(u_star[j : j + 1]))[0]
-                huh = np.einsum("hi,ij,hj->h", h, u_mat, h)
-                dw = np.exp(-TWO_PI2 * huh)
-            else:
-                dw = np.exp(-TWO_PI2 * float(u_iso[j]) * dstar2)
-            weight = float(occupancy[j]) * float(m.multiplicity[j]) / float(m.n_sym)
-            out[j] = weight * (ff + 1j * float(fdp[j])) * dw
-        return out
-
     def gauss_newton_blocks(self, curv_radial, curv_tangential, params=None):
         """Exact per-atom Gauss-Newton blocks via the Tronrud sum/difference split.
 

@@ -464,3 +464,170 @@ def test_gauss_newton_diagonal_op_round_trip():
     n = xs.scatterers().size()
     assert diag.d_site_frac.shape == (n, 3)
     assert float(diag.d_site_frac.sum()) != 0.0
+
+
+@pytest.mark.parametrize("space_group", ["P1", "P21"])
+def test_gauss_newton_blocks_site_match_finite_difference(space_group):
+    xs = _structure(space_group, elements=("C", "N", "O"), n_repeat=1, seed=9)
+    d_min = 2.0
+    fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl = np.array(list(fc.indices()))
+    eng = _engine(xs, hkl, d_min, quality_factor=1000)
+    f_obs = np.abs(eng.f_calc_numpy())
+    obs = Observations.from_numpy(data=f_obs)
+    tgt = LeastSquares(obs_type="F", scale_factor=1.0)
+    with torch.no_grad():
+        f = eng.f_calc(*eng.tensors())
+    ev = tgt.evaluate(f, obs)
+    blocks = eng.gauss_newton_blocks(ev.curv_radial, ev.curv_tangential)
+    sites = eng.model.sites_frac.copy()
+    h = 1e-4
+
+    def grad_sites(s):
+        params = list(eng.tensors(requires_grad=True))
+        params[0] = torch.tensor(s, dtype=torch.float64, requires_grad=True)
+        with torch.no_grad():
+            ff = eng.f_calc(*params)
+        e = tgt.evaluate(ff, obs)
+        return eng.gradients(e.d_target_d_f_calc, params=tuple(params))["site_frac"]
+
+    for j in range(sites.shape[0]):
+        H_fd = np.zeros((3, 3))
+        for a in range(3):
+            sp, sm = sites.copy(), sites.copy()
+            sp[j, a] += h
+            sm[j, a] -= h
+            H_fd[:, a] = (grad_sites(sp)[j] - grad_sites(sm)[j]) / (2 * h)
+        assert _rel(H_fd, blocks["site_frac"][j]) < 5e-3
+
+    # diagonal agrees with Hutchinson estimate
+    hutch = eng.gauss_newton_diagonal(ev.curv_radial, ev.curv_tangential, n_probes=64, seed=0)
+    block_diag = np.diagonal(blocks["site_frac"], axis1=1, axis2=2)
+    assert np.corrcoef(block_diag.ravel(), hutch["site_frac"].ravel())[0, 1] > 0.95
+
+
+def test_gauss_newton_blocks_op_round_trip():
+    bridge = _bridge()
+    xs = _structure("P1", elements=("C", "N", "O"), n_repeat=1, seed=10)
+    fc = xs.structure_factors(d_min=2.0, algorithm="direct").f_calc()
+    f_obs = fc.amplitudes()
+    refiner = RemoteRefinementTarget(
+        bridge, xs, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0, quality_factor=1000)
+    )
+    curv = refiner.curvatures()
+    n = xs.scatterers().size()
+    assert curv.site_frac.shape == (n, 3, 3)
+    assert curv.u_star.shape == (n, 6, 6)
+    # round-trip pack/unpack
+    from phridge.packing_scattering import unpack_sf_curvatures
+
+    blob = curv.pack()
+    again = unpack_sf_curvatures(blob, curv.meta)
+    np.testing.assert_allclose(again.site_frac, curv.site_frac)
+
+
+def test_lbfgs_with_and_without_diagonal_preconditioner():
+    """Report iterations-to-convergence; diagonal should not hurt and usually helps."""
+    import scitbx.lbfgs
+
+    bridge = _bridge()
+    xs = _structure("P21", n_repeat=2, seed=3)
+    fc = xs.structure_factors(d_min=2.0, algorithm="direct").f_calc()
+    f_obs = fc.amplitudes()
+
+    def run(use_diag):
+        xs2 = xs.deep_copy_scatterers()
+        xs2.shake_sites_in_place(rms_difference=0.15)
+        for sc in xs2.scatterers():
+            sc.flags.set_grad_site(True)
+            sc.flags.set_grad_occupancy(False)
+            sc.flags.set_grad_u_iso(False)
+            sc.flags.set_grad_u_aniso(False)
+        refiner = RemoteRefinementTarget(
+            bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0)
+        )
+        inv_diag = refiner.diagonal(xs2, method="blocks") if use_diag else None
+
+        class Minimizer:
+            def __init__(self):
+                self.x = xs2.sites_cart().as_double()
+                self.n_calls = 0
+                self.diag_mode = "once" if use_diag else None
+                scitbx.lbfgs.run(
+                    target_evaluator=self,
+                    termination_params=scitbx.lbfgs.termination_parameters(max_iterations=30),
+                )
+
+            def compute_functional_and_gradients(self):
+                xs2.set_sites_cart(flex.vec3_double(self.x))
+                self.n_calls += 1
+                return refiner.target_and_gradients(xs2)
+
+            def compute_functional_gradients_diag(self):
+                t, g = self.compute_functional_and_gradients()
+                return t, g, inv_diag
+
+        m = Minimizer()
+        t1, _ = refiner.target_and_gradients(xs2)
+        return m.n_calls, t1, xs.rms_difference(xs2)
+
+    n0, t0, rms0 = run(False)
+    n1, t1, rms1 = run(True)
+    assert t0 < 1e-2 and t1 < 1e-2
+    assert rms0 < 0.1 and rms1 < 0.1
+    # both converge; with diag should not need vastly more calls
+    assert n1 <= n0 * 2
+    print(f"LBFGS without diag: calls={n0} target={t0:.3e} rms={rms0:.4f}")
+    print(f"LBFGS with diag:    calls={n1} target={t1:.3e} rms={rms1:.4f}")
+
+
+def test_newton_cg_vs_lbfgs():
+    bridge = _bridge()
+    xs = _structure("P21", n_repeat=2, seed=3)
+    fc = xs.structure_factors(d_min=2.0, algorithm="direct").f_calc()
+    f_obs = fc.amplitudes()
+    xs2 = xs.deep_copy_scatterers()
+    xs2.shake_sites_in_place(rms_difference=0.15)
+    for sc in xs2.scatterers():
+        sc.flags.set_grad_site(True)
+        sc.flags.set_grad_occupancy(False)
+        sc.flags.set_grad_u_iso(False)
+    refiner = RemoteRefinementTarget(
+        bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0)
+    )
+    t0, _ = refiner.target_and_gradients(xs2)
+    result = refiner.newton_cg(xs2, max_iterations=10, cg_max_iter=10, damping=1e-2)
+    assert result["target"] < 0.2 * t0
+    assert result["n_iterations"] <= 10
+    # amplitude-only: origin along unique axis is free; check |F| fit
+    fc_r = result["xray_structure"].structure_factors(d_min=2.0, algorithm="direct").f_calc()
+    assert f_obs.r1_factor(fc_r.amplitudes()) < 1e-3
+
+    xs3 = xs.deep_copy_scatterers()
+    xs3.shake_sites_in_place(rms_difference=0.15)
+    for sc in xs3.scatterers():
+        sc.flags.set_grad_site(True)
+        sc.flags.set_grad_occupancy(False)
+        sc.flags.set_grad_u_iso(False)
+    import scitbx.lbfgs
+
+    refiner3 = RemoteRefinementTarget(
+        bridge, xs3, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0)
+    )
+
+    class M:
+        def __init__(self):
+            self.x = xs3.sites_cart().as_double()
+            self.n_calls = 0
+            scitbx.lbfgs.run(target_evaluator=self, termination_params=scitbx.lbfgs.termination_parameters(max_iterations=20))
+
+        def compute_functional_and_gradients(self):
+            xs3.set_sites_cart(flex.vec3_double(self.x))
+            self.n_calls += 1
+            return refiner3.target_and_gradients(xs3)
+
+    m = M()
+    t_lbfgs, _ = refiner3.target_and_gradients(xs3)
+    assert t_lbfgs < 0.2 * t0
+    print(f"Newton-CG: iters={result['n_iterations']} target={result['target']:.3e}")
+    print(f"L-BFGS:    calls={m.n_calls} target={t_lbfgs:.3e}")

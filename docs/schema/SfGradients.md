@@ -117,6 +117,7 @@ attributes:
     domain_of:
     - XrayStructure
     - SfGradients
+    - SfCurvatures
     range: integer
     required: true
   target:
@@ -153,6 +154,7 @@ attributes:
     domain_of:
     - XrayStructure
     - SfGradients
+    - SfCurvatures
     range: integer
     required: true
   target:

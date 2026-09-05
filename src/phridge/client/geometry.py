@@ -1,4 +1,4 @@
-"""Geometry restraint converters and Phenix-facing RemoteGeometry manager."""
+"""Geometry restraint converters and Phenix / torch-facing helpers."""
 
 from __future__ import annotations
 
@@ -13,10 +13,49 @@ from phridge.packing_xtal import PackedCartesian, PackedHierarchy
 
 __all__ = [
     "RemoteGeometry",
+    "RemoteRestraintBuilder",
     "model_geometry",
     "restraints_from_cctbx",
     "restraints_to_proxies",
 ]
+
+
+class RemoteRestraintBuilder:
+    """Torch-facing helper: build packed restraints via the CCTBX worker.
+
+    The calling process need not import cctbx. Jobs go to the ``cctbx``
+    Redis stream (``phridge-worker --runtime cctbx`` / ``phridge-cctbx-worker``)::
+
+        builder = RemoteRestraintBuilder(bridge)
+        out = builder.build(pdb_string=pdb)
+        geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
+    """
+
+    def __init__(self, bridge: Any) -> None:
+        self.bridge = bridge
+
+    def build(
+        self,
+        *,
+        pdb_string: Optional[str] = None,
+        hierarchy: Any = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Return ``{"hierarchy", "restraints"}`` as packed types (no cctbx)."""
+        params: dict[str, Any] = dict(extra)
+        if pdb_string is not None:
+            params["pdb_string"] = pdb_string
+        kwargs: dict[str, Any] = {}
+        if params:
+            kwargs["params"] = params
+        if hierarchy is not None:
+            kwargs["hierarchy"] = hierarchy
+        if not kwargs:
+            raise TypeError("build() needs pdb_string and/or hierarchy")
+        out = self.bridge.call("build_geometry_restraints", **kwargs)
+        if not isinstance(out, dict) or "hierarchy" not in out or "restraints" not in out:
+            raise RuntimeError("build_geometry_restraints did not return hierarchy and restraints")
+        return out
 
 
 class RemoteGeometry:
@@ -43,7 +82,7 @@ class RemoteGeometry:
         self._packed_hier = _as_packed_hierarchy(hierarchy)
         self._packed_restr = _as_packed_restraints(restraints, n_sites=self._packed_hier.meta.n_atoms)
         self._header = model_geometry(hierarchy=self._packed_hier, restraints=self._packed_restr)
-        self.last_target: Optional[dict[str, Any]] = None
+        self.last_target = None  # type: Optional[dict[str, Any]]
 
     @property
     def n_sites(self) -> int:
@@ -72,6 +111,9 @@ class RemoteGeometry:
         reports done. ``optimizer`` is ``"lbfgs"``, ``"adam"``, ``"adamw"``, or ``"sgd"``.
         First-order methods accept ``schedule`` (``none`` / ``cosine`` / ``triangular``),
         ``lr_min``, and SGD ``momentum``.
+
+        With packed hierarchy inputs (torch driver), pass ``update_hierarchy=False``
+        to get :class:`PackedCartesian` sites without importing cctbx.
         """
         out = self._call(
             sites_cart=sites_cart,
@@ -99,8 +141,11 @@ class RemoteGeometry:
         )
         if not update_hierarchy:
             return sites
+        from phridge.client.convert import has_cctbx
         from phridge.client.convert_xtal import hierarchy_to_cctbx
 
+        if not has_cctbx():
+            return sites
         return hierarchy_to_cctbx(self._packed_hier)
 
     def _call(

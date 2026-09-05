@@ -1,12 +1,14 @@
 # Extending phridge (external ops and workers)
 
 phridge is meant to be a **protocol + runtime**, not a closed app. Your own
-PyTorch package can add ops without forking this repo. Redis remains the
-server; `phridge-worker` (or a thin wrapper) is the consumer; Phenix talks
-through `Bridge`.
+package can add ops without forking this repo. Redis remains the server;
+`phridge-worker` / `phridge-cctbx-worker` are the consumers; Phenix or a
+torch driver talks through `Bridge`.
 
-There is no separate “phridge server” process — start `redis-server` and a
-worker that shares the URL.
+There is no separate “phridge server” process — start `redis-server` and
+workers that share the URL. Ops are routed by `OpSpec.runtime` (`torch` or
+`cctbx`) onto separate Redis streams so workers never steal each other's
+jobs. See [redis.md](redis.md).
 
 ## Register an op
 
@@ -29,6 +31,7 @@ def register():
         denoise,
         inputs={"array": "array", "strength": "json"},
         outputs={"array": "array"},
+        runtime="torch",  # default; use "cctbx" for mmtbx-side ops
     )
 
 # Import-time registration (works with --preload)
@@ -50,6 +53,7 @@ Lower-level helpers: `register(OpSpec(...))` and `register_impl(name, fn)`.
 # discovery options (any combination):
 phridge-worker --redis-url redis://gpu:6379/0 --preload mypkg.plugin
 PHRIDGE_PRELOAD=mypkg.plugin phridge-worker --device cuda
+phridge-worker --runtime cctbx   # or: phridge-cctbx-worker
 
 # dump catalog including plugins
 phridge-ops --preload mypkg.plugin
@@ -57,6 +61,7 @@ phridge-ops --preload mypkg.plugin
 
 | Flag / env | Role |
 |------------|------|
+| `--runtime torch\|cctbx` | Job stream / impl table (`PHRIDGE_RUNTIME`) |
 | `--preload MOD` | Import module(s) before serving (repeatable; comma-separated ok) |
 | `PHRIDGE_PRELOAD` | Same as `--preload` |
 | `--no-entry-points` | Skip the `phridge.ops` entry-point group |
@@ -96,6 +101,13 @@ For a new reciprocal-space target used by `target_eval` /
 [tutorial_sf_targets.md](tutorial_sf_targets.md). Math and built-ins:
 [engine.md](engine.md).
 
+## CCTBX-runtime ops
+
+Ops that need mmtbx / the monomer library register with `runtime="cctbx"`
+and ship an impl under a module the CCTBX worker loads. Built-in example:
+`build_geometry_restraints` (PDB / hierarchy → packed `GeometryRestraints`).
+Torch drivers use `RemoteRestraintBuilder` without importing cctbx.
+
 ## LinkML / contract tests
 
 Treat `schema/*.yaml` as the source of truth for envelopes and JSON meta.
@@ -128,3 +140,15 @@ make example-agentsg
 Flow: JSON unit cell → `Bridge(memory=True)` → worker calls
 `agentsg.cell.niggli_reduce` → JSON `{unit_cell, change_of_basis}`. For a live
 worker: `PYTHONPATH=examples phridge-worker --preload plugins.agentsg_niggli`.
+
+Phenix-facing helper (same module) converts cctbx ↔ JSON:
+
+```python
+from cctbx import uctbx
+from plugins.agentsg_niggli import niggli_cell
+from phridge.client import Bridge
+
+bridge = Bridge(memory=True)
+uc_red = niggli_cell(uctbx.unit_cell((9, 5, 7, 80, 100, 95)), bridge=bridge)
+# → cctbx.uctbx.unit_cell  (worker never imported cctbx)
+```

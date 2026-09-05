@@ -12,7 +12,7 @@ import json
 import sys
 from typing import Any, Callable, Iterable, Optional, Union
 
-from phridge.models import SCHEMA_VERSION, OpSpec
+from phridge.models import SCHEMA_VERSION, OpSpec, WorkerRuntime
 
 _SPECS: dict[str, OpSpec] = {}
 # External / late-bound implementations (avoids importing worker.ops on the client).
@@ -40,6 +40,7 @@ def register_op(
     inputs: Optional[dict[str, str]] = None,
     outputs: Optional[dict[str, str]] = None,
     schema_version: int = SCHEMA_VERSION,
+    runtime: Union[str, WorkerRuntime] = WorkerRuntime.torch,
 ) -> OpSpec:
     """Register an op for clients and (optionally) workers.
 
@@ -54,16 +55,20 @@ def register_op(
     inputs / outputs:
         Required when ``name`` is a string. Values are type tags
         (``array``, ``json``, or a LinkML class name such as ``MillerArray``).
+    runtime:
+        ``torch`` or ``cctbx`` — which Redis job stream consumes this op.
     """
     if isinstance(name, OpSpec):
         spec = register(name)
     else:
         if inputs is None or outputs is None:
             raise TypeError("register_op(str, ...) requires inputs= and outputs=")
+        rt = WorkerRuntime(runtime) if not isinstance(runtime, WorkerRuntime) else runtime
         spec = register(
             OpSpec(
                 name=str(name),
                 schema_version=schema_version,
+                runtime=rt,
                 inputs=dict(inputs),
                 outputs=dict(outputs),
             )
@@ -80,14 +85,27 @@ def get_op(name: str) -> OpSpec:
         raise KeyError(f"unknown op: {name}") from exc
 
 
-def get_implementation(name: str) -> Optional[Callable[..., Any]]:
+def get_implementation(name: str, *, runtime: Optional[Union[str, WorkerRuntime]] = None) -> Optional[Callable[..., Any]]:
     """Return the worker callable for ``name``, if any.
 
-    Looks in the late-bound map first, then the built-in
-    ``phridge.worker.ops.IMPLEMENTATIONS`` table (imported lazily).
+    Looks in the late-bound map first, then the built-in table for the op's
+    ``runtime`` (``phridge.worker.ops`` or ``phridge.cctbx_worker.ops``).
     """
     if name in _IMPLS:
         return _IMPLS[name]
+    spec = _SPECS.get(name)
+    if runtime is not None:
+        rt = WorkerRuntime(runtime) if not isinstance(runtime, WorkerRuntime) else runtime
+    elif spec is not None:
+        rt = WorkerRuntime(spec.runtime)
+    else:
+        rt = WorkerRuntime.torch
+    if rt == WorkerRuntime.cctbx:
+        try:
+            from phridge.cctbx_worker.ops import IMPLEMENTATIONS
+        except ImportError:
+            return None
+        return IMPLEMENTATIONS.get(name)
     try:
         from phridge.worker.ops import IMPLEMENTATIONS
     except ImportError:
@@ -255,10 +273,30 @@ register(
 
 register(
     OpSpec(
+        name="gauss_newton_blocks",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, "target": "TargetResult", "hkl": "MillerArray"},
+        outputs={"curvatures": "SfCurvatures"},
+    )
+)
+
+register(
+    OpSpec(
         name="geometry_minimize",
         schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
         inputs={"sites": "CartesianSites", "restraints": "GeometryRestraints", "params": "json"},
         outputs={"sites": "CartesianSites", "target": "json"},
+    )
+)
+
+register(
+    OpSpec(
+        name="build_geometry_restraints",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.cctbx,
+        inputs={"params": "json", "hierarchy": "Hierarchy"},
+        outputs={"hierarchy": "Hierarchy", "restraints": "GeometryRestraints"},
     )
 )
 

@@ -40,6 +40,7 @@ Name: phridge
 | [ReflectionFile](ReflectionFile.md) | Canonical iotbx |
 | [Scatterer](Scatterer.md) | One cctbx |
 | [ScatteringTable](ScatteringTable.md) | Gaussian form-factor coefficients per scattering type (cctbx scattering_type_... |
+| [SfCurvatures](SfCurvatures.md) | Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligne... |
 | [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |
 | [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |
 | [SlotBinding](SlotBinding.md) |  |
@@ -133,6 +134,7 @@ Name: phridge
 | [resolution](resolution.md) | Nominal high resolution (Å) when known |
 | [resolution_factor](resolution_factor.md) | Typical FFT factor (e |
 | [resseq](resseq.md) |  |
+| [runtime](runtime.md) | Which worker stream consumes this op (torch vs cctbx) |
 | [scale_factor](scale_factor.md) | Scale used or fitted by the target |
 | [scatterers](scatterers.md) |  |
 | [scattering_type](scattering_type.md) | cctbx scattering type (C, N, S, AU, water, …) |
@@ -173,6 +175,7 @@ Name: phridge
 | [MtzColumnType](MtzColumnType.md) | CCP4 MTZ column type character (iotbx |
 | [ObjectKind](ObjectKind.md) |  |
 | [ObservationType](ObservationType.md) |  |
+| [WorkerRuntime](WorkerRuntime.md) |  |
 
 
 ## Types

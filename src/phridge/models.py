@@ -102,6 +102,11 @@ class Compression(str, Enum):
     gzip = "gzip"
 
 
+class WorkerRuntime(str, Enum):
+    torch = "torch"
+    cctbx = "cctbx"
+
+
 class SymOp(_Strict):
     """One symmetry operator, x' = r @ x + t (fractional). r row-major 3x3."""
 
@@ -360,6 +365,12 @@ class SfGradients(_Strict):
     target: Optional[float] = None
 
 
+class SfCurvatures(_Strict):
+    """Per-atom Gauss-Newton blocks. npz: site_frac, occupancy, u_iso, u_star, fp, fdp."""
+
+    n_scatterers: int
+
+
 class TargetResult(_Strict):
     """Target evaluation. npz: per_reflection, d_target_d_f_calc, optional curv_radial, curv_tangential."""
 
@@ -398,6 +409,7 @@ CCTBX_TYPES = {
     "ScatteringTable": ScatteringTable,
     "SfEngineParams": SfEngineParams,
     "SfGradients": SfGradients,
+    "SfCurvatures": SfCurvatures,
     "TargetResult": TargetResult,
 }
 
@@ -463,5 +475,6 @@ class SlotBinding(_Strict):
 class OpSpec(_Strict):
     name: str
     schema_version: int = SCHEMA_VERSION
+    runtime: WorkerRuntime = WorkerRuntime.torch
     inputs: dict[str, str] = Field(default_factory=dict)
     outputs: dict[str, str] = Field(default_factory=dict)

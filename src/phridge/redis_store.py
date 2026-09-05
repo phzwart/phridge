@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 try:
     import redis
@@ -15,7 +15,7 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 from phridge.memory_redis import MemoryRedis
-from phridge.models import JobEnvelope
+from phridge.models import JobEnvelope, WorkerRuntime
 
 DEFAULT_TTL_SECONDS = 3600
 DEFAULT_MAX_OBJECT_BYTES = 64 * 1024 * 1024
@@ -23,8 +23,39 @@ DEFAULT_MAX_OBJECT_BYTES = 64 * 1024 * 1024
 JOB_KEY = "phridge:job:{job_id}"
 OBJ_KEY = "phridge:obj:{job_id}:{name}"
 READY_KEY = "phridge:job:{job_id}:ready"
-JOBS_STREAM = "phridge:jobs"
-WORKER_GROUP = "phridge-workers"
+
+# Per-runtime job streams so torch and cctbx workers never steal each other's jobs.
+# Legacy single stream was ``phridge:jobs``; torch now uses ``phridge:jobs:torch``.
+JOBS_STREAM_TORCH = "phridge:jobs:torch"
+JOBS_STREAM_CCTBX = "phridge:jobs:cctbx"
+WORKER_GROUP_TORCH = "phridge-workers:torch"
+WORKER_GROUP_CCTBX = "phridge-workers:cctbx"
+
+# Backward-compatible aliases (torch runtime).
+JOBS_STREAM = JOBS_STREAM_TORCH
+WORKER_GROUP = WORKER_GROUP_TORCH
+
+
+def normalize_runtime(runtime: Union[str, WorkerRuntime, None] = None) -> WorkerRuntime:
+    if runtime is None:
+        return WorkerRuntime.torch
+    if isinstance(runtime, WorkerRuntime):
+        return runtime
+    return WorkerRuntime(str(runtime))
+
+
+def jobs_stream(runtime: Union[str, WorkerRuntime, None] = None) -> str:
+    rt = normalize_runtime(runtime)
+    if rt == WorkerRuntime.cctbx:
+        return JOBS_STREAM_CCTBX
+    return JOBS_STREAM_TORCH
+
+
+def worker_group(runtime: Union[str, WorkerRuntime, None] = None) -> str:
+    rt = normalize_runtime(runtime)
+    if rt == WorkerRuntime.cctbx:
+        return WORKER_GROUP_CCTBX
+    return WORKER_GROUP_TORCH
 
 
 class ObjectTooLargeError(ValueError):
@@ -100,9 +131,14 @@ class RedisStore:
         self.client.rpush(key, b"1")
         self.client.expire(key, self.ttl_seconds)
 
-    def ensure_consumer_group(self) -> None:
+    def ensure_consumer_group(
+        self,
+        runtime: Union[str, WorkerRuntime, None] = None,
+    ) -> None:
+        stream = jobs_stream(runtime)
+        group = worker_group(runtime)
         try:
-            self.client.xgroup_create(JOBS_STREAM, WORKER_GROUP, id="0", mkstream=True)
+            self.client.xgroup_create(stream, group, id="0", mkstream=True)
         except redis.ResponseError as exc:
             if "BUSYGROUP" not in str(exc):
                 raise

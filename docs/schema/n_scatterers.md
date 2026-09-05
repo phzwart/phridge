@@ -22,6 +22,7 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 | --- | --- | --- |
 | [XrayStructure](XrayStructure.md) | Canonical cctbx |  no  |
 | [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |  no  |
+| [SfCurvatures](SfCurvatures.md) | Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligne... |  no  |
 
 
 
@@ -35,7 +36,7 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [XrayStructure](XrayStructure.md), [SfGradients](SfGradients.md) |
+| Domain Of | [XrayStructure](XrayStructure.md), [SfGradients](SfGradients.md), [SfCurvatures](SfCurvatures.md) |
 
 ### Cardinality and Requirements
 
@@ -76,6 +77,7 @@ name: n_scatterers
 domain_of:
 - XrayStructure
 - SfGradients
+- SfCurvatures
 range: string
 
 ```

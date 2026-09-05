@@ -12,7 +12,7 @@ import numpy as np
 
 from phridge.models import ObservationType, SfEngineParams
 from phridge.packing import PackedMiller
-from phridge.packing_scattering import PackedScatteringTable, PackedSfGradients, PackedTargetResult
+from phridge.packing_scattering import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 from phridge.packing_xtal import PackedXray
 from phridge.worker.targets import Observations, TargetEval, build_target
 from phridge.worker.xtal.engine import EngineParams, ScatteringModel, StructureFactorEngine
@@ -302,3 +302,28 @@ def gauss_newton_diagonal(
 
 
 gauss_newton_diagonal.compute_dtype = "float64"
+
+
+def gauss_newton_blocks(
+    xray: PackedXray,
+    table: PackedScatteringTable,
+    target: PackedTargetResult,
+    hkl: PackedMiller,
+    params: Any,
+) -> PackedSfCurvatures:
+    """Exact per-atom Gauss-Newton blocks (Tronrud D+S) as SfCurvatures."""
+    if target.curv_radial is None:
+        raise ValueError("TargetResult has no curvatures; evaluate with compute_curvature=True")
+    eng = _engine(xray, table, _np(hkl.hkl), params)
+    blocks = eng.gauss_newton_blocks(_np(target.curv_radial), _np(target.curv_tangential))
+    return PackedSfCurvatures(
+        site_frac=blocks["site_frac"],
+        occupancy=blocks["occupancy"],
+        u_iso=blocks["u_iso"],
+        u_star=blocks["u_star"],
+        fp=blocks["fp"],
+        fdp=blocks["fdp"],
+    )
+
+
+gauss_newton_blocks.compute_dtype = "float64"

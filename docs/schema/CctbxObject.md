@@ -64,6 +64,8 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
         click SfEngineParams href "../SfEngineParams/"
       CctbxObject <|-- SfGradients
         click SfGradients href "../SfGradients/"
+      CctbxObject <|-- SfCurvatures
+        click SfCurvatures href "../SfCurvatures/"
       CctbxObject <|-- TargetResult
         click TargetResult href "../TargetResult/"
       
@@ -94,6 +96,7 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
     * [ScatteringTable](ScatteringTable.md)
     * [SfEngineParams](SfEngineParams.md)
     * [SfGradients](SfGradients.md)
+    * [SfCurvatures](SfCurvatures.md)
     * [TargetResult](TargetResult.md)
 
 

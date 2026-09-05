@@ -66,6 +66,15 @@ and `TargetResult` carries `curv_radial` ($g''$) and `curv_tangential`
 ($g'/|F|$). The second (residual) term is block-diagonal by atom and is
 not computed; it vanishes in expectation at convergence.
 
+`gauss_newton_diagonal` estimates $\mathrm{diag}(J^\top H J)$ by Hutchinson
+with Rademacher probes (default $m=8$). `gauss_newton_blocks` builds the
+exact per-atom Gauss-Newton blocks via the Tronrud / REFMAC sum–difference
+split ($w^{(\pm)}=\tfrac12(g''\pm g'/|F|)$). On the client,
+`RemoteRefinementTarget.diagonal()` packs the inverse-Hessian diagonal for
+`scitbx.lbfgs` (`diag_mode="once"`), and `newton_cg()` solves
+$(J^\top H J+\lambda D)p=-\nabla Q$ with the HVP and a Jacobi
+preconditioner from the blocks.
+
 ## Targets
 
 Targets are registered by name and built from a JSON spec:
@@ -89,6 +98,8 @@ and the curvatures. Short tutorial (call path + custom likelihood):
 | `target_eval` | `f_calc`, `f_obs`, `target`, optional `weights`, `r_free`, `alpha`, `beta`, `epsilon`, `centric` | `target` (TargetResult) |
 | `refine_gradients` | `xray`, `table`, `params`, `f_obs`, `target`, optional arrays | `f_calc`, `target`, `gradients` |
 | `gauss_newton_hvp` | `xray`, `table`, `params`, `target`, `hkl`, `v` (SfGradients layout) | `hv` (SfGradients) |
+| `gauss_newton_diagonal` | `xray`, `table`, `params`, `target`, `hkl`, optional `n_probes`, `seed` | `diagonal` (SfGradients) |
+| `gauss_newton_blocks` | `xray`, `table`, `params`, `target`, `hkl` | `curvatures` (SfCurvatures) |
 
 `table` is a `ScatteringTable` (Gaussian coefficients per scattering
 type, `scattering_table_from_cctbx(xray_structure)`), and
@@ -116,6 +127,8 @@ res = functor(f_calc)                            # .target_work(), .gradients_wo
 # one round trip per minimizer step
 refiner = RemoteRefinementTarget(bridge, xray_structure, f_obs, {"name": "ls", "obs_type": "F"}, d_min=2.0)
 target, packed_gradients = refiner.target_and_gradients(xray_structure)   # feed to scitbx.lbfgs
+inv_diag = refiner.diagonal()  # packed Hk0 for lbfgs diag_mode="once"
+# or: refiner.newton_cg(xray_structure)  # Gauss-Newton CG with block Jacobi
 ```
 
 Bulk solvent and overall scaling are not part of the engine; use

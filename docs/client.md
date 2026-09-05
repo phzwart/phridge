@@ -29,11 +29,29 @@ header = model_geometry(hierarchy=hier, xray=xrs, restraints=packed)
 `restraints_to_proxies` rebuilds bond/angle/dihedral/chirality/planarity/parallelity
 proxies. It does not reconstruct `bond_params_table` or a live manager.
 
+### RemoteRestraintBuilder
+
+Torch-facing helper: build packed restraints on the **CCTBX** worker from a
+PDB string (no cctbx import in the driver). Then feed the packed objects
+into `RemoteGeometry` for torch minimization.
+
+```python
+from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+
+bridge = Bridge("redis://localhost:6379/0")  # needs torch + cctbx workers
+# bridge = Bridge(memory=True)  # both runtimes in-process (dev)
+
+out = RemoteRestraintBuilder(bridge).build(pdb_string=pdb)
+geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
+sites = geo.minimize(max_iterations=100, optimizer="lbfgs", update_hierarchy=False)
+```
+
 ### RemoteGeometry.minimize
 
 Phenix-facing manager: pack hierarchy + restraints to Redis, block until the
 worker finishes a **torch** optimizer (`lbfgs`, `adam`, `adamw`, or `sgd`), convert
-sites back to a cctbx hierarchy.
+sites back to a cctbx hierarchy (or packed sites when cctbx is unavailable /
+`update_hierarchy=False`).
 
 ```python
 from phridge.client import Bridge, RemoteGeometry

@@ -989,13 +989,18 @@
                         "null"
                     ]
                 },
+                "runtime": {
+                    "$ref": "#/$defs/WorkerRuntime",
+                    "description": "Which worker stream consumes this op (torch vs cctbx)"
+                },
                 "schema_version": {
                     "type": "integer"
                 }
             },
             "required": [
                 "name",
-                "schema_version"
+                "schema_version",
+                "runtime"
             ],
             "title": "OpSpec",
             "type": "object"
@@ -1262,6 +1267,20 @@
             "title": "ScatteringTable",
             "type": "object"
         },
+        "SfCurvatures": {
+            "additionalProperties": false,
+            "description": "Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligned with the XrayStructure. npz: site_frac [N,3,3], occupancy [N], u_iso [N], u_star [N,6,6], fp [N], fdp [N]. Inactive ADP entries are zero.",
+            "properties": {
+                "n_scatterers": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_scatterers"
+            ],
+            "title": "SfCurvatures",
+            "type": "object"
+        },
         "SfEngineParams": {
             "additionalProperties": false,
             "description": "Gridding / accuracy controls for the FFT structure-factor engine. JSON only. Mirrors cctbx structure_factors.from_scatterers FFT settings (grid_resolution_factor, quality_factor, wing_cutoff).",
@@ -1448,6 +1467,15 @@
             ],
             "title": "TargetResult",
             "type": "object"
+        },
+        "WorkerRuntime": {
+            "description": "",
+            "enum": [
+                "torch",
+                "cctbx"
+            ],
+            "title": "WorkerRuntime",
+            "type": "string"
         },
         "XrayStructure": {
             "additionalProperties": false,
