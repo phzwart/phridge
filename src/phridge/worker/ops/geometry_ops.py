@@ -8,10 +8,10 @@ import numpy as np
 
 from phridge.packing_geometry import PackedRestraints
 from phridge.packing_xtal import PackedCartesian
+from phridge.sfcalc import ops as sfcalc_ops
 from phridge.worker.geometry.energy import energy_and_sites
-from phridge.worker.ops import xtal_ops
 
-_DEVICE = xtal_ops._DEVICE
+_DEVICE = sfcalc_ops._DEVICE
 
 
 def geometry_minimize(

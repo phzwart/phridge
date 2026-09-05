@@ -199,6 +199,12 @@ installed. Large-N GPU SF gradient checks are marked `gpu`/`slow` — see
 make example-restraints
 # → examples/restraint_minimization.md  (torch LBFGS/Adam/SGD)
 
+make example-torch-build
+# → examples/torch_build_restraints.md  (CCTBX build → torch minimize)
+
+make example-latent-adam
+# → examples/latent_restraints_adam.md  (torch latents + CCTBX E/grads via phridge)
+
 make example-sf-server
 # → examples/sf_server_demo.md  (cctbx-feel SF server → remote GPU)
 

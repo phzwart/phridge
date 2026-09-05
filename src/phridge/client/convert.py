@@ -28,7 +28,7 @@ from phridge.packing_xtal import (
     PackedXray,
 )
 from phridge.packing_geometry import PackedRestraints
-from phridge.packing_scattering import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
+from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 
 def has_cctbx() -> bool:
     try:

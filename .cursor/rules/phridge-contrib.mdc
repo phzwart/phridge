@@ -1,0 +1,16 @@
+---
+description: Mandates for phridge.contrib packages — typing, pydantic, LinkML validation
+globs: src/phridge/contrib/**
+alwaysApply: false
+---
+
+# phridge.contrib standards
+
+Follow [`src/phridge/contrib/AGENTS.md`](src/phridge/contrib/AGENTS.md). Summary:
+
+- **Typing:** `from __future__ import annotations`; annotate public APIs and `register()`; no untyped `**kwargs` at the package boundary.
+- **Pydantic:** validate all JSON / target-spec / op options with a `BaseModel` (or `phridge.models` via `model_validate`); prefer `extra="forbid"`.
+- **LinkML:** prefer existing packed types; new kinds need `schema/` + regenerated JSON Schema + `jsonschema.validate` fixtures (`tests/test_linkml_validate.py`). See `docs/extending.md`.
+- **Tests:** registration smoke, pydantic accept/reject, evaluate smoke; LinkML coverage when schema changes.
+
+Do not put shared FFT / SF-server core here — that belongs in `phridge.sfcalc`.

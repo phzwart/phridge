@@ -3,10 +3,10 @@
 - [Types, packing, and i_seq correspondence](types.md)
 - [Client converters, geometry, and EM maps](client.md)
 - [**Structure-factor server** (cctbx-feel API → remote GPU)](sf_server.md)
-- [Torch structure-factor engine, targets, and the Phenix drop-in](engine.md)
+- [Torch structure-factor engine, targets, and the Phenix drop-in](engine.md) (`phridge.sfcalc`)
 - [**Tutorial: FFT targets / gradients + custom likelihood**](tutorial_sf_targets.md)
 - [Redis store, remote jobs, and `Bridge(memory=True)`](redis.md)
-- [External ops and custom workers](extending.md) (worked example: agentsg Niggli)
+- [External ops, `phridge.contrib`, and custom workers](extending.md) (worked example: agentsg Niggli)
 - [Generated LinkML class catalog](schema/index.md) (`make schema-docs`)
 
 JSON Schema for metadata is under [`schema/generated/`](../schema/generated/).

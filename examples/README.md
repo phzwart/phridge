@@ -68,6 +68,32 @@ geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
 sites = geo.minimize(max_iterations=80, optimizer="lbfgs", update_hierarchy=False)
 ```
 
+## Latent Adam (torch workflow ↔ CCTBX via phridge)
+
+Shows how a **torch-driven** loop (custom latents, Adam, autograd) can still
+use **CCTBX** as the authoritative geometry engine: build a live GRM on the
+cctbx runtime, then each step decode → `geo.energy_and_gradients` (phridge)
+→ CCTBX `E` / `∂E/∂x` / residual+RMS stats → VJP into latents. No torch
+copy of the restraint residual — phridge makes the two play nice.
+
+```bash
+make example-latent-adam
+# or:
+PYTHONPATH=examples python examples/latent_restraints_adam.py
+```
+
+Writes [`latent_restraints_adam.md`](latent_restraints_adam.md). Encoder:
+[`residue_encoder.py`](residue_encoder.py).
+
+```python
+from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+
+bridge = Bridge(memory=True)
+built = RemoteRestraintBuilder(bridge).build(pdb_string=pdb)
+geo = RemoteGeometry.from_build(bridge, built)  # keeps restraints_handle
+E, g_x = geo.energy_and_gradients(xyz)          # CCTBX via phridge
+```
+
 ## Structure-factor server (cctbx-feel → remote GPU)
 
 ```bash

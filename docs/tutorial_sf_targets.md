@@ -18,7 +18,7 @@ phridge-worker --redis-url redis://0.0.0.0:6379/0 --device cuda
 
 ```python
 # import cctbx before torch in one process
-from phridge.client import StructureFactorServer
+from phridge.sfcalc import StructureFactorServer  # or phridge.client
 from phridge.models import SfEngineParams
 
 # production: Redis on the GPU server (other machine OK)
@@ -51,12 +51,13 @@ target, packed = sf.target_and_gradients(
 # packed: flex.double — sites (cart), U, occ, … per grad flags
 ```
 
-Built-in targets:
+Built-in / contrib targets:
 
 | `target_spec` | Needs |
 |---------------|--------|
 | `{"name": "ls", "obs_type": "F"}` or `"I"` | `f_obs` amplitudes (or intensities for `"I"`) |
 | `{"name": "ml_f"}` | also `alpha`, `beta` (and epsilons / centric flags; filled from `f_obs` if omitted) |
+| `{"name": "ml_i", "sigma": 1.0}` | intensities in `f_obs` / `obs.data` (`I_calc=|F|^2`); optional `obs.sigmas` — from `phridge.contrib.intensity_ll` (entry point) |
 
 ML example:
 
@@ -102,8 +103,8 @@ You only write the **per-reflection loss** in torch. Autograd supplies
 curvatures. The FFT chain then turns that into per-atom gradients.
 
 ```python
-# mypkg/my_likelihood.py  — must run on the *worker* (preload / memory Bridge)
-from phridge.worker.targets import Observations, Target, register_target
+# mypkg/my_likelihood.py  — must run on the *worker* (preload / entry point / memory Bridge)
+from phridge.sfcalc.targets import Observations, Target, register_target
 
 
 @register_target("my_nll")
@@ -127,12 +128,22 @@ def register():
     pass  # decorator already registered the class
 ```
 
+For in-tree packages, put this under `phridge.contrib.<name>/` and follow
+[`src/phridge/contrib/AGENTS.md`](../src/phridge/contrib/AGENTS.md) (typing +
+pydantic options + LinkML when needed). Ship via:
+
+```toml
+[project.entry-points."phridge.targets"]
+my_nll = "mypkg.my_likelihood:register"
+```
+
 **Wire it in**
 
 1. Worker loads your module (so the target registry knows `"my_nll"`):
 
 ```bash
 phridge-worker --preload mypkg.my_likelihood --device cuda
+# or rely on the phridge.targets entry point after pip install
 # or with StructureFactorServer(memory=True): import mypkg.my_likelihood before the call
 ```
 
@@ -152,7 +163,7 @@ Tips:
 
 - Put anything that needs torch in `per_reflection` / `prepare` / `reduce`.
 - Use `obs.data`, `obs.weights`, `obs.r_free`, `obs.alpha`, `obs.beta`, …
-  (see `Observations` in `phridge.worker.targets`). Pass extras through
+  (see `Observations` in `phridge.sfcalc.targets`). Pass extras through
   `sf.target_and_gradients(..., alpha=..., beta=..., weights=...)`.
 - Override `reduce` if you do not want the default mean over work reflections.
 - Set `amplitude_only = False` if your loss uses the complex \(F_h\) (phase),
@@ -196,5 +207,6 @@ scitbx.lbfgs.run(target_evaluator=m)
 | Grads given \(G_h\) | `sf.gradients(xs, miller_set, dtdf, ...)` |
 | Target on fixed \(F_c\) | `sf.target_functor(...)(f_calc)` |
 | Full step (FFT + target + grads) | `sf.target_and_gradients(...)` |
-| Custom likelihood | `@register_target("name")` + `{"name": "name", ...}` |
+| Custom likelihood | `@register_target` in `phridge.sfcalc.targets` / `phridge.contrib` |
+| Intensity Gaussian NLL | `{"name": "ml_i", ...}` (`phridge.contrib.intensity_ll`) |
 | Architecture write-up | [sf_server.md](sf_server.md) |

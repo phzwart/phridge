@@ -45,7 +45,7 @@ from phridge.packing_xtal import (
     unpack_xray,
 )
 from phridge.packing_geometry import PackedRestraints, unpack_restraints
-from phridge.packing_scattering import (
+from phridge.sfcalc.packing import (
     PackedScatteringTable,
     PackedSfCurvatures,
     PackedSfGradients,

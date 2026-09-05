@@ -23,10 +23,10 @@ tensor, so the two conventions line up with no factors of two.
 
 | Stage | Where | How |
 |-------|-------|-----|
-| $F_h(\mathbf{x})$ | worker `xtal.engine` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
-| $G_h = \partial g/\partial F_h$ | worker `targets` | autograd of the target w.r.t. the complex `f_calc` tensor |
-| $\partial F_h/\partial x$ chain | worker `xtal.engine` | vector-Jacobian product through the FFT (the Agarwal gradient-map trick, for free) |
-| packing for a minimizer | client `xtal_engine` | cctbx `packing_order_convention == 2`, cartesian site / $U_{cart}$ gradients |
+| $F_h(\mathbf{x})$ | `phridge.sfcalc.engine` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
+| $G_h = \partial g/\partial F_h$ | `phridge.sfcalc.targets` | autograd of the target w.r.t. the complex `f_calc` tensor |
+| $\partial F_h/\partial x$ chain | `phridge.sfcalc.engine` | vector-Jacobian product through the FFT (the Agarwal gradient-map trick, for free) |
+| packing for a minimizer | `phridge.sfcalc.client` | cctbx `packing_order_convention == 2`, cartesian site / $U_{cart}$ gradients |
 
 ## Forward model
 
@@ -83,10 +83,12 @@ Targets are registered by name and built from a JSON spec:
 |------|--------------|---------|
 | `ls` | `obs_type` "F" or "I", `scale_factor`, `compute_scale_using_all_data`, `use_sigmas_as_weights` | `cctbx.xray.ext.targets_least_squares_residual[_for_intensity]` |
 | `ml_f` | `scale_factor` | `cctbx.xray.ext.mlf_target_and_gradients` (needs `alpha`, `beta`, `epsilon`, `centric`) |
+| `ml_i` | `sigma`, `use_sigmas` | contrib Gaussian NLL on intensities (`phridge.contrib.intensity_ll`; entry point) |
 
-A new target is a subclass of `phridge.worker.targets.Target` with a
+A new target is a subclass of `phridge.sfcalc.targets.Target` with a
 `per_reflection(f_calc, obs)` method; autograd supplies `d_target_d_f_calc`
-and the curvatures. Short tutorial (call path + custom likelihood):
+and the curvatures. In-tree extras live under `phridge.contrib` (see
+[extending.md](extending.md)). Short tutorial (call path + custom likelihood):
 [tutorial_sf_targets.md](tutorial_sf_targets.md).
 
 ## Ops
@@ -129,7 +131,8 @@ an explicit `Bridge`:
 
 ```python
 from phridge.client import Bridge
-from phridge.client.xtal_engine import RemoteStructureFactors, RemoteTargetFunctor, RemoteRefinementTarget
+from phridge.sfcalc.client import RemoteStructureFactors, RemoteTargetFunctor, RemoteRefinementTarget
+# or: from phridge.client.xtal_engine import ...  (shim)
 
 bridge = Bridge("redis://gpu-box:6379/0")
 # bridge = Bridge(memory=True)  # no redis-server; runs ops in-process

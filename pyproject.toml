@@ -36,6 +36,9 @@ phridge-worker = "phridge.worker.runner:main"
 phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"
 
+[project.entry-points."phridge.targets"]
+intensity_ll = "phridge.contrib.intensity_ll:register"
+
 [tool.hatch.build.targets.sdist]
 include = ["schema", "src/phridge", "README.md", "docs"]
 

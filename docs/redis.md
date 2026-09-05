@@ -127,7 +127,7 @@ Worker flags (env overrides in parentheses):
 | `--consumer` | `PHRIDGE_CONSUMER` | hostname |
 | `--max-object-bytes` | `PHRIDGE_MAX_OBJECT_BYTES` | 64 MiB |
 | `--preload MOD` | `PHRIDGE_PRELOAD` | (none) |
-| `--no-entry-points` | | load `phridge.ops` entry points |
+| `--no-entry-points` | | skip `phridge.ops` / `phridge.targets` entry points |
 
 `Bridge` takes `redis_url` (or an injected `store`); it does not read
 `PHRIDGE_REDIS_URL` itself. Point both sides at the same instance so the
@@ -168,6 +168,8 @@ The restraint minimization example
 ([`examples/restraint_minimization.py`](../examples/restraint_minimization.py))
 uses `Bridge(memory=True)`. The torch-driver build+minimize example is
 [`examples/torch_build_restraints.py`](../examples/torch_build_restraints.py).
+Latent Adam with CCTBX `E`/grads each step:
+[`examples/latent_restraints_adam.py`](../examples/latent_restraints_adam.py).
 
 ## Tests with fakeredis
 

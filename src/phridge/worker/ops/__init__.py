@@ -9,9 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from phridge.worker.ops.geometry_ops import geometry_minimize
-from phridge.worker.ops.scale_array import scale_array
-from phridge.worker.ops.xtal_ops import (
+from phridge.sfcalc.ops import (
     gauss_newton_blocks,
     gauss_newton_diagonal,
     gauss_newton_hvp,
@@ -20,6 +18,8 @@ from phridge.worker.ops.xtal_ops import (
     sf_gradients,
     target_eval,
 )
+from phridge.worker.ops.geometry_ops import geometry_minimize
+from phridge.worker.ops.scale_array import scale_array
 
 IMPLEMENTATIONS: dict[str, Callable[..., Any]] = {
     "scale_array": scale_array,

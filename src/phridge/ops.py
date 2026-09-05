@@ -2,7 +2,8 @@
 
 Third-party packages register ops with :func:`register_op` (catalog + optional
 impl). Workers discover them via ``--preload`` / ``PHRIDGE_PRELOAD`` or the
-``phridge.ops`` setuptools entry-point group. See ``docs/extending.md``.
+``phridge.ops`` / ``phridge.targets`` setuptools entry-point groups. See
+``docs/extending.md``.
 """
 
 from __future__ import annotations
@@ -141,8 +142,8 @@ def load_entry_points(group: str = "phridge.ops") -> list[str]:
     """Load setuptools / hatch entry points in ``group``.
 
     Each entry point must resolve to a zero-argument callable that registers
-    ops (typically via :func:`register_op`). Returns the entry-point names
-    that were invoked.
+    ops or targets (typically via :func:`register_op` / ``register_target``).
+    Returns the entry-point names that were invoked.
     """
     try:
         from importlib.metadata import entry_points
@@ -164,16 +165,38 @@ def load_entry_points(group: str = "phridge.ops") -> list[str]:
     return loaded
 
 
+DEFAULT_ENTRY_POINT_GROUPS: tuple[str, ...] = ("phridge.ops", "phridge.targets")
+
+
 def bootstrap_plugins(
     *,
     preload: Optional[Iterable[str]] = None,
     load_eps: bool = True,
-    group: str = "phridge.ops",
-) -> dict[str, list[str]]:
-    """Load entry points then explicit preload modules (preload wins on clash)."""
-    eps = load_entry_points(group=group) if load_eps else []
+    groups: Optional[Iterable[str]] = None,
+    group: Optional[str] = None,
+) -> dict[str, Any]:
+    """Load entry points then explicit preload modules (preload wins on clash).
+
+    By default loads both ``phridge.ops`` and ``phridge.targets``. Pass
+    ``group=`` for a single group (legacy) or ``groups=`` for an explicit list.
+    ``load_eps=False`` / ``--no-entry-points`` skips every group.
+    """
+    if group is not None:
+        ep_groups: tuple[str, ...] = (str(group),)
+    elif groups is not None:
+        ep_groups = tuple(str(g) for g in groups)
+    else:
+        ep_groups = DEFAULT_ENTRY_POINT_GROUPS
+
+    by_group: dict[str, list[str]] = {}
+    flat: list[str] = []
+    if load_eps:
+        for g in ep_groups:
+            names = load_entry_points(group=g)
+            by_group[g] = names
+            flat.extend(names)
     mods = preload_modules(preload or ())
-    return {"entry_points": eps, "preload": mods}
+    return {"entry_points": flat, "entry_points_by_group": by_group, "preload": mods}
 
 
 def _parse_preload_arg(values: Optional[Iterable[str]]) -> list[str]:
@@ -296,7 +319,21 @@ register(
         schema_version=SCHEMA_VERSION,
         runtime=WorkerRuntime.cctbx,
         inputs={"params": "json", "hierarchy": "Hierarchy"},
-        outputs={"hierarchy": "Hierarchy", "restraints": "GeometryRestraints"},
+        outputs={
+            "hierarchy": "Hierarchy",
+            "restraints": "GeometryRestraints",
+            "restraints_handle": "json",
+        },
+    )
+)
+
+register(
+    OpSpec(
+        name="geometry_restraints_energy_grad",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.cctbx,
+        inputs={"sites": "CartesianSites", "params": "json"},
+        outputs={"energy": "json", "sites_grad": "array", "stats": "json"},
     )
 )
 
@@ -315,7 +352,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     parser.add_argument(
         "--no-entry-points",
         action="store_true",
-        help="Skip loading the phridge.ops entry-point group",
+        help="Skip loading phridge.ops / phridge.targets entry-point groups",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     env_preload = os.environ.get("PHRIDGE_PRELOAD", "")

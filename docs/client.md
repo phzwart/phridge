@@ -32,8 +32,10 @@ proxies. It does not reconstruct `bond_params_table` or a live manager.
 ### RemoteRestraintBuilder
 
 Torch-facing helper: build packed restraints on the **CCTBX** worker from a
-PDB string (no cctbx import in the driver). Then feed the packed objects
-into `RemoteGeometry` for torch minimization.
+PDB string (no cctbx import in the driver). Returns packed hierarchy /
+restraints **and** a process-local `restraints_handle` for live GRM
+energy+gradients. Use `RemoteGeometry.from_build` (or pass the handle) for
+CCTBX `E`/`∂E/∂x`; use packed restraints alone for torch `minimize`.
 
 ```python
 from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
@@ -42,9 +44,17 @@ bridge = Bridge("redis://localhost:6379/0")  # needs torch + cctbx workers
 # bridge = Bridge(memory=True)  # both runtimes in-process (dev)
 
 out = RemoteRestraintBuilder(bridge).build(pdb_string=pdb)
-geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
+geo = RemoteGeometry.from_build(bridge, out)
+# torch minimize on packed restraints:
 sites = geo.minimize(max_iterations=100, optimizer="lbfgs", update_hierarchy=False)
+# CCTBX energy + Cartesian grads (live GRM behind restraints_handle):
+E, g_x = geo.energy_and_gradients(sites_cart=sites)
+# geo.last_target["stats"] → residual sums, RMS deviations, energies.show lines
 ```
+
+`restraints_handle` is valid only on the CCTBX worker process that ran
+`build_geometry_restraints` (sticky worker / memory mode). See
+`examples/latent_restraints_adam.py`.
 
 ### RemoteGeometry.minimize
 

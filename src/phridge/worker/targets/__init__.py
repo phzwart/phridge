@@ -1,13 +1,15 @@
-"""Reciprocal-space refinement targets Q = sum_h w_h g(obs_h, F_h) in torch.
+"""Compatibility shim — prefer ``phridge.sfcalc.targets``."""
 
-A target only has to define its per-reflection value; autograd supplies
-d_target_d_f_calc (cctbx convention dQ/dA + i dQ/dB) and, for
-amplitude-only targets, the radial / tangential curvatures.
-"""
-
-from phridge.worker.targets.base import Observations, Target, TargetEval, build_target, register_target
-from phridge.worker.targets.least_squares import LeastSquares
-from phridge.worker.targets.maximum_likelihood import MaximumLikelihoodAmplitude
+from phridge.sfcalc.targets import (  # noqa: F401
+    LeastSquares,
+    MaximumLikelihoodAmplitude,
+    Observations,
+    Target,
+    TargetEval,
+    build_target,
+    list_targets,
+    register_target,
+)
 
 __all__ = [
     "Observations",
@@ -16,5 +18,6 @@ __all__ = [
     "LeastSquares",
     "MaximumLikelihoodAmplitude",
     "build_target",
+    "list_targets",
     "register_target",
 ]

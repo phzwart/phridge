@@ -64,7 +64,7 @@ phridge-ops --preload mypkg.plugin
 | `--runtime torch\|cctbx` | Job stream / impl table (`PHRIDGE_RUNTIME`) |
 | `--preload MOD` | Import module(s) before serving (repeatable; comma-separated ok) |
 | `PHRIDGE_PRELOAD` | Same as `--preload` |
-| `--no-entry-points` | Skip the `phridge.ops` entry-point group |
+| `--no-entry-points` | Skip `phridge.ops` and `phridge.targets` entry-point groups |
 
 Entry points (optional) so `pip install mypkg` is enough:
 
@@ -72,10 +72,42 @@ Entry points (optional) so `pip install mypkg` is enough:
 # mypkg pyproject.toml
 [project.entry-points."phridge.ops"]
 denoise = "mypkg.plugin:register"
+
+# reciprocal-space targets (register_target):
+[project.entry-points."phridge.targets"]
+my_nll = "mypkg.my_likelihood:register"
 ```
 
 `phridge-worker` and `phridge-ops` call each entry point (zero-arg) at
-startup, then apply `--preload` (preload wins on name clashes).
+startup for **both** groups, then apply `--preload` (preload wins on name
+clashes).
+
+## Package map: `phridge.sfcalc` vs `phridge.contrib`
+
+| Package | Role |
+|---------|------|
+| [`phridge.sfcalc`](../src/phridge/sfcalc/) | Structure-factor **core**: FFT engine, built-in targets (`ls`, `ml_f`), SF ops, packing, `StructureFactorServer` |
+| [`phridge.contrib`](../src/phridge/contrib/) | Optional in-tree specialized targets/ops (e.g. `intensity_ll` → `ml_i`) |
+
+Preferred imports:
+
+```python
+from phridge.sfcalc import StructureFactorServer
+from phridge.sfcalc.targets import Target, register_target
+```
+
+Compatibility shims still exist (`phridge.worker.targets`, `phridge.client.xtal_engine`, …).
+
+### In-tree contrib subpackages
+
+Add specialized science under `src/phridge/contrib/<name>/` with a zero-arg
+`register()` and a `phridge.targets` (or `phridge.ops`) entry point in
+`pyproject.toml`. **Mandatory agent rules** (typing, pydantic options,
+LinkML/jsonschema when schema changes) live in
+[`src/phridge/contrib/AGENTS.md`](../src/phridge/contrib/AGENTS.md).
+
+Built-in contrib example: `phridge.contrib.intensity_ll` registers
+`{"name": "ml_i", ...}` (Gaussian NLL on intensities).
 
 ## Client side
 
@@ -95,9 +127,10 @@ process — still call `register_op` (with impl) first.
 ## Custom targets (existing SF ops)
 
 For a new reciprocal-space target used by `target_eval` /
-`refine_gradients`, subclass `phridge.worker.targets.Target` and
-`@register_target("my_name")`. The worker must import that module (same
-`--preload` / entry-point path). Step-by-step:
+`refine_gradients`, subclass `phridge.sfcalc.targets.Target` and
+`@register_target("my_name")`. Prefer an in-tree package under
+`phridge.contrib` (see above) or an external module; the worker must load
+it via entry points or `--preload`. Step-by-step:
 [tutorial_sf_targets.md](tutorial_sf_targets.md). Math and built-ins:
 [engine.md](engine.md).
 

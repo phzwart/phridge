@@ -503,7 +503,7 @@ def scattering_table_from_cctbx(structure: Any, table: Optional[str] = None) -> 
     Uses the structure's existing scattering_type_registry when ``table``
     is None (falling back to wk1995 if none was set up yet).
     """
-    from phridge.packing_scattering import PackedScatteringTable
+    from phridge.sfcalc.packing import PackedScatteringTable
 
     if table is not None:
         structure.scattering_type_registry(table=table)

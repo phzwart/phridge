@@ -198,14 +198,15 @@ def main(argv: Optional[list[str]] = None) -> None:
         action="append",
         default=[],
         help=(
-            "Import module(s) that call phridge.ops.register_op before serving "
-            "(repeatable; comma-separated ok). Also reads PHRIDGE_PRELOAD."
+            "Import module(s) that call phridge.ops.register_op / "
+            "register_target before serving (repeatable; comma-separated ok). "
+            "Also reads PHRIDGE_PRELOAD."
         ),
     )
     parser.add_argument(
         "--no-entry-points",
         action="store_true",
-        help="Skip loading the phridge.ops setuptools entry-point group",
+        help="Skip loading phridge.ops / phridge.targets entry-point groups",
     )
     args = parser.parse_args(argv)
     if args.runtime == "cctbx":

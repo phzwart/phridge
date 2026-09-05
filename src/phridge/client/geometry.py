@@ -28,7 +28,11 @@ class RemoteRestraintBuilder:
 
         builder = RemoteRestraintBuilder(bridge)
         out = builder.build(pdb_string=pdb)
-        geo = RemoteGeometry(bridge, out["hierarchy"], out["restraints"])
+        # out["restraints_handle"] keeps the live GRM on the CCTBX worker
+        geo = RemoteGeometry(
+            bridge, out["hierarchy"], out["restraints"],
+            restraints_handle=out["restraints_handle"],
+        )
     """
 
     def __init__(self, bridge: Any) -> None:
@@ -41,7 +45,7 @@ class RemoteRestraintBuilder:
         hierarchy: Any = None,
         **extra: Any,
     ) -> dict[str, Any]:
-        """Return ``{"hierarchy", "restraints"}`` as packed types (no cctbx)."""
+        """Return packed hierarchy/restraints plus ``restraints_handle`` (CCTBX)."""
         params: dict[str, Any] = dict(extra)
         if pdb_string is not None:
             params["pdb_string"] = pdb_string
@@ -59,13 +63,11 @@ class RemoteRestraintBuilder:
 
 
 class RemoteGeometry:
-    """Phenix-facing geometry minimizer. Packs cctbx → Redis; worker runs torch optim.
+    """Phenix / torch-facing geometry helper over phridge.
 
-    From Phenix this looks like a local call that blocks until the phridge
-    worker finishes torch LBFGS / Adam / SGD on packed restraints::
-
-        geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
-        hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")
+    Torch minimize (``geometry_minimize``) uses packed restraints on the torch
+    worker. CCTBX energy+gradients (``energy_and_gradients``) use a live GRM
+    kept on the CCTBX worker behind ``restraints_handle``.
     """
 
     def __init__(
@@ -75,6 +77,7 @@ class RemoteGeometry:
         restraints: Any,
         *,
         selection: Optional[Any] = None,
+        restraints_handle: Optional[str] = None,
     ) -> None:
         if selection is not None:
             raise NotImplementedError("RemoteGeometry selection is not supported in v1")
@@ -82,16 +85,72 @@ class RemoteGeometry:
         self._packed_hier = _as_packed_hierarchy(hierarchy)
         self._packed_restr = _as_packed_restraints(restraints, n_sites=self._packed_hier.meta.n_atoms)
         self._header = model_geometry(hierarchy=self._packed_hier, restraints=self._packed_restr)
+        self.restraints_handle = restraints_handle
         self.last_target: Optional[dict[str, Any]] = None
+
+    @classmethod
+    def from_build(cls, bridge: Any, built: dict[str, Any]) -> "RemoteGeometry":
+        """Construct from ``RemoteRestraintBuilder.build`` output (includes handle)."""
+        handle = built.get("restraints_handle")
+        if handle is not None:
+            handle = str(handle)
+        return cls(
+            bridge,
+            built["hierarchy"],
+            built["restraints"],
+            restraints_handle=handle,
+        )
 
     @property
     def n_sites(self) -> int:
         return int(self._packed_restr.n_sites)
 
     def energy(self, sites_cart: Optional[Any] = None) -> float:
-        """Remote energy evaluation (no minimization steps)."""
+        """Remote energy evaluation (no minimization steps).
+
+        Prefer ``energy_and_gradients`` when a ``restraints_handle`` is available
+        (CCTBX ``energies_sites``). Otherwise falls back to torch packed energy
+        via ``geometry_minimize`` with ``max_iterations=0``.
+        """
+        if self.restraints_handle is not None:
+            e, _ = self.energy_and_gradients(sites_cart=sites_cart)
+            return e
         out = self._call(sites_cart=sites_cart, max_iterations=0, optimizer="lbfgs")
         return float(out["target"]["before"])
+
+    def energy_and_gradients(
+        self,
+        sites_cart: Optional[Any] = None,
+    ) -> tuple[float, np.ndarray]:
+        """CCTBX restraint energy and ∂E/∂x via phridge (``geometry_restraints_energy_grad``).
+
+        Requires ``restraints_handle`` from ``RemoteRestraintBuilder.build``.
+        Every call packs sites through Bridge onto the CCTBX stream.
+        """
+        if self.restraints_handle is None:
+            raise RuntimeError(
+                "energy_and_gradients requires restraints_handle "
+                "(use RemoteRestraintBuilder.build / RemoteGeometry.from_build)"
+            )
+        sites = _sites_for_call(sites_cart, self._packed_hier)
+        result = self.bridge.call(
+            "geometry_restraints_energy_grad",
+            sites=sites,
+            params={"restraints_handle": self.restraints_handle},
+        )
+        if not isinstance(result, dict) or "energy" not in result or "sites_grad" not in result:
+            raise RuntimeError("geometry_restraints_energy_grad did not return energy and sites_grad")
+        energy = float(result["energy"])
+        grad = np.asarray(result["sites_grad"], dtype=np.float64)
+        if grad.ndim != 2 or grad.shape[1] != 3:
+            raise ValueError(f"sites_grad must have shape (N, 3), got {grad.shape}")
+        stats = result.get("stats")
+        self.last_target = {
+            "energy": energy,
+            "source": "cctbx",
+            "stats": dict(stats) if isinstance(stats, dict) else None,
+        }
+        return energy, grad
 
     def minimize(
         self,
