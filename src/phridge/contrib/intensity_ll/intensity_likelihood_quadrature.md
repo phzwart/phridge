@@ -111,7 +111,7 @@ Single-threaded numpy prototype: 15 µs per reflection (1.5 s per 100 000), Newt
 Precompute once: Legendre nodes (24), Hermite nodes (7), log-gamma rules per $\nu$ (12–16). Per batch of reflections, vectorized:
 
 1. Newton in $E$ on the merged acentric/centric log-integrand (mask-selected), 12–20 iterations max, damped; obtain $E_0$, $H_E$.
-2. Classify: `boundary` if $H_E \geq 0$ or the gradient at the origin is negative; `strong` if acentric, not boundary, and $Z_o/\sigma_Z \geq 5$.
+2. Classify: `boundary` if $H_E \geq 0$, the gradient at the origin is negative, or the Laplace width $\sigma_E$ exceeds the physical cutoff $E_{\max}$ (flat-topped centric integrands); `strong` if acentric, not boundary, and $Z_o/\sigma_Z \geq 5$.
 3. Strong: a few Newton steps in $I$ from $E_0^2$; 7-node Gauss–Hermite in $I$.
 4. Otherwise: 24-node Gauss–Legendre on the clipped, capped window in $E$.
 5. $t$ noise: wrap 1–4 in the log-$\lambda$ rule with $\sigma_Z \to \sigma_Z e^{-u_j/2}$.
@@ -119,7 +119,7 @@ Precompute once: Legendre nodes (24), Hermite nodes (7), log-gamma rules per $\n
 
 What is kept from the paper unchanged: the $\sigma_A$ normalization, the $\nu = N_{\text{eff}} - 1$ argument, the Sivia intensity-to-amplitude conversion as a fallback, and the validation methodology. What is dropped: the power and logistic transforms, the trapezoid, the mode search inside the transform, and the hand-derived gradient with node-derivative terms.
 
-## 5. PyTorch implementation (`mli_quad.py`)
+## 5. PyTorch implementation (`mli.py`)
 
 ```python
 from mli_quad import log_likelihood_normal, log_likelihood_t, normalize

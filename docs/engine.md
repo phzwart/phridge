@@ -83,7 +83,7 @@ Targets are registered by name and built from a JSON spec:
 |------|--------------|---------|
 | `ls` | `obs_type` "F" or "I", `scale_factor`, `compute_scale_using_all_data`, `use_sigmas_as_weights` | `cctbx.xray.ext.targets_least_squares_residual[_for_intensity]` |
 | `ml_f` | `scale_factor` | `cctbx.xray.ext.mlf_target_and_gradients` (needs `alpha`, `beta`, `epsilon`, `centric`) |
-| `ml_i` | `sigma_a`, `sigma_wilson`, `sigma`, `use_sigmas`, `nu`, quadrature knobs | contrib intensity ML (`phridge.contrib.intensity_ll`; needs `alpha`≡σ_A / `beta`≡Σ or scalars; `epsilon`, `centric`) |
+| `ml_i` | `sigma_a`, `sigma_wilson`, `sigma`, `use_sigmas`, `nu`, quadrature knobs | contrib intensity ML (`phridge.contrib.intensity_ll`; needs `alpha`≡σ_A / `beta`≡Σ or scalars; `epsilon`, `centric`). Map coefficients (posterior-based mFo−DFc / 2mFo−DFc / gradient / Newton analogues, robust weights, ∂log L/∂ν) via the `ml_i_maps` op — see [`contrib/intensity_ll/maps.md`](../src/phridge/contrib/intensity_ll/maps.md) |
 
 A new target is a subclass of `phridge.sfcalc.targets.Target` with a
 `per_reflection(f_calc, obs)` method; autograd supplies `d_target_d_f_calc`

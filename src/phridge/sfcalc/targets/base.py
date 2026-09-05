@@ -25,6 +25,7 @@ class Observations:
     centric: Optional[Any] = None
     alpha: Optional[Any] = None
     beta: Optional[Any] = None
+    nu: Optional[Any] = None
 
     @classmethod
     def from_numpy(cls, device: str = "cpu", dtype: Any = None, **arrays: Optional[np.ndarray]) -> "Observations":

@@ -10,3 +10,6 @@ dist/
 build/
 *.npz
 .DS_Store
+examples/intensity_demo_output/
+*.ccp4
+examples/lysozyme/1iee*
