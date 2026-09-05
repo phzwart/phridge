@@ -33,7 +33,7 @@ URI: [phridge:compression](https://github.com/phzwart/phridge/schema/phridge/com
 
 | Property | Value |
 | --- | --- |
-| Range | [Compression](Compression.md) |
+| Range | [CompressionKind](CompressionKind.md) |
 | Domain Of | [ObjectRef](ObjectRef.md) |
 
 ### Cardinality and Requirements
@@ -91,7 +91,7 @@ rank: 1000
 owner: ObjectRef
 domain_of:
 - ObjectRef
-range: Compression
+range: CompressionKind
 
 ```
 </details></div>

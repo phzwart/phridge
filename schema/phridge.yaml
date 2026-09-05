@@ -47,7 +47,9 @@ enums:
     permissible_values:
       little:
       big:
-  Compression:
+  # Named CompressionKind (not Compression) so docs/schema filenames do not
+  # collide with the compression slot on case-insensitive filesystems.
+  CompressionKind:
     permissible_values:
       none:
       gzip:
@@ -97,7 +99,7 @@ classes:
       byte_order:
         range: ByteOrder
       compression:
-        range: Compression
+        range: CompressionKind
       cctbx_type:
         description: Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry)
       meta:

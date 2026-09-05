@@ -45,8 +45,8 @@ URI: [phridge:ObjectRef](https://github.com/phzwart/phridge/schema/phridge/Objec
     
         
         
-        ObjectRef --> "0..1" Compression : compression
-        click Compression href "../Compression/"
+        ObjectRef --> "0..1" CompressionKind : compression
+        click CompressionKind href "../CompressionKind/"
     
 
         
@@ -86,7 +86,7 @@ URI: [phridge:ObjectRef](https://github.com/phzwart/phridge/schema/phridge/Objec
 | [dtype](dtype.md) | 0..1 <br/> [String](String.md) | Element dtype when kind=array | direct |
 | [shape](shape.md) | * <br/> [Integer](Integer.md) | Shape when kind=array | direct |
 | [byte_order](byte_order.md) | 0..1 <br/> [ByteOrder](ByteOrder.md) |  | direct |
-| [compression](compression.md) | 0..1 <br/> [Compression](Compression.md) |  | direct |
+| [compression](compression.md) | 0..1 <br/> [CompressionKind](CompressionKind.md) |  | direct |
 | [cctbx_type](cctbx_type.md) | 0..1 <br/> [String](String.md) | Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry) | direct |
 | [meta](meta.md) | 0..1 <br/> [String](String.md) | Kind-specific JSON (ArrayMeta, BlobMeta, or a CctbxObject) | direct |
 
@@ -225,7 +225,7 @@ attributes:
     rank: 1000
     domain_of:
     - ObjectRef
-    range: Compression
+    range: CompressionKind
   cctbx_type:
     name: cctbx_type
     description: Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry)
@@ -343,7 +343,7 @@ attributes:
     owner: ObjectRef
     domain_of:
     - ObjectRef
-    range: Compression
+    range: CompressionKind
   cctbx_type:
     name: cctbx_type
     description: Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry)

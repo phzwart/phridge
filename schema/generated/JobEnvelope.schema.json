@@ -203,13 +203,13 @@
             "title": "ComplexMap",
             "type": "object"
         },
-        "Compression": {
+        "CompressionKind": {
             "description": "",
             "enum": [
                 "none",
                 "gzip"
             ],
-            "title": "Compression",
+            "title": "CompressionKind",
             "type": "string"
         },
         "CoordinateFrame": {
@@ -891,7 +891,7 @@
                     ]
                 },
                 "compression": {
-                    "$ref": "#/$defs/Compression"
+                    "$ref": "#/$defs/CompressionKind"
                 },
                 "dtype": {
                     "description": "Element dtype when kind=array",

@@ -97,9 +97,13 @@ class ByteOrder(str, Enum):
     big = "big"
 
 
-class Compression(str, Enum):
+class CompressionKind(str, Enum):
     none = "none"
     gzip = "gzip"
+
+
+# Backwards-compatible alias (prefer CompressionKind).
+Compression = CompressionKind
 
 
 class WorkerRuntime(str, Enum):
@@ -430,7 +434,7 @@ class ObjectRef(_Strict):
     dtype: Optional[str] = None
     shape: Optional[list[int]] = None
     byte_order: ByteOrder = ByteOrder.little
-    compression: Compression = Compression.none
+    compression: CompressionKind = CompressionKind.none
     cctbx_type: Optional[str] = None
     meta: Optional[dict[str, Any]] = None
 
