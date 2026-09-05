@@ -1,8 +1,8 @@
 # phridge
 
-Bridge between Phenix/cctbx and a PyTorch worker. Redis is the only shared
-store: blobs, a job stream, and a per-job ready list. The client never
-imports torch. The worker never imports cctbx.
+Bridge between Phenix/cctbx and a PyTorch worker. Redis is mandatory and
+the only shared store: blobs, a job stream, and a per-job ready list. The
+client never imports torch. The worker never imports cctbx.
 
 More detail: [docs/README.md](docs/README.md). The worker also carries a
 differentiable FFT structure-factor engine and ML / least-squares

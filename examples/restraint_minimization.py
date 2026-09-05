@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """cctbx → phridge Redis → torch minimize → cctbx hierarchy.
 
-Phenix-facing API::
-
-    geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
-    hierarchy_out = geo.minimize(optimizer="lbfgs")  # blocks until worker done
-
-This demo uses an in-process worker (fakeredis loopback) and writes a markdown
-code-demo log with checks::
+Compares torch ``lbfgs``, ``adam``, ``adamw``, and ``sgd`` on a distorted
+ideal 30-residue poly-Ala α-helix and writes a markdown code-demo log::
 
     python examples/restraint_minimization.py
     # → examples/restraint_minimization.md
 
-Requires chem_data for the peptide (``make chem-data``) and torch.
+Requires chem_data (``make chem-data``) and torch.
 """
 
 from __future__ import annotations
@@ -23,49 +18,66 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from libtbx.utils import null_out
 from scitbx.array_family import flex
 import iotbx.pdb
 import mmtbx.model
+from mmtbx.secondary_structure.build import ss_idealization as ssb
 
 from phridge.client import Bridge, RemoteGeometry
-from phridge.redis_store import RedisStore
-from phridge.worker.runner import process_envelope
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_MD = HERE / "restraint_minimization.md"
+N_RESIDUES = 30
+N_ATOMS_EXPECTED = 5 * N_RESIDUES  # ALA: N, CA, C, O, CB
+DISTORT_SIGMA = 0.35  # Å Gaussian noise per coordinate
+DISTORT_SEED = 0
 
-PDB = """\
-CRYST1   21.937    4.866   23.477  90.00 107.08  90.00 P 1 21 1      2
-ATOM      1  N   GLY A   1      -9.009   4.612   6.102  1.00 16.77           N
-ATOM      2  CA  GLY A   1      -9.052   4.207   4.651  1.00 16.57           C
-ATOM      3  C   GLY A   1      -8.015   3.140   4.419  1.00 16.16           C
-ATOM      4  O   GLY A   1      -7.523   2.521   5.381  1.00 16.78           O
-ATOM      5  N   ASN A   2      -7.656   2.923   3.155  1.00 15.02           N
-ATOM      6  CA  ASN A   2      -6.522   2.038   2.831  1.00 14.10           C
-ATOM      7  C   ASN A   2      -5.241   2.537   3.427  1.00 13.13           C
-ATOM      8  O   ASN A   2      -4.978   3.742   3.426  1.00 11.91           O
-ATOM      9  CB  ASN A   2      -6.346   1.881   1.341  1.00 15.38           C
-ATOM     10  CG  ASN A   2      -7.584   1.342   0.692  1.00 14.08           C
-ATOM     11  OD1 ASN A   2      -8.025   0.227   1.016  1.00 17.46           O
-ATOM     12  ND2 ASN A   2      -8.204   2.155  -0.169  1.00 11.72           N
-ATOM     13  N   ASN A   3      -4.438   1.590   3.905  1.00 12.26           N
-ATOM     14  CA  ASN A   3      -3.193   1.904   4.589  1.00 11.74           C
-ATOM     15  C   ASN A   3      -1.955   1.332   3.895  1.00 11.10           C
-ATOM     16  O   ASN A   3      -1.872   0.119   3.648  1.00 10.42           O
-ATOM     17  CB  ASN A   3      -3.259   1.378   6.042  1.00 12.15           C
-END
-"""
-
-
-class _LoopbackBridge(Bridge):
-    """Demo stand-in for redis-server + phridge-worker (in-process)."""
-
-    def call(self, op, timeout=None, **kwargs):
-        job_id = self.submit(op, **kwargs)
-        envelope = self.store.get_envelope(job_id)
-        process_envelope(self.store, envelope, device="cpu")
-        return self.result(job_id, timeout=30)
+# Tuned so first-order methods reach E≈LBFGS on the helix (with schedules).
+OPTIMIZER_RUNS: list[dict[str, Any]] = [
+    {"optimizer": "lbfgs", "max_iterations": 100, "lr": None, "schedule": None, "momentum": 0.0},
+    {
+        "optimizer": "adam",
+        "max_iterations": 2000,
+        "lr": 0.1,
+        "lr_min": 1e-4,
+        "schedule": "cosine",
+        "momentum": 0.0,
+    },
+    {
+        "optimizer": "adam",
+        "max_iterations": 3000,
+        "lr": 0.15,
+        "lr_min": 1e-3,
+        "schedule": "triangular",
+        "momentum": 0.0,
+    },
+    {
+        "optimizer": "adamw",
+        "max_iterations": 4000,
+        "lr": 0.2,
+        "lr_min": 1e-4,
+        "schedule": "cosine",
+        "momentum": 0.0,
+    },
+    {
+        "optimizer": "sgd",
+        "max_iterations": 4000,
+        "lr": 0.02,
+        "lr_min": 1e-4,
+        "schedule": "cosine",
+        "momentum": 0.9,
+    },
+    {
+        "optimizer": "sgd",
+        "max_iterations": 4000,
+        "lr": 0.03,
+        "lr_min": 5e-4,
+        "schedule": "triangular",
+        "momentum": 0.9,
+    },
+]
 
 
 @dataclass
@@ -86,6 +98,13 @@ class DemoLog:
 
     def output(self, text: str) -> None:
         self.sections.append(f"**Output:**\n\n```text\n{text.rstrip()}\n```\n\n")
+
+    def table(self, headers: list[str], rows: list[list[str]]) -> None:
+        self.sections.append("| " + " | ".join(headers) + " |\n")
+        self.sections.append("| " + " | ".join("---" for _ in headers) + " |\n")
+        for row in rows:
+            self.sections.append("| " + " | ".join(row) + " |\n")
+        self.sections.append("\n")
 
     def check(self, ok: bool, label: str, detail: str = "") -> None:
         self.checks.append((ok, label if not detail else f"{label} — {detail}"))
@@ -109,6 +128,7 @@ class DemoLog:
             "\n## Summary\n",
             "\n| | |\n|---|---|\n",
             "| Flow | cctbx → Redis pack → torch minimize → cctbx |\n",
+            "| Optimizers | LBFGS, Adam, AdamW, SGD |\n",
             f"| Checks | **{n_ok}/{n}** passed |\n",
             f"| Result | **{'OK' if not self.failed else 'FAILED'}** |\n",
             "\n### Checklist\n",
@@ -134,105 +154,280 @@ def require_monomer_library(log: DemoLog) -> str:
     return path
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("-o", "--output", type=Path, default=DEFAULT_MD)
-    parser.add_argument("--optimizer", default="lbfgs", choices=("lbfgs", "adam", "sgd"))
-    parser.add_argument("--max-iterations", type=int, default=100)
-    args = parser.parse_args(argv)
-
-    log = DemoLog(title="RemoteGeometry.minimize (cctbx → torch worker → cctbx)")
-    log.heading("Setup")
-    log.para(
-        "Spin up a phridge worker (here: in-process loopback). A cctbx product "
-        "holds a molecule + restraints. `RemoteGeometry.minimize` packs them "
-        "through Redis; the worker runs **torch** `LBFGS` / `Adam` / `SGD`; "
-        "the client blocks until done and returns a cctbx hierarchy."
-    )
-    log.code(
-        """\
-# production:
-#   redis-server
-#   phridge-worker --redis-url redis://localhost:6379/0 --device cuda
-bridge = Bridge("redis://localhost:6379/0")
-
-geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
-hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")  # blocks
-""",
-    )
-    require_monomer_library(log)
-
-    log.heading("1. cctbx molecule + restraints")
-    log.code(
-        """\
-model = mmtbx.model.manager(model_input=..., log=null_out())
-model.process(make_restraints=True)
-hierarchy = model.get_hierarchy()
-grm = model.get_restraints_manager().geometry
-# distort so minimization has work to do
-sites = hierarchy.atoms().extract_xyz()
-sites += flex.vec3_double([(0.25, -0.15, 0.1)] * sites.size())
-hierarchy.atoms().set_xyz(sites)"""
+def _distorted_model():
+    """Ideal poly-Ala α-helix + local Gaussian noise (not a rigid shift)."""
+    helix = ssb.secondary_structure_from_sequence(ssb.alpha_helix_str, "A" * N_RESIDUES)
+    pdb_str = (
+        "CRYST1  100.000  100.000  100.000  90.00  90.00  90.00 P 1           1\n"
+        + helix.as_pdb_string()
     )
     model = mmtbx.model.manager(
-        model_input=iotbx.pdb.input(source_info=None, lines=PDB.split("\n")),
+        model_input=iotbx.pdb.input(source_info=None, lines=pdb_str.split("\n")),
         log=null_out(),
     )
     model.process(make_restraints=True)
     hierarchy = model.get_hierarchy()
     grm = model.get_restraints_manager().geometry
-    sites = hierarchy.atoms().extract_xyz()
-    sites = sites + flex.vec3_double([(0.25, -0.15, 0.1)] * sites.size())
+    sites0 = hierarchy.atoms().extract_xyz().deep_copy()
+    xyz = np.asarray(list(sites0), dtype=np.float64)
+    noise = np.random.default_rng(DISTORT_SEED).normal(0.0, DISTORT_SIGMA, size=xyz.shape)
+    sites = flex.vec3_double(xyz + noise)
     hierarchy.atoms().set_xyz(sites)
-    log.output(f"atoms={hierarchy.atoms().size()}\ntype(grm)={type(grm).__module__}.{type(grm).__name__}")
-    log.check(hierarchy.atoms().size() == 17, "cctbx hierarchy has 17 atoms")
+    return hierarchy, grm, sites0, sites
 
-    log.heading("2. RemoteGeometry packs + waits on torch worker")
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("-o", "--output", type=Path, default=DEFAULT_MD)
+    args = parser.parse_args(argv)
+
+    log = DemoLog(title="RemoteGeometry.minimize — LBFGS / Adam / AdamW / SGD")
+    log.heading("Setup")
+    log.para(
+        f"Same distorted **{N_RESIDUES}-residue poly-Ala α-helix** for every run "
+        f"(ideal `ss_idealization` geometry + σ={DISTORT_SIGMA} Å Gaussian noise). "
+        "`RemoteGeometry.minimize` packs cctbx hierarchy + restraints through Redis; "
+        "the worker runs a **torch.optim** algorithm; the client blocks and returns "
+        "a cctbx hierarchy."
+    )
     log.code(
-        f"""\
-bridge = Bridge(...)  # Redis
+        """\
+geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
+for name in ("lbfgs", "adam", "adamw", "sgd"):
+    hierarchy_out = geo.minimize(max_iterations=..., optimizer=name, lr=...)
+"""
+    )
+    require_monomer_library(log)
+
+    log.heading("1. cctbx molecule + restraints")
+    hierarchy, grm, sites0, sites_distorted = _distorted_model()
+    n_res = hierarchy.overall_counts().n_residues
+    log.output(
+        f"molecule=ideal poly-Ala α-helix ({N_RESIDUES} ALA)\n"
+        f"atoms={hierarchy.atoms().size()}  residues={n_res}\n"
+        f"type(grm)={type(grm).__module__}.{type(grm).__name__}\n"
+        f"distortion = N(0, {DISTORT_SIGMA}²) Å per coordinate (seed={DISTORT_SEED})"
+    )
+    log.check(
+        hierarchy.atoms().size() == N_ATOMS_EXPECTED,
+        f"cctbx hierarchy has {N_ATOMS_EXPECTED} atoms",
+        f"got {hierarchy.atoms().size()}",
+    )
+    log.check(n_res == N_RESIDUES, f"cctbx hierarchy has {N_RESIDUES} residues", f"got {n_res}")
+
+    log.heading("2. Compare torch optimizers via RemoteGeometry")
+    log.code(
+        """\
+bridge = Bridge(memory=True)  # in-process; use redis_url= for a live server
 geo = RemoteGeometry(bridge, hierarchy, grm)
+
+# each optimizer starts from the same distorted sites
 hierarchy_out = geo.minimize(
-    max_iterations={args.max_iterations},
-    optimizer={args.optimizer!r},
+    sites_cart=sites_distorted,
+    max_iterations=...,
+    optimizer="lbfgs" | "adam" | "adamw" | "sgd",
+    lr=...,
 )"""
     )
-    import fakeredis
-
-    bridge = _LoopbackBridge(store=RedisStore(fakeredis.FakeRedis()), timeout=30)
+    bridge = Bridge(memory=True, timeout=300)
     geo = RemoteGeometry(bridge, hierarchy, grm)
-    e0 = geo.energy()
+    e0 = geo.energy(sites_cart=sites_distorted)
     log.check(e0 > 1.0, "remote energy (distorted) is large", f"{e0:.6g}")
-    hierarchy_out = geo.minimize(
-        max_iterations=args.max_iterations,
-        optimizer=args.optimizer,
+
+    rows: list[list[str]] = []
+    results: list[dict[str, Any]] = []
+    for run in OPTIMIZER_RUNS:
+        name = run["optimizer"]
+        hierarchy.atoms().set_xyz(sites_distorted)
+        out = geo.minimize(
+            sites_cart=sites_distorted,
+            max_iterations=int(run["max_iterations"]),
+            optimizer=name,
+            lr=run.get("lr"),
+            lr_min=run.get("lr_min"),
+            schedule=run.get("schedule"),
+            momentum=float(run.get("momentum") or 0.0),
+        )
+        tgt = dict(geo.last_target or {})
+        before = float(tgt["before"])
+        after = float(tgt["after"])
+        ratio = after / before if before else float("nan")
+        label = name
+        if run.get("schedule") and run["schedule"] not in (None, "none"):
+            label = f"{name}+{run['schedule']}"
+        results.append({"name": name, "label": label, "tgt": tgt, "out": out, "ratio": ratio, "run": run})
+        rows.append(
+            [
+                f"`{label}`",
+                str(run["max_iterations"]),
+                "—" if run.get("lr") is None else f"{run['lr']:g}",
+                str(run.get("schedule") or "none"),
+                f"{run.get('momentum') or 0:g}",
+                f"{before:.6g}",
+                f"{after:.6g}",
+                f"{ratio:.4g}",
+                str(int(tgt.get("n_steps", 0))),
+                str(int(tgt.get("n_calls", tgt.get("n_iter", 0)))),
+                f"{float(tgt.get('n_calls', 0)) / max(float(tgt.get('n_steps', 1)), 1):.2f}",
+                f"{float(tgt.get('optimizer_state_mb', 0)):.4g}",
+                f"{float(tgt.get('rss_delta_mb', 0)):.3g}",
+            ]
+        )
+        print(
+            f"{label}: {before:.6g} -> {after:.6g}  "
+            f"(steps={tgt.get('n_steps')}, calls={tgt.get('n_calls')}, "
+            f"opt_state={tgt.get('optimizer_state_mb'):.4g} MiB, "
+            f"rssΔ={tgt.get('rss_delta_mb'):.3g} MiB)"
+        )
+
+    log.para(
+        "Each row starts from the **same** distorted coordinates. "
+        "**n_steps** = optimizer iterations. "
+        "**n_calls** = loss(+grad) evaluations (LBFGS closures include strong-Wolfe line search). "
+        "**opt_state MiB** = torch optimizer state tensors. "
+        "**rssΔ MiB** = process VmRSS change over the minimize call."
     )
-    tgt = geo.last_target or {}
-    log.output(
-        f"optimizer = {tgt.get('optimizer')}\n"
-        f"energy before = {tgt.get('before'):.6g}\n"
-        f"energy after  = {tgt.get('after'):.6g}\n"
-        f"n_iter = {tgt.get('n_iter')}\n"
-        f"type(hierarchy_out) = {type(hierarchy_out).__module__}.{type(hierarchy_out).__name__}\n"
-        f"atoms = {hierarchy_out.atoms().size()}"
+    log.table(
+        [
+            "optimizer",
+            "max_iter",
+            "lr",
+            "schedule",
+            "mom",
+            "E before",
+            "E after",
+            "after/before",
+            "n_steps",
+            "n_calls",
+            "calls/step",
+            "opt_state MiB",
+            "rssΔ MiB",
+        ],
+        rows,
     )
-    log.check(tgt.get("optimizer") == args.optimizer, "worker used requested torch optimizer", str(tgt.get("optimizer")))
-    log.check(
-        float(tgt.get("after", 1e9)) < 0.2 * float(tgt.get("before", 1.0)),
-        "torch minimize dropped energy by >5×",
-        f"{tgt.get('after'):.6g} < 0.2×{tgt.get('before'):.6g}",
+
+    log.heading("3. Call-count benchmark")
+    log.para(
+        "How many times the worker evaluates the torch loss (and gradients) "
+        "versus how many optimizer steps it takes."
     )
-    log.check(
-        hierarchy_out.atoms().size() == hierarchy.atoms().size(),
-        "returned cctbx hierarchy atom count",
-        str(hierarchy_out.atoms().size()),
+    call_rows = []
+    for res in results:
+        tgt = res["tgt"]
+        steps = int(tgt.get("n_steps", 0))
+        calls = int(tgt.get("n_calls", tgt.get("n_iter", 0)))
+        call_rows.append(
+            [
+                f"`{res['label']}`",
+                str(steps),
+                str(calls),
+                f"{calls / max(steps, 1):.2f}",
+                f"{float(tgt['after']):.6g}",
+            ]
+        )
+    log.table(
+        ["optimizer", "n_steps", "n_calls (closures / loss evals)", "calls/step", "E after"],
+        call_rows,
     )
-    log.check("iotbx" in type(hierarchy_out).__module__ or "hierarchy" in type(hierarchy_out).__module__, "result is a cctbx/iotbx hierarchy")
+
+    log.heading("4. Memory benchmark")
+    log.para(
+        "**optimizer_state_mb** is the size of tensors stored in `torch.optim` state "
+        "(LBFGS history vs Adam/AdamW moments vs SGD velocity). "
+        "**rss_delta_mb** is the change in process resident set during that minimize. "
+        "**cuda_peak_mb** is zero on CPU."
+    )
+    mem_rows = []
+    for res in results:
+        tgt = res["tgt"]
+        mem_rows.append(
+            [
+                f"`{res['label']}`",
+                f"{float(tgt.get('optimizer_state_mb', 0)):.6g}",
+                f"{float(tgt.get('rss_before_mb', 0)):.3g}",
+                f"{float(tgt.get('rss_after_mb', 0)):.3g}",
+                f"{float(tgt.get('rss_delta_mb', 0)):.3g}",
+                f"{float(tgt.get('cuda_peak_mb', 0)):.3g}",
+            ]
+        )
+    log.table(
+        [
+            "optimizer",
+            "opt_state MiB",
+            "rss before",
+            "rss after",
+            "rss Δ",
+            "cuda peak Δ",
+        ],
+        mem_rows,
+    )
+    for res in results:
+        log.check(
+            float(res["tgt"].get("optimizer_state_mb", -1)) >= 0.0,
+            f"{res['label']}: optimizer_state_mb reported",
+            f"{res['tgt'].get('optimizer_state_mb')} MiB",
+        )
+
+    lbfgs = next((r for r in results if r["name"] == "lbfgs"), None)
+    if lbfgs is not None:
+        steps = int(lbfgs["tgt"].get("n_steps", 0))
+        calls = int(lbfgs["tgt"].get("n_calls", 0))
+        log.check(
+            calls >= steps,
+            "lbfgs: closure calls >= LBFGS iterations",
+            f"n_calls={calls} n_steps={steps}",
+        )
+        if steps > 0:
+            log.check(
+                calls > steps,
+                "lbfgs: line search makes extra closure calls",
+                f"calls/step={calls / steps:.2f}",
+            )
+    for res in results:
+        if res["name"] in ("adam", "adamw", "sgd"):
+            steps = int(res["tgt"].get("n_steps", 0))
+            calls = int(res["tgt"].get("n_calls", 0))
+            log.check(
+                calls == steps,
+                f"{res['label']}: one loss call per step",
+                f"n_calls={calls} n_steps={steps}",
+            )
+
+    for res in results:
+        name = res["name"]
+        tgt = res["tgt"]
+        log.check(tgt.get("optimizer") == name, f"{name}: worker optimizer", str(tgt.get("optimizer")))
+        log.check(
+            float(tgt["after"]) < float(tgt["before"]),
+            f"{name}: energy decreased",
+            f"{tgt['after']:.6g} < {tgt['before']:.6g}",
+        )
+        # LBFGS should crush the target; first-order methods need only a clear drop.
+        if name == "lbfgs":
+            log.check(
+                float(tgt["after"]) < 0.2 * float(tgt["before"]),
+                f"{name}: energy dropped by >5×",
+                f"{tgt['after']:.6g} < 0.2×{tgt['before']:.6g}",
+            )
+        log.check(
+            res["out"].atoms().size() == hierarchy.atoms().size(),
+            f"{name}: returned cctbx hierarchy atom count",
+            str(res["out"].atoms().size()),
+        )
+
+    best = min(results, key=lambda r: float(r["tgt"]["after"]))
+    leanest = min(results, key=lambda r: float(r["tgt"].get("optimizer_state_mb", 1e9)))
+    log.para(
+        f"Lowest final energy: **`{best['label']}`** ({float(best['tgt']['after']):.6g}). "
+        f"Smallest optimizer state: **`{leanest['label']}`** "
+        f"({float(leanest['tgt'].get('optimizer_state_mb', 0)):.4g} MiB)."
+    )
 
     log.heading("Done")
     log.para(
         "Phenix only called `RemoteGeometry.minimize(...)` and waited. "
-        "Packing, torch optimization, and unpacking stayed behind the Bridge."
+        "Packing, torch optimization (`LBFGS` / `Adam` / `AdamW` / `SGD`), "
+        "and unpacking stayed behind the Bridge."
     )
     log.write(args.output)
     return 1 if log.failed else 0

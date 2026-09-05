@@ -32,18 +32,28 @@ proxies. It does not reconstruct `bond_params_table` or a live manager.
 ### RemoteGeometry.minimize
 
 Phenix-facing manager: pack hierarchy + restraints to Redis, block until the
-worker finishes a **torch** optimizer (`lbfgs`, `adam`, or `sgd`), convert
+worker finishes a **torch** optimizer (`lbfgs`, `adam`, `adamw`, or `sgd`), convert
 sites back to a cctbx hierarchy.
 
 ```python
 from phridge.client import Bridge, RemoteGeometry
 
 bridge = Bridge("redis://gpu-box:6379/0")
+# bridge = Bridge(memory=True)  # no redis-server; runs the op in-process
 geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
 hierarchy_out = geo.minimize(max_iterations=100, optimizer="lbfgs")
 # geo.energy()              # remote eval, no steps
-# geo.last_target           # {"before", "after", "n_iter", "optimizer"}
+# geo.last_target           # before/after, n_steps, n_calls, optimizer_state_mb, rss_*_mb, ...
 ```
+
+First-order methods accept `schedule` (`none` / `cosine` / `triangular`),
+`lr` / `lr_min`, and SGD `momentum`. Memory fields on `last_target`:
+
+| key | meaning |
+|-----|---------|
+| `optimizer_state_mb` | torch optimizer state tensors (LBFGS history vs Adam moments vs SGD velocity) |
+| `rss_before_mb` / `rss_after_mb` / `rss_delta_mb` | process VmRSS around the minimize |
+| `cuda_peak_mb` | CUDA peak allocation delta (0 on CPU) |
 
 v1 worker energy uses packed bonds / angles / dihedrals only (no nonbonded /
 ASU / planarity). See `examples/restraint_minimization.py`.

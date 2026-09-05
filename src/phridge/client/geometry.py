@@ -60,19 +60,27 @@ class RemoteGeometry:
         max_iterations: int = 100,
         optimizer: str = "lbfgs",
         lr: Optional[float] = None,
+        lr_min: Optional[float] = None,
+        schedule: Optional[str] = None,
+        momentum: float = 0.0,
         sites_cart: Optional[Any] = None,
         update_hierarchy: bool = True,
     ) -> Any:
         """Run remote torch minimization; return a cctbx hierarchy (or packed sites).
 
         Blocks on ``bridge.call("geometry_minimize", ...)`` until the worker
-        reports done. ``optimizer`` is ``"lbfgs"``, ``"adam"``, or ``"sgd"``.
+        reports done. ``optimizer`` is ``"lbfgs"``, ``"adam"``, ``"adamw"``, or ``"sgd"``.
+        First-order methods accept ``schedule`` (``none`` / ``cosine`` / ``triangular``),
+        ``lr_min``, and SGD ``momentum``.
         """
         out = self._call(
             sites_cart=sites_cart,
             max_iterations=max_iterations,
             optimizer=optimizer,
             lr=lr,
+            lr_min=lr_min,
+            schedule=schedule,
+            momentum=momentum,
         )
         sites = out["sites"]
         if isinstance(sites, PackedCartesian):
@@ -102,14 +110,22 @@ class RemoteGeometry:
         max_iterations: int,
         optimizer: str,
         lr: Optional[float] = None,
+        lr_min: Optional[float] = None,
+        schedule: Optional[str] = None,
+        momentum: float = 0.0,
     ) -> dict[str, Any]:
         sites = _sites_for_call(sites_cart, self._packed_hier)
         params: dict[str, Any] = {
             "max_iterations": int(max_iterations),
             "optimizer": str(optimizer),
+            "momentum": float(momentum),
         }
         if lr is not None:
             params["lr"] = float(lr)
+        if lr_min is not None:
+            params["lr_min"] = float(lr_min)
+        if schedule is not None:
+            params["schedule"] = str(schedule)
         result = self.bridge.call(
             "geometry_minimize",
             sites=sites,

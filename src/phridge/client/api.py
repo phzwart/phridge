@@ -32,17 +32,29 @@ class Bridge:
         redis_url: str = "redis://localhost:6379/0",
         *,
         store: Optional[RedisStore] = None,
+        memory: bool = False,
+        device: str = "cpu",
         ttl_seconds: int = DEFAULT_TTL_SECONDS,
         max_object_bytes: int = DEFAULT_MAX_OBJECT_BYTES,
         timeout: float = 3600.0,
     ) -> None:
-        self.store = store or RedisStore.from_url(
-            redis_url,
-            ttl_seconds=ttl_seconds,
-            max_object_bytes=max_object_bytes,
-        )
+        if memory and store is not None:
+            raise ValueError("pass memory=True or store=, not both")
+        if memory:
+            self.store = RedisStore.memory(
+                ttl_seconds=ttl_seconds,
+                max_object_bytes=max_object_bytes,
+            )
+        else:
+            self.store = store or RedisStore.from_url(
+                redis_url,
+                ttl_seconds=ttl_seconds,
+                max_object_bytes=max_object_bytes,
+            )
         self.protocol = Protocol(self.store)
         self.timeout = timeout
+        self.memory = memory
+        self.device = device
         self._prefer_cctbx: dict[str, bool] = {}
 
     def call(self, op: str, timeout: Optional[float] = None, **kwargs: Any) -> Any:
@@ -65,6 +77,13 @@ class Bridge:
             updated_at=utcnow(),
         )
         self.protocol.enqueue(envelope)
+        if self.memory:
+            from phridge.worker.runner import process_envelope
+
+            loaded = self.store.get_envelope(job_id)
+            if loaded is None:
+                raise RuntimeError(f"memory store lost envelope {job_id}")
+            process_envelope(self.store, loaded, device=self.device)
         return job_id
 
     def result(self, job_id: str, timeout: Optional[float] = None) -> Any:

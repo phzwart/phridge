@@ -1,7 +1,10 @@
 """Torch geometry-restraint energies from packed tables (no cctbx).
 
 v1: bonds, angles, dihedrals. Chirality / planarity / nonbonded / ASU ignored.
-Minimizer is always a ``torch.optim`` algorithm: ``lbfgs``, ``adam``, or ``sgd``.
+Minimizer is always a ``torch.optim`` algorithm: ``lbfgs``, ``adam``, ``adamw``, or ``sgd``.
+
+First-order methods support optional LR schedules (``cosine``, ``triangular``)
+and SGD momentum.
 """
 
 from __future__ import annotations
@@ -12,13 +15,55 @@ import numpy as np
 
 from phridge.packing_geometry import PackedRestraints
 
-_OPTIMIZERS = ("lbfgs", "adam", "sgd")
+_OPTIMIZERS = ("lbfgs", "adam", "adamw", "sgd")
+_SCHEDULES = ("none", "cosine", "triangular")
 
 
 def _as_numpy(value: Any) -> np.ndarray:
     if hasattr(value, "detach"):
         return value.detach().cpu().numpy()
     return np.asarray(value)
+
+
+def _rss_mb() -> float:
+    """Current resident set size in MiB (Linux VmRSS; fallback via resource)."""
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return float(line.split()[1]) / 1024.0  # kB → MiB
+    except OSError:
+        pass
+    import resource
+
+    # Linux: ru_maxrss is kB; macOS: bytes. Prefer current RSS path above.
+    return float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+
+
+def _optimizer_state_nbytes(opt: Any) -> int:
+    import torch
+
+    total = 0
+    for state in opt.state.values():
+        if not isinstance(state, dict):
+            continue
+        for value in state.values():
+            if torch.is_tensor(value):
+                total += int(value.numel()) * int(value.element_size())
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    if torch.is_tensor(item):
+                        total += int(item.numel()) * int(item.element_size())
+    return total
+
+
+def _normalize_schedule(schedule: Optional[str]) -> str:
+    if schedule is None or schedule == "":
+        return "none"
+    name = str(schedule).lower().strip()
+    if name not in _SCHEDULES:
+        raise ValueError(f"schedule must be one of {_SCHEDULES}, got {schedule!r}")
+    return name
 
 
 def energy_and_sites(
@@ -28,19 +73,35 @@ def energy_and_sites(
     max_iterations: int = 100,
     optimizer: str = "lbfgs",
     lr: Optional[float] = None,
+    lr_min: Optional[float] = None,
+    schedule: Optional[str] = None,
+    momentum: float = 0.0,
     device: str = "cpu",
     dtype: Optional[Any] = None,
-) -> tuple[np.ndarray, dict[str, float]]:
+) -> tuple[np.ndarray, dict[str, Any]]:
     """Minimize sites under packed restraints with a torch optimizer.
 
-    Returns ``(sites_out, {"before", "after", "n_iter", "optimizer"})``.
-    ``max_iterations=0`` evaluates energy only (no steps).
+    First-order kwargs:
+
+    - ``schedule``: ``none`` | ``cosine`` | ``triangular``
+    - ``lr_min``: floor LR for schedules (default ``lr * 0.01``)
+    - ``momentum``: SGD momentum (ignored for Adam / AdamW / LBFGS)
+
+    Stats include ``n_steps``, ``n_calls`` (closure / loss evals), ``schedule``,
+    ``momentum``, ``lr``, ``lr_min``, plus memory:
+
+    - ``rss_before_mb`` / ``rss_after_mb`` / ``rss_delta_mb``: process VmRSS
+    - ``optimizer_state_mb``: torch optimizer state tensors after the run
+    - ``cuda_peak_mb``: ``torch.cuda.max_memory_allocated`` delta (0 on CPU)
     """
+    import gc
+
     import torch
 
     name = optimizer.lower().strip()
     if name not in _OPTIMIZERS:
         raise ValueError(f"optimizer must be one of {_OPTIMIZERS}, got {optimizer!r}")
+    sched = _normalize_schedule(schedule)
 
     if dtype is None:
         dtype = torch.float64
@@ -54,17 +115,51 @@ def energy_and_sites(
     xyz = xyz0.clone().requires_grad_(True)
     before = float(tables.energy(xyz).detach().cpu())
 
+    base_stats: dict[str, Any] = {
+        "before": before,
+        "optimizer": name,
+        "schedule": sched,
+        "momentum": float(momentum) if name == "sgd" else 0.0,
+    }
+
+    empty_mem = {
+        "rss_before_mb": 0.0,
+        "rss_after_mb": 0.0,
+        "rss_delta_mb": 0.0,
+        "optimizer_state_mb": 0.0,
+        "cuda_peak_mb": 0.0,
+    }
+
     if max_iterations <= 0:
         return _as_numpy(xyz0), {
-            "before": before,
+            **base_stats,
+            **empty_mem,
             "after": before,
             "n_iter": 0.0,
-            "optimizer": name,
+            "n_steps": 0.0,
+            "n_calls": 0.0,
+            "lr": float(lr) if lr is not None else None,
+            "lr_min": float(lr_min) if lr_min is not None else None,
         }
 
-    n_iter = 0
+    gc.collect()
+    if device.startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+        cuda_before = float(torch.cuda.memory_allocated()) / (1024.0 ** 2)
+    else:
+        cuda_before = 0.0
+    rss_before = _rss_mb()
+
+    n_calls = 0
+    n_steps = 0
+    used_lr: Optional[float] = None
+    used_lr_min: Optional[float] = None
+    opt: Any = None
+
     if name == "lbfgs":
         step_lr = 1.0 if lr is None else float(lr)
+        used_lr = step_lr
         opt = torch.optim.LBFGS(
             [xyz],
             lr=step_lr,
@@ -76,34 +171,78 @@ def energy_and_sites(
         )
 
         def closure():
-            nonlocal n_iter
+            nonlocal n_calls
             opt.zero_grad(set_to_none=True)
             loss = tables.energy(xyz)
             loss.backward()
-            n_iter += 1
+            n_calls += 1
             return loss
 
         opt.step(closure)
+        state = opt.state[xyz]
+        n_steps = int(state.get("n_iter", 0))
     else:
-        step_lr = (1e-2 if name == "adam" else 1e-4) if lr is None else float(lr)
+        defaults = {"adam": 1e-2, "adamw": 1e-2, "sgd": 1e-3}
+        step_lr = defaults[name] if lr is None else float(lr)
+        floor = (step_lr * 0.01) if lr_min is None else float(lr_min)
+        used_lr, used_lr_min = step_lr, floor
         if name == "adam":
             opt = torch.optim.Adam([xyz], lr=step_lr)
+        elif name == "adamw":
+            opt = torch.optim.AdamW([xyz], lr=step_lr)
         else:
-            opt = torch.optim.SGD([xyz], lr=step_lr, momentum=0.0)
+            opt = torch.optim.SGD([xyz], lr=step_lr, momentum=float(momentum))
+
+        scheduler = None
+        if sched == "cosine":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, T_max=max(max_iterations, 1), eta_min=floor
+            )
+        elif sched == "triangular":
+            period = max(max_iterations // 2, 1)
+            scheduler = torch.optim.lr_scheduler.CyclicLR(
+                opt,
+                base_lr=floor,
+                max_lr=step_lr,
+                step_size_up=period,
+                step_size_down=max(max_iterations - period, 1),
+                mode="triangular",
+                cycle_momentum=False,
+            )
+
         for _ in range(max_iterations):
             opt.zero_grad(set_to_none=True)
             loss = tables.energy(xyz)
             loss.backward()
+            n_calls += 1
             torch.nn.utils.clip_grad_norm_([xyz], max_norm=1.0)
             opt.step()
-            n_iter += 1
+            n_steps += 1
+            if scheduler is not None:
+                scheduler.step()
 
     after = float(tables.energy(xyz).detach().cpu())
+    opt_state_mb = _optimizer_state_nbytes(opt) / (1024.0 ** 2) if opt is not None else 0.0
+    rss_after = _rss_mb()
+    if device.startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.synchronize()
+        cuda_peak = float(torch.cuda.max_memory_allocated()) / (1024.0 ** 2) - cuda_before
+    else:
+        cuda_peak = 0.0
+
     return _as_numpy(xyz.detach()), {
-        "before": before,
+        **base_stats,
         "after": after,
-        "n_iter": float(n_iter),
-        "optimizer": name,
+        "n_iter": float(n_calls),
+        "n_steps": float(n_steps),
+        "n_calls": float(n_calls),
+        "lr": used_lr,
+        "lr_min": used_lr_min,
+        "rss_before_mb": float(rss_before),
+        "rss_after_mb": float(rss_after),
+        "rss_delta_mb": float(rss_after - rss_before),
+        "optimizer_state_mb": float(opt_state_mb),
+        "cuda_peak_mb": float(max(cuda_peak, 0.0)),
     }
 
 

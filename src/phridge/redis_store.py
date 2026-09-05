@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
-import redis
+try:
+    import redis
+except ImportError as exc:  # pragma: no cover
+    raise ImportError(
+        "phridge requires the redis package (pip install redis). "
+        "There is no automatic FakeRedis substitute when redis is missing. "
+        "Use Bridge(memory=True) for an explicit in-process store "
+        "(still requires the redis package)."
+    ) from exc
 
+from phridge.memory_redis import MemoryRedis
 from phridge.models import JobEnvelope
 
 DEFAULT_TTL_SECONDS = 3600
@@ -25,7 +34,7 @@ class ObjectTooLargeError(ValueError):
 class RedisStore:
     def __init__(
         self,
-        client: redis.Redis,
+        client: Any,
         *,
         ttl_seconds: int = DEFAULT_TTL_SECONDS,
         max_object_bytes: int = DEFAULT_MAX_OBJECT_BYTES,
@@ -41,6 +50,11 @@ class RedisStore:
         **kwargs,
     ) -> "RedisStore":
         return cls(redis.Redis.from_url(url, decode_responses=False), **kwargs)
+
+    @classmethod
+    def memory(cls, **kwargs) -> "RedisStore":
+        """In-process store; no redis-server. Same key layout as Redis."""
+        return cls(MemoryRedis(), **kwargs)
 
     def job_key(self, job_id: str) -> str:
         return JOB_KEY.format(job_id=job_id)

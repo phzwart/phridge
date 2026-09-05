@@ -19,9 +19,7 @@ from phridge.client.xtal_engine import (  # noqa: E402
     RemoteTargetFunctor,
 )
 from phridge.models import SfEngineParams  # noqa: E402
-from phridge.redis_store import RedisStore  # noqa: E402
 from phridge.worker.ops.xtal_ops import scattering_model  # noqa: E402
-from phridge.worker.runner import process_envelope  # noqa: E402
 from phridge.worker.targets import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
 from phridge.worker.xtal.engine import EngineParams, StructureFactorEngine  # noqa: E402
 
@@ -232,19 +230,8 @@ def test_amplitude_curvature_finite_difference():
 
 
 # ----------------------------------------------------- bridge round trips
-class _LoopbackBridge(Bridge):
-    """Bridge whose result() runs the worker in-process (fakeredis)."""
-
-    def call(self, op, timeout=None, **kwargs):
-        job_id = self.submit(op, **kwargs)
-        envelope = self.store.get_envelope(job_id)
-        process_envelope(self.store, envelope, device="cpu")
-        return self.result(job_id, timeout=1)
-
-
 def _bridge():
-    fakeredis = pytest.importorskip("fakeredis")
-    return _LoopbackBridge(store=RedisStore(fakeredis.FakeRedis()), timeout=2)
+    return Bridge(memory=True, timeout=2)
 
 
 def test_crystal_symmetry_carries_symops():

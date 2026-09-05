@@ -6,27 +6,16 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-fakeredis = pytest.importorskip("fakeredis")
 
 from phridge.client import Bridge, RemoteGeometry  # noqa: E402
 from phridge.packing_geometry import PackedRestraints  # noqa: E402
 from phridge.packing_xtal import PackedCartesian, PackedHierarchy  # noqa: E402
 from phridge.models import Atom, CoordinateFrame  # noqa: E402
-from phridge.redis_store import RedisStore  # noqa: E402
 from phridge.worker.geometry.energy import energy_and_sites  # noqa: E402
-from phridge.worker.runner import process_envelope  # noqa: E402
-
-
-class _LoopbackBridge(Bridge):
-    def call(self, op, timeout=None, **kwargs):
-        job_id = self.submit(op, **kwargs)
-        envelope = self.store.get_envelope(job_id)
-        process_envelope(self.store, envelope, device="cpu")
-        return self.result(job_id, timeout=1)
 
 
 def _bridge():
-    return _LoopbackBridge(store=RedisStore(fakeredis.FakeRedis()), timeout=2)
+    return Bridge(memory=True, timeout=2)
 
 
 def _triangle_restraints() -> PackedRestraints:
@@ -64,15 +53,20 @@ def test_torch_energy_triangle_collapses():
     assert target["after"] < 1e-3 * target["before"]
     d01 = np.linalg.norm(out[0] - out[1])
     assert abs(d01 - 1.5) < 1e-3
+    assert target["n_calls"] >= target["n_steps"] > 0
+    assert target["n_calls"] > target["n_steps"]  # Wolfe line search
+    assert target["optimizer_state_mb"] > 0.0
+    assert "rss_before_mb" in target and "rss_after_mb" in target
+    assert "rss_delta_mb" in target and "cuda_peak_mb" in target
 
 
-@pytest.mark.parametrize("optimizer", ["lbfgs", "adam", "sgd"])
+@pytest.mark.parametrize("optimizer", ["lbfgs", "adam", "adamw", "sgd"])
 def test_torch_optimizers_reduce_energy(optimizer):
     restr = _triangle_restraints()
     sites = np.array([(0.0, 0.0, 0.0), (1.8, 0.0, 0.0), (0.9, 1.2, 0.0)])
     if optimizer == "lbfgs":
         max_iter, lr = 50, None
-    elif optimizer == "adam":
+    elif optimizer in ("adam", "adamw"):
         max_iter, lr = 800, 5e-2
     else:
         max_iter, lr = 2000, 1e-5
@@ -80,6 +74,33 @@ def test_torch_optimizers_reduce_energy(optimizer):
     assert np.isfinite(target["after"])
     assert target["after"] < target["before"]
     assert target["optimizer"] == optimizer
+    assert int(target["n_calls"]) >= int(target["n_steps"]) > 0
+    if optimizer == "lbfgs":
+        assert int(target["n_calls"]) > int(target["n_steps"])
+    else:
+        assert int(target["n_calls"]) == int(target["n_steps"])
+    # SGD with momentum=0 keeps no state tensors; others always allocate.
+    if optimizer == "sgd":
+        assert float(target["optimizer_state_mb"]) >= 0.0
+    else:
+        assert float(target["optimizer_state_mb"]) > 0.0
+    assert float(target["rss_before_mb"]) > 0.0
+    assert float(target["cuda_peak_mb"]) >= 0.0
+
+
+def test_optimizer_memory_lbfgs_larger_than_sgd():
+    """LBFGS history buffers should exceed SGD's single velocity buffer."""
+    restr = _triangle_restraints()
+    sites = np.array([(0.0, 0.0, 0.0), (1.8, 0.0, 0.0), (0.9, 1.2, 0.0)])
+    _, lbfgs = energy_and_sites(sites, restr, max_iterations=30, optimizer="lbfgs")
+    _, sgd = energy_and_sites(
+        sites, restr, max_iterations=30, optimizer="sgd", lr=1e-4, momentum=0.9
+    )
+    assert lbfgs["optimizer_state_mb"] > sgd["optimizer_state_mb"] > 0.0
+    _, adam = energy_and_sites(sites, restr, max_iterations=30, optimizer="adam", lr=5e-2)
+    # Adam stores m+v; LBFGS history_size=20 grows past that on this tiny problem
+    # once enough iterations fill the history — just require both reported.
+    assert adam["optimizer_state_mb"] > 0.0
 
 
 def test_remote_geometry_minimize_triangle():
@@ -109,6 +130,9 @@ def test_geometry_minimize_op_round_trip():
         params={"max_iterations": 50, "optimizer": "lbfgs"},
     )
     assert out["target"]["after"] < 0.2 * out["target"]["before"]
+    assert float(out["target"]["optimizer_state_mb"]) > 0.0
+    assert "rss_delta_mb" in out["target"]
+    assert "cuda_peak_mb" in out["target"]
 
 
 def test_remote_geometry_peptide_when_chem_data_available():

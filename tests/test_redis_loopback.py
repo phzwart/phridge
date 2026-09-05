@@ -32,6 +32,19 @@ def test_process_envelope_scale_array():
     assert result.dtype == np.float64
 
 
+def test_memory_bridge_scale_array():
+    bridge = Bridge(memory=True, timeout=2)
+    result = bridge.call("scale_array", array=np.arange(4, dtype=np.float64), scale=2.0)
+    np.testing.assert_allclose(result, [0, 2, 4, 6])
+    assert result.dtype == np.float64
+
+
+def test_memory_and_store_conflict():
+    store = _store()
+    with pytest.raises(ValueError, match="memory=True or store"):
+        Bridge(memory=True, store=store)
+
+
 def test_stream_loopback_scale_array():
     store = _store()
     try:
