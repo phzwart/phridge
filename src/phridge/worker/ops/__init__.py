@@ -11,7 +11,14 @@ from typing import Any, Callable
 
 from phridge.worker.ops.geometry_ops import geometry_minimize
 from phridge.worker.ops.scale_array import scale_array
-from phridge.worker.ops.xtal_ops import gauss_newton_hvp, refine_gradients, sf_calc, sf_gradients, target_eval
+from phridge.worker.ops.xtal_ops import (
+    gauss_newton_diagonal,
+    gauss_newton_hvp,
+    refine_gradients,
+    sf_calc,
+    sf_gradients,
+    target_eval,
+)
 
 IMPLEMENTATIONS: dict[str, Callable[..., Any]] = {
     "scale_array": scale_array,
@@ -20,5 +27,6 @@ IMPLEMENTATIONS: dict[str, Callable[..., Any]] = {
     "target_eval": target_eval,
     "refine_gradients": refine_gradients,
     "gauss_newton_hvp": gauss_newton_hvp,
+    "gauss_newton_diagonal": gauss_newton_diagonal,
     "geometry_minimize": geometry_minimize,
 }

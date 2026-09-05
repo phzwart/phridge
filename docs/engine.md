@@ -77,7 +77,8 @@ Targets are registered by name and built from a JSON spec:
 
 A new target is a subclass of `phridge.worker.targets.Target` with a
 `per_reflection(f_calc, obs)` method; autograd supplies `d_target_d_f_calc`
-and the curvatures.
+and the curvatures. Short tutorial (call path + custom likelihood):
+[tutorial_sf_targets.md](tutorial_sf_targets.md).
 
 ## Ops
 

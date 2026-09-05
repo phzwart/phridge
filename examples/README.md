@@ -58,3 +58,22 @@ Writes [`sf_gradient_benchmark.md`](sf_gradient_benchmark.md): ~1000-atom
 structures over several space groups, F_obs from a known model, small
 Gaussian site shake, then CCTBX `gradients_direct` vs phridge CUDA site
 gradients (cosine / length ratio + timings). Requires CUDA.
+
+## External package: agentsg cell reduction
+
+Canonical **bring-your-own-package** walkthrough. Install
+[agentsg](https://github.com/phzwart/agentsg), register a plugin op, call it
+through `Bridge` — no edits under `src/phridge`.
+
+```bash
+pip install -e ".[agentsg]"
+# or: pip install "git+https://github.com/phzwart/agentsg.git#subdirectory=agentsg"
+
+make example-agentsg
+# or:
+PYTHONPATH=examples python examples/agentsg_cell_reduce.py
+```
+
+Writes [`agentsg_cell_reduce.md`](agentsg_cell_reduce.md). Plugin source:
+[`plugins/agentsg_niggli.py`](plugins/agentsg_niggli.py). See
+[docs/extending.md](../docs/extending.md).

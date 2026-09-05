@@ -240,6 +240,21 @@ register(
 
 register(
     OpSpec(
+        name="gauss_newton_diagonal",
+        schema_version=SCHEMA_VERSION,
+        inputs={
+            **_XRAY_INPUTS,
+            "target": "TargetResult",
+            "hkl": "MillerArray",
+            "n_probes": "json",
+            "seed": "json",
+        },
+        outputs={"diagonal": "SfGradients"},
+    )
+)
+
+register(
+    OpSpec(
         name="geometry_minimize",
         schema_version=SCHEMA_VERSION,
         inputs={"sites": "CartesianSites", "restraints": "GeometryRestraints", "params": "json"},

@@ -20,6 +20,9 @@ dependencies = [
 client = ["cctbx-base"]
 cctbx = ["cctbx-base"]
 worker = ["torch"]
+agentsg = [
+    "agentsg @ git+https://github.com/phzwart/agentsg.git#subdirectory=agentsg",
+]
 dev = [
     "pytest>=7.4",
     "fakeredis>=2.23",

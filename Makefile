@@ -1,4 +1,4 @@
-.PHONY: venv test test-sf-gpu schema-docs demo-restraints example-restraints example-sf-gradients chem-data
+.PHONY: venv test test-sf-gpu schema-docs demo-restraints example-restraints example-sf-gradients example-agentsg chem-data
 
 # Prefer the conda cctbx-base env when present (aarch64-friendly).
 CONDA_ENV ?= $(HOME)/miniforge3/envs/phridge-cctbx
@@ -33,3 +33,6 @@ example-restraints demo-restraints:
 
 example-sf-gradients:
 	$(PYTHON) examples/sf_gradient_benchmark.py
+
+example-agentsg:
+	PYTHONPATH=examples $(PYTHON) examples/agentsg_cell_reduce.py

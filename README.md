@@ -8,7 +8,8 @@ More detail: [docs/README.md](docs/README.md) (including
 [Redis / `Bridge(memory=True)`](docs/redis.md)). The worker also carries a
 differentiable FFT structure-factor engine and ML / least-squares
 targets that drop in for `cctbx.xray.structure_factors` on the Phenix
-side: [docs/engine.md](docs/engine.md).
+side: [docs/engine.md](docs/engine.md). Short how-to:
+[docs/tutorial_sf_targets.md](docs/tutorial_sf_targets.md).
 
 ## Contract
 
@@ -187,28 +188,30 @@ installed. Large-N GPU SF gradient checks are marked `gpu`/`slow` — see
 
 ```bash
 make example-restraints
-# or: python examples/restraint_minimization.py
-# → examples/restraint_minimization.md  (code demo + checks)
+# → examples/restraint_minimization.md  (torch LBFGS/Adam/SGD)
 
 make example-sf-gradients
 # → examples/sf_gradient_benchmark.md  (CUDA SF grads vs CCTBX)
+
+pip install -e ".[agentsg]"   # optional third-party cell package
+make example-agentsg
+# → examples/agentsg_cell_reduce.md  (external op via register_op)
 ```
 
-See [examples/README.md](examples/README.md) — cctbx packs restraints, the
-worker runs torch LBFGS/Adam/SGD (via `Bridge(memory=True)` in the demo,
-or a live Redis + `phridge-worker`), and the client gets a cctbx hierarchy
-back from `RemoteGeometry.minimize(...)`. The SF gradient example compares
-phridge CUDA site gradients to CCTBX `gradients_direct` on ~1000-atom
-structures across several space groups.
+See [examples/README.md](examples/README.md). Restraint and SF demos use
+built-in ops; the agentsg demo is the canonical **external package** path
+(`register_op` + `--preload`, no edits under `src/phridge`) — details in
+[docs/extending.md](docs/extending.md).
 
 ## Layout
 
 ```
 schema/                      LinkML (source of truth)
-docs/                        Contract, packing, client helpers
-examples/                    cctbx → phridge → cctbx demos
+docs/                        Contract, packing, client helpers, extending
+examples/                    demos + examples/plugins/ (third-party ops)
 src/phridge/models.py        committed pydantic
 src/phridge/packing*.py      npz encode/decode
 src/phridge/client/          Bridge, converters, EM + geometry helpers
-src/phridge/worker/          stream loop, torch helpers, scale_array
+src/phridge/worker/          stream loop, torch helpers, science ops
+src/phridge/ops.py           OpSpec catalog + register_op / preload
 ```

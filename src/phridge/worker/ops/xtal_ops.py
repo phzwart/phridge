@@ -270,3 +270,35 @@ def gauss_newton_hvp(
 
 
 gauss_newton_hvp.compute_dtype = "float64"
+
+
+def gauss_newton_diagonal(
+    xray: PackedXray,
+    table: PackedScatteringTable,
+    target: PackedTargetResult,
+    hkl: PackedMiller,
+    params: Any,
+    n_probes: int = 8,
+    seed: int = 0,
+) -> PackedSfGradients:
+    """Hutchinson estimate of diag(J^T H J) in SfGradients layout."""
+    if target.curv_radial is None:
+        raise ValueError("TargetResult has no curvatures; evaluate with compute_curvature=True")
+    eng = _engine(xray, table, _np(hkl.hkl), params)
+    diag = eng.gauss_newton_diagonal(
+        _np(target.curv_radial),
+        _np(target.curv_tangential),
+        n_probes=int(n_probes),
+        seed=int(seed),
+    )
+    return PackedSfGradients(
+        d_site_frac=diag["site_frac"],
+        d_occupancy=diag["occupancy"],
+        d_u_iso=diag["u_iso"],
+        d_u_star=diag["u_star"],
+        d_fp=diag["fp"],
+        d_fdp=diag["fdp"],
+    )
+
+
+gauss_newton_diagonal.compute_dtype = "float64"

@@ -489,3 +489,289 @@ class StructureFactorEngine:
         ct = torch.as_tensor(np.asarray(curv_tangential, dtype=np.float64), dtype=self.dtype, device=self.device)
         h_df = phase * torch.complex(cr * c.real, ct * c.imag)  # H_h dF_h in the (A,B) plane
         return self.gradients(h_df.cpu().numpy(), params=self.tensors(requires_grad=True))
+
+    def gauss_newton_diagonal(
+        self,
+        curv_radial,
+        curv_tangential,
+        n_probes: int = 8,
+        seed: int = 0,
+        params=None,
+    ):
+        """Hutchinson estimate of diag(J^T H_F J) with Rademacher probes.
+
+        ``diag(H) ≈ (1/m) Σ_k z_k ⊙ H z_k``, ``z_k ∈ {-1,+1}^n``. Inactive
+        parameters (u_iso of anisotropic atoms, u_star of isotropic ones) are
+        left at zero. Returns a dict like ``gradients``.
+        """
+        torch = self.torch
+        if params is None:
+            leaf_params = None
+            shapes = [tuple(p.shape) for p in self.tensors(requires_grad=False)]
+        else:
+            leaf_params = tuple(
+                p if getattr(p, "requires_grad", False) else p.detach().clone().requires_grad_(True)
+                for p in params
+            )
+            shapes = [tuple(p.shape) for p in leaf_params]
+        rng = np.random.default_rng(int(seed))
+        names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+        aniso = np.asarray(self.model.anisotropic, dtype=bool)
+        acc = [np.zeros(s, dtype=np.float64) for s in shapes]
+        m = max(1, int(n_probes))
+        for _ in range(m):
+            tangents = []
+            for i, shape in enumerate(shapes):
+                z = rng.choice(np.array([-1.0, 1.0]), size=shape).astype(np.float64)
+                if i == 2:  # u_iso
+                    z[aniso] = 0.0
+                elif i == 3:  # u_star
+                    z[~aniso] = 0.0
+                tangents.append(z)
+            hv = self.gauss_newton_hvp(
+                tangents, curv_radial, curv_tangential, params=leaf_params
+            )
+            for i, name in enumerate(names):
+                acc[i] += tangents[i] * hv[name]
+        out = {name: acc[i] / float(m) for i, name in enumerate(names)}
+        out["u_iso"][aniso] = 0.0
+        out["u_star"][~aniso] = 0.0
+        return out
+
+
+    def _atomic_sf_no_phase(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
+        """Complex atomic SF without the exp(2πi h·x) phase, shape (N, N_refl).
+
+        Matches the continuum (direct) model; u_extra cancels with the engine's
+        reciprocal-space correction. Used by the Tronrud/REFMAC block formulae.
+        """
+        m = self.model
+        h = self.hkl.astype(np.float64)
+        dstar = reciprocal_cartesian(m.unit_cell, h)
+        dstar2 = np.sum(dstar**2, axis=1)  # (H,)
+        stol2 = dstar2 / 4.0
+        n = sites_frac.shape[0]
+        out = np.zeros((n, h.shape[0]), dtype=np.complex128)
+        for j in range(n):
+            a = m.gauss_a[m.type_index[j]]
+            b = m.gauss_b[m.type_index[j]]
+            c = float(m.gauss_c[m.type_index[j]])
+            ff = c + float(fp[j]) + np.sum(a[:, None] * np.exp(-b[:, None] * stol2[None, :]), axis=0)
+            if m.anisotropic[j]:
+                u_mat = sym6_to_mat(np.asarray(u_star[j : j + 1]))[0]
+                huh = np.einsum("hi,ij,hj->h", h, u_mat, h)
+                dw = np.exp(-TWO_PI2 * huh)
+            else:
+                dw = np.exp(-TWO_PI2 * float(u_iso[j]) * dstar2)
+            weight = float(occupancy[j]) * float(m.multiplicity[j]) / float(m.n_sym)
+            out[j] = weight * (ff + 1j * float(fdp[j])) * dw
+        return out
+
+    def gauss_newton_blocks(self, curv_radial, curv_tangential, params=None):
+        """Exact per-atom Gauss-Newton blocks via the Tronrud sum/difference split.
+
+        Returns dict with:
+          site_frac (N,3,3), occupancy (N,), u_iso (N,), u_star (N,6,6),
+          fp (N,), fdp (N,). Inactive ADP blocks/entries are zero.
+
+        ``∂F/∂x = a_h κ(h) e^{2πi h·x}`` with symmetry folded into the
+        Jacobian; the GN block is
+        ``Σ_h [w^(-) Re[conj(∂F/∂x)∂F/∂y] + w^(+) Re[∂F/∂x ∂F/∂y e^{-2iφ}]]``
+        (Tronrud/REFMAC D+S split, including cross-symmetry terms).
+        """
+        torch = self.torch
+        if params is None:
+            sites, occ, u_iso, u_star, fp, fdp = (
+                np.asarray(x, dtype=np.float64) for x in (
+                    self.model.sites_frac, self.model.occupancy, self.model.u_iso,
+                    self.model.u_star, self.model.fp, self.model.fdp,
+                )
+            )
+        else:
+            sites, occ, u_iso, u_star, fp, fdp = (
+                p.detach().cpu().numpy().astype(np.float64) for p in params
+            )
+        with torch.no_grad():
+            f = self.f_calc(
+                *[torch.as_tensor(x, dtype=self.dtype, device=self.device) for x in (sites, occ, u_iso, u_star, fp, fdp)]
+            ).cpu().numpy().astype(np.complex128)
+        amp = np.abs(f)
+        phase = f / np.maximum(amp, 1e-300)
+        e_m2iphi = np.conj(phase) ** 2
+        cr = np.asarray(curv_radial, dtype=np.float64)
+        ct = np.asarray(curv_tangential, dtype=np.float64)
+        wp = 0.5 * (cr + ct)
+        wm = 0.5 * (cr - ct)
+
+        h = self.hkl.astype(np.float64)
+        n_h = h.shape[0]
+        n = sites.shape[0]
+        s = self.model.n_sym
+        rot = np.asarray(self.model.rot, dtype=np.float64)
+        trans = np.asarray(self.model.trans, dtype=np.float64)
+        two_pi = 2.0 * math.pi
+        aniso = np.asarray(self.model.anisotropic, dtype=bool)
+        dstar2 = np.sum(reciprocal_cartesian(self.model.unit_cell, h) ** 2, axis=1)
+
+        # Expanded atomic SF and sites (weight already includes 1/n_sym)
+        a_exp = np.zeros((n * s, n_h), dtype=np.complex128)
+        x_exp = np.zeros((n * s, 3), dtype=np.float64)
+        R_exp = np.zeros((n * s, 3, 3), dtype=np.float64)
+        stol2 = dstar2 / 4.0
+        for j in range(n):
+            ga = self.model.gauss_a[self.model.type_index[j]]
+            gb = self.model.gauss_b[self.model.type_index[j]]
+            gc = float(self.model.gauss_c[self.model.type_index[j]])
+            ff = gc + float(fp[j]) + np.sum(ga[:, None] * np.exp(-gb[:, None] * stol2[None, :]), axis=0)
+            weight = float(occ[j]) * float(self.model.multiplicity[j]) / float(self.model.n_sym)
+            for si in range(s):
+                e = j * s + si
+                R_exp[e] = rot[si]
+                x_exp[e] = rot[si] @ sites[j] + trans[si]
+                if aniso[j]:
+                    u_mat = sym6_to_mat(u_star[j : j + 1])[0]
+                    u_sym = rot[si] @ u_mat @ rot[si].T
+                    dw = np.exp(-TWO_PI2 * np.einsum("hi,ij,hj->h", h, u_sym, h))
+                else:
+                    dw = np.exp(-TWO_PI2 * float(u_iso[j]) * dstar2)
+                a_exp[e] = weight * (ff + 1j * float(fdp[j])) * dw
+
+        site_blocks = np.zeros((n, 3, 3), dtype=np.float64)
+        occ_diag = np.zeros(n, dtype=np.float64)
+        u_iso_diag = np.zeros(n, dtype=np.float64)
+        u_star_blocks = np.zeros((n, 6, 6), dtype=np.float64)
+        fp_diag = np.zeros(n, dtype=np.float64)
+        fdp_diag = np.zeros(n, dtype=np.float64)
+
+        # --- site 3x3 via dF construction (D + S, full symmetry) ---
+        for j in range(n):
+            dF = np.zeros((3, n_h), dtype=np.complex128)
+            for si in range(s):
+                e = j * s + si
+                eph = np.exp(2j * math.pi * (h @ x_exp[e]))
+                # ∂F/∂x_exp = a * 2πi * h * eph
+                dF_exp = (a_exp[e] * eph)[None, :] * (1j * two_pi * h.T)  # (3, H)
+                dF += R_exp[e].T @ dF_exp
+            site_blocks[j] = _gn_block_from_df(dF, wm, wp, e_m2iphi)
+
+            # occupancy
+            dF_occ = np.zeros(n_h, dtype=np.complex128)
+            for si in range(s):
+                e = j * s + si
+                eph = np.exp(2j * math.pi * (h @ x_exp[e]))
+                dF_occ += (a_exp[e] / max(float(occ[j]), 1e-300)) * eph
+            occ_diag[j] = _gn_scalar_from_df(dF_occ, wm, wp, e_m2iphi)
+
+            # fp / fdp: ∂a/∂fp = weight * dw (real), ∂a/∂fdp = i * weight * dw
+            w_wo = float(self.model.multiplicity[j]) / float(self.model.n_sym) * float(occ[j])
+            dF_fp = np.zeros(n_h, dtype=np.complex128)
+            dF_fdp = np.zeros(n_h, dtype=np.complex128)
+            for si in range(s):
+                e = j * s + si
+                eph = np.exp(2j * math.pi * (h @ x_exp[e]))
+                if aniso[j]:
+                    u_mat = sym6_to_mat(u_star[j : j + 1])[0]
+                    u_sym = rot[si] @ u_mat @ rot[si].T
+                    dw = np.exp(-TWO_PI2 * np.einsum("hi,ij,hj->h", h, u_sym, h))
+                else:
+                    dw = np.exp(-TWO_PI2 * float(u_iso[j]) * dstar2)
+                dF_fp += w_wo * dw * eph
+                dF_fdp += 1j * w_wo * dw * eph
+            fp_diag[j] = _gn_scalar_from_df(dF_fp, wm, wp, e_m2iphi)
+            fdp_diag[j] = _gn_scalar_from_df(dF_fdp, wm, wp, e_m2iphi)
+
+            if aniso[j]:
+                # U* : κ_μ = -2π² * (h⊗h)_μ with 2× off-diagonals; transform by symop
+                dF_u = np.zeros((6, n_h), dtype=np.complex128)
+                for si in range(s):
+                    e = j * s + si
+                    eph = np.exp(2j * math.pi * (h @ x_exp[e]))
+                    hh = np.stack(
+                        [h[:, 0] ** 2, h[:, 1] ** 2, h[:, 2] ** 2, 2 * h[:, 0] * h[:, 1], 2 * h[:, 0] * h[:, 2], 2 * h[:, 1] * h[:, 2]],
+                        axis=0,
+                    )  # (6, H)
+                    # ∂/∂U*_asu: chain through U*_exp = R U* R^T
+                    # d(huh)/dU*_asu via gradient transform
+                    gtmx = _u_star_gradient_transform(rot[si])  # (6,6)
+                    kappa = -TWO_PI2 * (gtmx @ hh)  # (6, H)
+                    dF_u += kappa * (a_exp[e] * eph)[None, :]
+                u_star_blocks[j] = _gn_block_from_df(dF_u, wm, wp, e_m2iphi)
+            else:
+                dF_uiso = np.zeros(n_h, dtype=np.complex128)
+                for si in range(s):
+                    e = j * s + si
+                    eph = np.exp(2j * math.pi * (h @ x_exp[e]))
+                    dF_uiso += a_exp[e] * eph * (-TWO_PI2 * dstar2)
+                u_iso_diag[j] = _gn_scalar_from_df(dF_uiso, wm, wp, e_m2iphi)
+
+        return {
+            "site_frac": site_blocks,
+            "occupancy": occ_diag,
+            "u_iso": u_iso_diag,
+            "u_star": u_star_blocks,
+            "fp": fp_diag,
+            "fdp": fdp_diag,
+        }
+
+
+def _gn_block_from_df(dF, wm, wp, e_m2iphi):
+    """GN block from dF[param, refl] complex Jacobians."""
+    n = dF.shape[0]
+    out = np.zeros((n, n), dtype=np.float64)
+    for a in range(n):
+        for b in range(a, n):
+            cprod = np.conj(dF[a]) * dF[b]
+            sprod = dF[a] * dF[b] * e_m2iphi
+            val = float(np.sum(wm * cprod.real + wp * sprod.real))
+            out[a, b] = out[b, a] = val
+    return out
+
+
+def _gn_scalar_from_df(dF, wm, wp, e_m2iphi):
+    cprod = np.conj(dF) * dF
+    sprod = dF * dF * e_m2iphi
+    return float(np.sum(wm * cprod.real + wp * sprod.real))
+
+
+def _u_star_gradient_transform(R):
+    """6x6 matrix mapping d(huh)/dU*_exp contributions back to d/dU*_asu.
+
+    U*_exp = R U*_asu R^T; returns G such that kappa_asu = G @ kappa_exp_coeffs
+    where kappa_exp_coeffs = (h'h', k'k', l'l', 2h'k', 2h'l', 2k'l') for h' = R^T h
+    ... actually we use cctbx tensor_rank_2::gradient_transform_matrix convention:
+    d_target/dU*_asu = G^T @ d_target/dU*_exp, so kappa_asu = G @ kappa_exp when
+    dF ∝ kappa · (a e^{iφ}).
+    """
+    # Build G where vec(U_exp) related; for sym_mat3 packed (6,):
+    # huh = h^T U_exp h = h^T R U R^T h = (R^T h)^T U (R^T h)
+    # so kappa_asu_μ = -2π² * m_μ(R^T h) with m = (hh,kk,ll,2hk,2hl,2kl)
+    # Equivalently kappa_asu = G @ (-2π² m(h_exp)) with h_exp = h (same miller in
+    # crystal frame) and U_exp = R U R^T means m(h) on U_exp = m(R^T h) on U_asu.
+    # Easiest: express m_asu(h) = m(R^T h) via the 6x6 that maps m(h_exp)->m_asu.
+    # We pass hh computed from crystal-frame h for U_exp; need ∂huh/∂U_asu.
+    # huh = h^T R U R^T h = (R^T h)^T U (R^T h). Let p = R^T h.
+    # ∂huh/∂U_ij packed = m(p). So kappa_asu = -2π² m(R^T h) = G @ (-2π² m(h))
+    # with G mapping m(h) -> m(R^T h)... no that's not a linear map on m(h) alone
+    # independent of h. Compute G as gradient_transform: d/dU_asu = G^T d/dU_exp
+    # where U_exp = R U_asu R^T.
+    G = np.zeros((6, 6), dtype=np.float64)
+    # Finite basis: for each ASU basis matrix E_μ, U_exp = R E_μ R^T, read packed
+    basis = [
+        np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=np.float64),
+        np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]], dtype=np.float64),
+        np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]], dtype=np.float64),
+        np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]], dtype=np.float64),
+        np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]], dtype=np.float64),
+        np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0]], dtype=np.float64),
+    ]
+    for mu, E in enumerate(basis):
+        Uexp = R @ E @ R.T
+        # pack (11,22,33,12,13,23); off-diagonals stored as full U_ij (not doubled)
+        packed = np.array([Uexp[0, 0], Uexp[1, 1], Uexp[2, 2], Uexp[0, 1], Uexp[0, 2], Uexp[1, 2]])
+        G[:, mu] = packed  # U_exp_packed = G @ U_asu_packed ... check off-diag
+    # For off-diagonal basis E_3 has U_01=U_10=1, packed_asu[3]=1 meaning U_01=1.
+    # U_exp = R E R^T, packed_exp = G @ e_mu. Then huh = m(h)·U_exp_packed with
+    # m = (hh,kk,ll,2hk,2hl,2kl). And huh = m_asu · U_asu with m_asu = G.T @ m.
+    # So kappa_asu = -2π² G.T @ m(h) when kappa_exp = -2π² m(h).
+    # Thus we want gtmx such that kappa_asu = gtmx @ hh_as_m, i.e. gtmx = G.T
+    return G.T

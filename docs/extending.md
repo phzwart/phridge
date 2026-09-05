@@ -92,7 +92,9 @@ process — still call `register_op` (with impl) first.
 For a new reciprocal-space target used by `target_eval` /
 `refine_gradients`, subclass `phridge.worker.targets.Target` and
 `@register_target("my_name")`. The worker must import that module (same
-`--preload` / entry-point path). See [engine.md](engine.md).
+`--preload` / entry-point path). Step-by-step:
+[tutorial_sf_targets.md](tutorial_sf_targets.md). Math and built-ins:
+[engine.md](engine.md).
 
 ## LinkML / contract tests
 
@@ -108,3 +110,21 @@ Packed npz / i_seq checks stay in Python pack constructors — not LinkML.
 3. Prefer `array` / `json` / existing packed types.
 4. `--preload your.module` on the worker; import the same module on the client.
 5. Optional: `phridge.ops` entry point + contract tests on `JobEnvelope` JSON.
+
+## Worked example: agentsg Niggli reduction
+
+A full runnable demo lives under [`examples/`](../examples/):
+
+| File | Role |
+|------|------|
+| [`examples/plugins/agentsg_niggli.py`](../examples/plugins/agentsg_niggli.py) | External plugin (`register_op`) |
+| [`examples/agentsg_cell_reduce.py`](../examples/agentsg_cell_reduce.py) | Client + markdown report |
+
+```bash
+pip install -e ".[agentsg]"   # git+https://github.com/phzwart/agentsg …/subdirectory=agentsg
+make example-agentsg
+```
+
+Flow: JSON unit cell → `Bridge(memory=True)` → worker calls
+`agentsg.cell.niggli_reduce` → JSON `{unit_cell, change_of_basis}`. For a live
+worker: `PYTHONPATH=examples phridge-worker --preload plugins.agentsg_niggli`.

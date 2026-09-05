@@ -394,3 +394,73 @@ def test_gauss_newton_hvp_op_round_trip():
     assert hv.d_site_frac.shape == (n, 3)
     # J^T H J is symmetric positive semidefinite for a convex-in-|F| LS target: v . Hv >= 0
     assert float((hv.d_site_frac * v.d_site_frac).sum()) > 0
+
+
+def _exact_gn_diagonal_sites(eng, curv_radial, curv_tangential):
+    """Exact diag(J^T H J) for sites via e_i^T (J^T H J) e_i."""
+    sites = eng.model.sites_frac
+    zeros = [
+        np.zeros_like(eng.model.occupancy),
+        np.zeros_like(eng.model.u_iso),
+        np.zeros_like(eng.model.u_star),
+        np.zeros_like(eng.model.fp),
+        np.zeros_like(eng.model.fdp),
+    ]
+    diag = np.zeros_like(sites)
+    for i in range(sites.shape[0]):
+        for j in range(3):
+            v = np.zeros_like(sites)
+            v[i, j] = 1.0
+            hv = eng.gauss_newton_hvp((v, *zeros), curv_radial, curv_tangential)
+            diag[i, j] = hv["site_frac"][i, j]
+    return diag
+
+
+def test_gauss_newton_diagonal_hutchinson_matches_exact():
+    """Hutchinson diag ≈ exact GN diagonal on a tiny P1 LS-on-F problem (exact data)."""
+    xs = _structure("P1", elements=("C", "N", "O"), n_repeat=1, seed=7)
+    d_min = 2.0
+    fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl = np.array(list(fc.indices()))
+    eng = _engine(xs, hkl, d_min, quality_factor=1000)
+    f_obs = np.abs(eng.f_calc_numpy())
+    obs = Observations.from_numpy(data=f_obs)
+    tgt = LeastSquares(obs_type="F", scale_factor=1.0)
+    with torch.no_grad():
+        f = eng.f_calc(*eng.tensors())
+    ev = tgt.evaluate(f, obs)
+    exact = _exact_gn_diagonal_sites(eng, ev.curv_radial, ev.curv_tangential)
+    estimates = [
+        eng.gauss_newton_diagonal(ev.curv_radial, ev.curv_tangential, n_probes=64, seed=s)["site_frac"]
+        for s in range(4)
+    ]
+    mean_est = np.mean(estimates, axis=0)
+    # loose tolerance: Hutchinson with m=64, averaged over seeds
+    assert _rel(exact, mean_est) < 0.25
+    assert np.corrcoef(exact.ravel(), mean_est.ravel())[0, 1] > 0.95
+
+
+def test_gauss_newton_diagonal_op_round_trip():
+    bridge = _bridge()
+    xs = _structure("P1", elements=("C", "N", "O"), n_repeat=1, seed=8)
+    fc = xs.structure_factors(d_min=2.0, algorithm="direct").f_calc()
+    f_obs = fc.amplitudes()
+    refiner = RemoteRefinementTarget(
+        bridge, xs, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0, quality_factor=1000)
+    )
+    out = refiner.compute()
+    from phridge.client.xtal_engine import _miller_template
+
+    diag = bridge.call(
+        "gauss_newton_diagonal",
+        xray=xray_from_cctbx(xs),
+        table=scattering_table_from_cctbx(xs),
+        params=refiner.params,
+        target=out["target"],
+        hkl=_miller_template(f_obs),
+        n_probes=8,
+        seed=0,
+    )
+    n = xs.scatterers().size()
+    assert diag.d_site_frac.shape == (n, 3)
+    assert float(diag.d_site_frac.sum()) != 0.0
