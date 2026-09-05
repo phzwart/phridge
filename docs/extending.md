@@ -107,7 +107,7 @@ LinkML/jsonschema when schema changes) live in
 [`src/phridge/contrib/AGENTS.md`](../src/phridge/contrib/AGENTS.md).
 
 Built-in contrib example: `phridge.contrib.intensity_ll` registers
-`{"name": "ml_i", ...}` (Gaussian NLL on intensities).
+`{"name": "ml_i", ...}` (crystallographic intensity likelihood via adaptive quadrature).
 
 ## Client side
 

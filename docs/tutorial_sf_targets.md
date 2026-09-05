@@ -57,7 +57,7 @@ Built-in / contrib targets:
 |---------------|--------|
 | `{"name": "ls", "obs_type": "F"}` or `"I"` | `f_obs` amplitudes (or intensities for `"I"`) |
 | `{"name": "ml_f"}` | also `alpha`, `beta` (and epsilons / centric flags; filled from `f_obs` if omitted) |
-| `{"name": "ml_i", "sigma": 1.0}` | intensities in `f_obs` / `obs.data` (`I_calc=|F|^2`); optional `obs.sigmas` — from `phridge.contrib.intensity_ll` (entry point) |
+| `{"name": "ml_i", "sigma_a": 0.8, "sigma_wilson": 1.0}` | intensities in `f_obs` / `obs.data`; `alpha`≡σ_A / `beta`≡Wilson Σ (or scalars); `epsilon`, `centric`, optional `sigmas` — `phridge.contrib.intensity_ll` |
 
 ML example:
 
@@ -208,5 +208,5 @@ scitbx.lbfgs.run(target_evaluator=m)
 | Target on fixed \(F_c\) | `sf.target_functor(...)(f_calc)` |
 | Full step (FFT + target + grads) | `sf.target_and_gradients(...)` |
 | Custom likelihood | `@register_target` in `phridge.sfcalc.targets` / `phridge.contrib` |
-| Intensity Gaussian NLL | `{"name": "ml_i", ...}` (`phridge.contrib.intensity_ll`) |
+| Intensity ML (Rice × noise) | `{"name": "ml_i", ...}` (`phridge.contrib.intensity_ll`) |
 | Architecture write-up | [sf_server.md](sf_server.md) |

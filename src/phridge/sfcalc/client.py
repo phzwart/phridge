@@ -261,7 +261,7 @@ class RemoteTargetFunctor:
         self.compute_curvature = compute_curvature
         self._packed_obs = miller_from_cctbx(f_obs)
         name = self.target_spec.get("name")
-        if name == "ml_f":
+        if name in ("ml_f", "ml_i"):
             if epsilons is None:
                 epsilons = f_obs.epsilons().data().as_double()
             if centric_flags is None:

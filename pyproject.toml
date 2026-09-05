@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Bridge between Phenix/cctbx and a PyTorch worker via Redis"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "BSD-3-Clause" }
+license = { text = "MIT" }
 authors = [{ name = "phridge contributors" }]
 dependencies = [
     "numpy>=1.22",
