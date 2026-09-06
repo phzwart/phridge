@@ -248,6 +248,30 @@ def test_coordinate_refinement():
     assert len(sites) == xs.scatterers().size()
 
 
+def test_b_iso_refinement():
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model()
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=5)
+    model.convert_to_isotropic()
+    target0, _ = model.compute_target_and_gradients()
+
+    b_orig = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    sites_orig = list(model.xray_structure.sites_frac())
+
+    # Perform a few B refinement steps
+    history = model.refine_b_iso(max_iterations=3, step_scale=100.0)
+    assert len(history) <= 4
+    assert history[-1] <= history[0]
+
+    # Verify sites were NOT modified
+    sites_after = list(model.xray_structure.sites_frac())
+    for s0, s1 in zip(sites_orig, sites_after):
+        assert np.allclose(s0, s1, atol=1e-8)
+
+    # Verify B values were modified
+    b_after = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    assert not np.allclose(b_orig, b_after)
+
+
 def test_map_synthesis_and_writing(tmp_path: Path):
     xs, i_obs, hierarchy, r_free = _make_synthetic_model()
     model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=5)
@@ -498,3 +522,428 @@ def test_cli_target_amplitude(tmp_path: Path):
     assert os.path.exists(f"{out_prefix}_maps.mtz")
     assert os.path.exists(f"{out_prefix}_refined.pdb")
 
+
+def test_compute_all_map_coefficients_and_maps_export(tmp_path: Path):
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+
+    all_maps = model.compute_all_map_coefficients(newton_damping=0.1)
+    for key in (
+        "difference",
+        "model",
+        "gradient",
+        "newton",
+        "gradient_weighted",
+        "gradient_raw",
+        "2fofc",
+        "fofc",
+        "fom",
+        "f_post",
+        "robust_weight",
+        "curvature",
+    ):
+        assert key in all_maps
+        assert all_maps[key].size() == i_obs.size()
+
+    # Check export writes all map targets
+    prefix = str(tmp_path / "all_maps_out")
+    files = model.write_maps(prefix=prefix, resolution_factor=0.33, compute_all=True)
+
+    assert "mtz" in files
+    assert "newton" in files
+    assert "diff_post" in files
+    assert "model_post" in files
+    assert os.path.exists(files["newton"])
+    assert os.path.exists(files["diff_post"])
+    assert os.path.exists(files["model_post"])
+
+    # Verify MTZ has new columns
+    reader = any_reflection_file(files["mtz"])
+    col_labels = []
+    for a in reader.as_miller_arrays():
+        if a.info() and a.info().labels:
+            col_labels.extend(a.info().labels)
+    assert any("FNEWTON" in l for l in col_labels)
+    assert any("FDIFF_POST" in l for l in col_labels)
+    assert any("FMODEL_POST" in l for l in col_labels)
+    assert any("FOM" in l for l in col_labels)
+    assert any("F_POST" in l for l in col_labels)
+
+
+def test_geometry_restraints_build_and_gradients():
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.convert_to_isotropic()
+
+    e_geom, g_geom = model.compute_geometry_energy_and_gradients()
+    assert isinstance(e_geom, float)
+    assert g_geom.shape == (15, 3)
+
+
+def test_hessian_preconditioners():
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.convert_to_isotropic()
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+
+    import torch
+    from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
+    from phridge.sfcalc.targets.base import Observations
+
+    fmod_t = torch.as_tensor(np.asarray(model.f_model.data(), dtype=np.complex128))
+    obs = Observations.from_numpy(
+        data=np.asarray(model.i_obs.data(), dtype=np.float64),
+        sigmas=np.asarray(model.i_obs.sigmas(), dtype=np.float64),
+        epsilon=np.asarray(model.i_obs.epsilons().data().as_double(), dtype=np.float64),
+        centric=np.asarray(model.i_obs.centric_flags().data(), dtype=bool),
+        alpha=np.asarray(model.sigma_a_per_refl, dtype=np.float64),
+        beta=np.asarray(model.mean_i_per_refl, dtype=np.float64),
+        r_free=np.asarray(model.r_free_flags.data(), dtype=bool),
+    )
+    tgt = IntensityLogLikelihood()
+    ev = tgt.evaluate(fmod_t, obs, compute_curvature=True)
+
+    p_sites, p_b = model.compute_hessian_preconditioners(ev, damping_factor=0.05)
+    assert p_sites.shape == (15, 3)
+    assert p_b.shape == (15,)
+    assert np.all(p_sites > 0.0)
+    assert np.all(p_b > 0.0)
+
+
+def test_adam_refinement_with_hessian_and_geometry():
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, estimate_nu=True)
+    model.convert_to_isotropic()
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+
+    sites_orig = list(model.xray_structure.sites_frac())
+    b_orig = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    k_orig = model.k_total
+
+    history = model.refine_adam(
+        max_iterations=3,
+        lr_sites=0.005,
+        lr_b=0.2,
+        lr_scale=0.001,
+        refine_scales=True,
+        refine_b=True,
+        refine_sites=True,
+        refine_sigma_a=True,
+        refine_nu=True,
+        sigma_a_interval=1,
+        verbose=False,
+    )
+
+    assert len(history["nll"]) == 3
+    assert history["nll"][-1] <= history["nll"][0]
+
+    # Verify sites were modified
+    sites_after = list(model.xray_structure.sites_frac())
+    any_diff = False
+    for s0, s1 in zip(sites_orig, sites_after):
+        if not np.allclose(s0, s1, atol=1e-6):
+            any_diff = True
+    assert any_diff
+
+    # Verify B values were modified
+    b_after = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    assert not np.allclose(b_orig, b_after)
+
+
+def test_cli_adam_refinement(tmp_path: Path):
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+
+    pdb_file = tmp_path / "adam_model.pdb"
+    pdb_file.write_text(xs.as_pdb_file())
+
+    mtz_file = tmp_path / "adam_data.mtz"
+    mtz_ds = i_obs.as_mtz_dataset(column_root_label="IOBS")
+    mtz_ds.add_miller_array(r_free, column_root_label="FreeR_flag")
+    mtz_ds.mtz_object().write(str(mtz_file))
+
+    out_prefix = str(tmp_path / "adam_out")
+    exit_code = main([
+        str(pdb_file),
+        str(mtz_file),
+        "--prefix", out_prefix,
+        "--n-bins", "4",
+        "--refine-mode", "adam",
+        "--refine", "2",
+        "--estimate-nu",
+    ])
+    assert exit_code == 0
+    assert os.path.exists(f"{out_prefix}_maps.mtz")
+    assert os.path.exists(f"{out_prefix}_refined.pdb")
+
+
+def test_four_way_refinement_modes():
+    """Verify that all four refinement modes execute properly on a synthetic model:
+      1. Classic F-based likelihood (ml_f, unpreconditioned)
+      2. Preconditioned F-based likelihood (ml_f, Gauss-Newton Hessian)
+      3. Intensity-based likelihood (ml_i, unpreconditioned)
+      4. Preconditioned intensity likelihood (ml_i, Gauss-Newton Hessian)
+    """
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+
+    # 1. Classic F-based likelihood (unpreconditioned)
+    m_f = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, target_type="amplitude")
+    m_f.convert_to_isotropic()
+    m_f.refine_scale_and_solvent()
+    m_f.estimate_sigma_a()
+    hist_f = m_f.refine_adam(max_iterations=2, use_preconditioner=False, verbose=False)
+    assert len(hist_f["nll"]) == 2
+    assert np.isfinite(hist_f["nll"][-1])
+
+    # 2. Preconditioned F-based likelihood
+    m_f_prec = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, target_type="amplitude")
+    m_f_prec.convert_to_isotropic()
+    m_f_prec.refine_scale_and_solvent()
+    m_f_prec.estimate_sigma_a()
+    hist_f_prec = m_f_prec.refine_adam(max_iterations=2, use_preconditioner=True, verbose=False)
+    assert len(hist_f_prec["nll"]) == 2
+    assert np.isfinite(hist_f_prec["nll"][-1])
+
+    # 3. Intensity-based likelihood (unpreconditioned)
+    m_i_unprec = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, target_type="intensity", estimate_nu=True)
+    m_i_unprec.convert_to_isotropic()
+    m_i_unprec.refine_scale_and_solvent()
+    m_i_unprec.estimate_sigma_a()
+    hist_i_unprec = m_i_unprec.refine_adam(max_iterations=2, use_preconditioner=False, verbose=False)
+    assert len(hist_i_unprec["nll"]) == 2
+    assert np.isfinite(hist_i_unprec["nll"][-1])
+
+    # 4. Preconditioned intensity likelihood
+    m_i_prec = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, target_type="intensity", estimate_nu=True)
+    m_i_prec.convert_to_isotropic()
+    m_i_prec.refine_scale_and_solvent()
+    m_i_prec.estimate_sigma_a()
+    hist_i_prec = m_i_prec.refine_adam(max_iterations=2, use_preconditioner=True, verbose=False)
+    assert len(hist_i_prec["nll"]) == 2
+    assert np.isfinite(hist_i_prec["nll"][-1])
+
+
+def test_hessian_xray_weighting_and_intact_geometry():
+    """Verify that leaving geometry scale intact and reweighting X-ray via Hessian ratios works."""
+    import torch
+    from phridge.sfcalc.targets.maximum_likelihood import MaximumLikelihoodAmplitude
+    from phridge.sfcalc.targets.base import Observations
+
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, estimate_nu=False)
+    model.convert_to_isotropic()
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+
+    # 1. Test estimate_geometry_curvature fallback on model without restraints
+    h_geom = model.estimate_geometry_curvature(n_shakes=2)
+    assert h_geom > 0
+
+    # 2. Test compute_hessian_preconditioners with w_xray and h_geom
+    tgt = MaximumLikelihoodAmplitude(scale_factor=1.0)
+    fo = model.get_f_obs()
+    obs = Observations.from_numpy(
+        device=model.device,
+        dtype=model.float_dtype,
+        data=np.asarray(fo.data(), dtype=np.float64),
+        sigmas=np.asarray(fo.sigmas(), dtype=np.float64),
+        epsilon=np.asarray(model.i_obs.epsilons().data().as_double(), dtype=np.float64),
+        centric=np.asarray(model.i_obs.centric_flags().data(), dtype=bool),
+        alpha=np.asarray(model.sigma_a_per_refl, dtype=np.float64),
+        beta=np.asarray(model.mean_i_per_refl, dtype=np.float64) * (1.0 - np.asarray(model.sigma_a_per_refl, dtype=np.float64)**2),
+        r_free=np.asarray(model.r_free_flags.data(), dtype=bool),
+    )
+    fmod_t = torch.as_tensor(np.asarray(model.f_model.data(), dtype=np.complex128), dtype=model.complex_dtype, device=model.torch_device)
+    ev = tgt.evaluate(fmod_t, obs, compute_curvature=True)
+
+    p_sites, p_B = model.compute_hessian_preconditioners(ev, damping_factor=0.05, w_xray=1e6, h_geom=5000.0)
+    assert p_sites.shape == (15, 3)
+    assert np.all(p_sites > 0)
+    assert np.all(np.isfinite(p_sites))
+    assert p_B.shape == (15,)
+    assert np.all(p_B > 0)
+
+    # 3. Test refine_adam with xray_weight_mode='hessian'
+    history = model.refine_adam(
+        max_iterations=3,
+        xray_weight_mode="hessian",
+        xray_scale=1.0,
+        use_preconditioner=True,
+        refine_scales=True,
+        refine_b=True,
+        refine_sites=True,
+        refine_sigma_a=False,
+        refine_nu=False,
+        verbose=False,
+    )
+    assert len(history["nll"]) == 3
+    assert len(history["w_xray"]) == 3
+    assert np.isfinite(history["nll"][-1])
+
+
+def test_lbfgs_refinement():
+    """Verify that L-BFGS refinement executes properly on synthetic data."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.convert_to_isotropic()
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+
+    hist = model.refine_lbfgs(
+        macrocycles=2,
+        max_iterations_per_cycle=5,
+        regularize_geometry=False,
+        xray_weight_mode="hessian",
+        xray_scale=1.0,
+        refine_scales=True,
+        refine_b=True,
+        refine_sites=True,
+        refine_sigma_a=False,
+        refine_nu=False,
+        polish_geometry=False,
+        verbose=False,
+    )
+    assert len(hist["nll"]) >= 2
+    assert np.isfinite(hist["nll"][-1])
+    assert len(hist["r_work"]) >= 2
+    assert len(hist["r_free"]) >= 2
+
+
+def test_cli_lbfgs_refinement(tmp_path: Path):
+    """Verify CLI execution with --refine-mode lbfgs."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+
+    pdb_file = tmp_path / "lbfgs_model.pdb"
+    pdb_file.write_text(xs.as_pdb_file())
+
+    mtz_file = tmp_path / "lbfgs_data.mtz"
+    mtz_ds = i_obs.as_mtz_dataset(column_root_label="IOBS")
+    mtz_ds.add_miller_array(r_free, column_root_label="FreeR_flag")
+    mtz_ds.mtz_object().write(str(mtz_file))
+
+    out_prefix = str(tmp_path / "lbfgs_out")
+    exit_code = main([
+        str(pdb_file),
+        str(mtz_file),
+        "--prefix", out_prefix,
+        "--n-bins", "4",
+        "--refine-mode", "lbfgs",
+        "--macrocycles", "1",
+        "--lbfgs-max-iter", "3",
+        "--no-regularize-geometry",
+        "--no-polish-geometry",
+    ])
+    assert exit_code == 0
+    assert os.path.exists(f"{out_prefix}_maps.mtz")
+    assert os.path.exists(f"{out_prefix}_refined.pdb")
+
+
+def test_co_refine_sigma_a_and_global_nu():
+    """Verify co-refinement of sigma_A and a single global nu across the full dataset."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(
+        xs,
+        i_obs,
+        hierarchy=hierarchy,
+        r_free_flags=r_free,
+        n_bins=4,
+        nu=7.0,
+        estimate_nu=True,
+        nu_mode="global",
+    )
+    assert model.nu == 7.0
+    assert model.nu_mode == "global"
+    assert model.nu_per_refl is not None
+    assert len(model.nu_per_refl) == i_obs.size()
+
+    # Refine scales & solvent first
+    model.refine_scale_and_solvent()
+
+    # Co-refine sigma_A and global nu
+    sa_dict, nu_val = model.refine_sigma_a_and_nu(max_cycles=2, nu_mode="global")
+    assert isinstance(nu_val, float)
+    assert 3.0 <= nu_val <= 30.0
+    assert len(sa_dict) == 4
+    for sa in sa_dict.values():
+        assert 0.01 <= sa <= 0.999
+    assert model.nu == nu_val
+    assert np.allclose(list(model.nu_per_refl), nu_val)
+
+
+def test_shake_b_iso_reset_fractional():
+    """Verify B-factor reset with fractional shake (e.g. +/- 25%)."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=20, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.convert_to_isotropic()
+
+    b_orig = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    b_mean = float(np.mean(b_orig))
+
+    # 1. Reset to mean B with +/- 25% uniform fractional shake
+    rng = np.random.default_rng(123)
+    b_shaken = model.shake_b_iso(fraction=0.25, reset=True, rng=rng)
+
+    assert len(b_shaken) == len(b_orig)
+    # Every shaken B should be within [0.75 * b_mean, 1.25 * b_mean]
+    assert np.all(b_shaken >= 0.75 * b_mean - 1e-6)
+    assert np.all(b_shaken <= 1.25 * b_mean + 1e-6)
+    assert np.isclose(np.mean(b_shaken), b_mean, atol=2.0)
+
+    # 2. Shake individual B-factors without resetting to mean
+    rng2 = np.random.default_rng(456)
+    b_shaken_ind = model.shake_b_iso(fraction=0.25, reset=False, rng=rng2)
+    # Check that individual ratios are within [0.75, 1.25]
+    ratios = b_shaken_ind / b_shaken
+    assert np.all(ratios >= 0.75 - 1e-6)
+    assert np.all(ratios <= 1.25 + 1e-6)
+
+
+def test_combined_shake_and_recover_sites_and_b():
+    """Verify combined coordinate shake and B-factor reset with fractional shake."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=20, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4)
+    model.convert_to_isotropic()
+
+    sites_orig = np.asarray(model.xray_structure.sites_cart(), dtype=np.float64).copy()
+    b_orig = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+
+    # Combined shake: 0.10 Å coordinate RMSD + B-factor reset with +/- 25% shake
+    res = model.shake(rmsd=0.10, b_fraction=0.25, reset_b=True, rng=np.random.default_rng(42))
+
+    sites_shaken = np.asarray(model.xray_structure.sites_cart(), dtype=np.float64)
+    b_shaken = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+
+    actual_rmsd = float(np.sqrt(np.mean((sites_shaken - sites_orig)**2)))
+    assert np.isclose(actual_rmsd, 0.10, atol=0.01)
+
+    b_mean = float(np.mean(b_orig))
+    assert np.all(b_shaken >= 0.75 * b_mean - 1e-6)
+    assert np.all(b_shaken <= 1.25 * b_mean + 1e-6)
+
+
+def test_preconditioned_b_factor_refinement_recovery():
+    """Verify that preconditioned Newton steps for B-factors actively reduce NLL and recover B-factors."""
+    xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
+    model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, estimate_nu=False)
+    model.convert_to_isotropic()
+    b_true = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+
+    # Shake B-factors with +/- 25% noise
+    model.shake_b_iso(fraction=0.25, reset=True, rng=np.random.default_rng(42))
+    b_start = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    rmsd_start = float(np.sqrt(np.mean((b_start - b_true)**2)))
+
+    # Refine with preconditioned B steps
+    model.refine_scale_and_solvent()
+    model.estimate_sigma_a()
+    hist = model.refine_b_iso(max_iterations=3, use_preconditioner=True, verbose=False)
+
+    b_final = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
+    rmsd_final = float(np.sqrt(np.mean((b_final - b_true)**2)))
+
+    # Verify that NLL decreased and B-factor RMSD improved
+    assert hist[-1] < hist[0]
+    assert rmsd_final < rmsd_start

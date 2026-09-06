@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from phridge.contrib.intensity_ll import target as _target  # noqa: F401
-from phridge.contrib.intensity_ll.ops import OP_NAME as MAPS_OP_NAME
+from phridge.contrib.intensity_ll.ops import NUISANCE_FIT_OP_NAME, OP_NAME as MAPS_OP_NAME
 from phridge.contrib.intensity_ll.ops import register_ops
 from phridge.contrib.intensity_ll.target import IntensityLogLikelihood, IntensityLogLikelihoodOptions
 
@@ -16,6 +16,7 @@ __all__ = [
     "IntensityLogLikelihood",
     "IntensityLogLikelihoodOptions",
     "MAPS_OP_NAME",
+    "NUISANCE_FIT_OP_NAME",
     "log_likelihood_normal",
     "log_likelihood_t",
     "normalize",

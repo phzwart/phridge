@@ -431,6 +431,18 @@
             "additionalProperties": false,
             "description": "Canonical cctbx.geometry_restraints.manager proxy tables. i_seq values index the corresponding Hierarchy / XrayStructure.",
             "properties": {
+                "adp_level_weight": {
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "adp_nu": {
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
                 "bond_asu_rt_mx": {
                     "description": "sgtbx.rt_mx.as_xyz() for each ASU bond, same order as bond_asu_i_seqs",
                     "items": {
@@ -449,6 +461,12 @@
                         {
                             "type": "null"
                         }
+                    ]
+                },
+                "n_adp_pairs": {
+                    "type": [
+                        "integer",
+                        "null"
                     ]
                 },
                 "n_angles": {
@@ -481,9 +499,21 @@
                 "n_reference_coords": {
                     "type": "integer"
                 },
+                "n_rigid_bonds": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
                 "n_sites": {
                     "description": "Atom/scatterer count in the i_seq space",
                     "type": "integer"
+                },
+                "wilson_b": {
+                    "type": [
+                        "number",
+                        "null"
+                    ]
                 }
             },
             "required": [

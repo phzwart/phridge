@@ -29,6 +29,7 @@ def process_envelope(
     envelope.status = JobStatus.running
     envelope.updated_at = utcnow()
     store.put_envelope(envelope)
+    _set_op_device(device)
     try:
         try:
             spec = get_op(envelope.op)
@@ -43,6 +44,9 @@ def process_envelope(
             raise UnknownOpError(f"no worker implementation for {envelope.op}")
         native: dict[str, Any] = {}
         compute_dtype = _compute_dtype(impl)
+        if device.startswith("mps"):
+            import torch
+            compute_dtype = torch.float32
         for name, ref in envelope.inputs.items():
             native[name] = to_torch(decode_ref(store, ref), device, compute_dtype)
         kwargs = _bind_kwargs(impl, native)

@@ -122,8 +122,21 @@ def main(args: list[str] | None = None) -> int:
     parser.add_argument("--nu-mode", default="binned", choices=["binned", "global"], help="Nu estimation mode: 'binned' (per resolution shell) or 'global' (single scalar, default: binned)")
     parser.add_argument("--bulk-solvent", action="store_true", default=True, help="Enable cctbx map-gridded bulk solvent")
     parser.add_argument("--no-bulk-solvent", action="store_false", dest="bulk_solvent", help="Disable bulk solvent")
-    parser.add_argument("--refine", type=int, default=1, dest="max_iterations", help="Number of coordinate refinement steps (default: 1)")
-    parser.add_argument("--prefix", default=None, help="Output prefix for maps and logs (default: 1iee_omit_<mode> or 1iee_out)")
+    parser.add_argument("--refine", type=int, default=1, dest="max_iterations", help="Number of refinement steps (default: 1)")
+    parser.add_argument("--refine-mode", default="sites", choices=["sites", "b_iso", "both", "adam"], help="Parameters to refine: 'sites' (coordinates), 'b_iso' (isotropic B-factors only, sites fixed), 'both', or 'adam' (preconditioned Adam with CCTBX restraints, default: sites)")
+    parser.add_argument("--refine-b", type=int, default=0, help="Number of B-factor refinement steps (default: 0)")
+    parser.add_argument("--convert-to-isotropic", action="store_true", default=False, help="Convert model to isotropic B-factors before refinement")
+    parser.add_argument("--lr-sites", type=float, default=0.005, help="Adam learning rate for Cartesian coordinates (default: 0.005)")
+    parser.add_argument("--lr-b", type=float, default=0.2, help="Adam learning rate for isotropic B-factors (default: 0.2)")
+    parser.add_argument("--lr-scale", type=float, default=0.001, help="Adam learning rate for overall scale factor (default: 0.001)")
+    parser.add_argument("--lr-solvent", type=float, default=0.005, help="Adam learning rate for bulk solvent parameters (default: 0.005)")
+    parser.add_argument("--w-geom", type=float, default=None, help="Explicit geometry restraint weight (default: None, auto-scaled from gradient RMS ratio)")
+    parser.add_argument("--geom-scale", type=float, default=0.5, help="Scale multiplier for auto-weighted geometry restraints (default: 0.5)")
+    parser.add_argument("--sigma-a-interval", type=int, default=2, help="Interval in Adam steps between sigma_A and nu re-estimation (default: 2)")
+    parser.add_argument("--damping-factor", type=float, default=0.05, help="Damping factor for Hessian preconditioner (default: 0.05)")
+    parser.add_argument("--no-refine-sigma-a", action="store_true", default=False, help="Disable periodic sigma_A refinement during Adam optimization")
+    parser.add_argument("--no-refine-nu", action="store_true", default=False, help="Disable periodic nu refinement during Adam optimization")
+    parser.add_argument("--prefix", default=None, help="Output prefix for maps and logs (default: 1iee_b_refined, 1iee_adam_refined, 1iee_omit_<mode>, or 1iee_out)")
     parser.add_argument("--omit", default="45:52", help="Residues or atom selection to omit (default: '45:52', pass 'none' to disable)")
     parser.add_argument("--omit-mode", default="delete", choices=["delete", "zero_occ"], help="Omit treatment: 'delete' (removes atoms) or 'zero_occ' (sets occupancy to 0.0, default: delete)")
     parser.add_argument("--force-download", action="store_true", help="Force redownload of PDB and CIF files")
@@ -135,6 +148,10 @@ def main(args: list[str] | None = None) -> int:
     omit_arg = None if opts.omit and opts.omit.lower() == "none" else opts.omit
     if opts.prefix is not None:
         prefix = opts.prefix
+    elif opts.refine_mode == "b_iso" and not omit_arg:
+        prefix = str(LYSOZYME_DIR / "1iee_b_refined")
+    elif opts.refine_mode == "adam" and not omit_arg:
+        prefix = str(LYSOZYME_DIR / "1iee_adam_refined")
     elif omit_arg:
         prefix = str(LYSOZYME_DIR / f"1iee_omit_{opts.omit_mode}")
     else:
@@ -145,7 +162,8 @@ def main(args: list[str] | None = None) -> int:
 
     # 2. Run pipeline
     omit_desc = f"omit={omit_arg} ({opts.omit_mode})" if omit_arg else "no omit"
-    print(f"\n--- 3. Running Intensity Pipeline (d_min={opts.d_min} Å, bulk_solvent={opts.bulk_solvent}, {omit_desc}) ---")
+    ref_desc = f"refine_mode={opts.refine_mode} (steps={opts.max_iterations})" if opts.max_iterations > 0 or opts.refine_b > 0 else "no refinement"
+    print(f"\n--- 3. Running Intensity Pipeline (d_min={opts.d_min} Å, bulk_solvent={opts.bulk_solvent}, {omit_desc}, {ref_desc}) ---")
     result = run_intensity_pipeline(
         pdb_path=pdb_path,
         mtz_path=mtz_path,
@@ -161,6 +179,19 @@ def main(args: list[str] | None = None) -> int:
         estimate_nu=opts.estimate_nu,
         nu_mode=opts.nu_mode,
         max_iterations=opts.max_iterations,
+        refine_mode=opts.refine_mode,
+        refine_b=opts.refine_b,
+        convert_to_isotropic=opts.convert_to_isotropic,
+        lr_sites=opts.lr_sites,
+        lr_b=opts.lr_b,
+        lr_scale=opts.lr_scale,
+        lr_solvent=opts.lr_solvent,
+        w_geom=opts.w_geom,
+        geom_scale=opts.geom_scale,
+        refine_sigma_a=not opts.no_refine_sigma_a,
+        refine_nu=not opts.no_refine_nu,
+        sigma_a_interval=opts.sigma_a_interval,
+        damping_factor=opts.damping_factor,
         device=opts.device,
         view=opts.view,
         omit=omit_arg,

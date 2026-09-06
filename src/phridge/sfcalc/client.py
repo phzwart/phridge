@@ -136,6 +136,34 @@ def _pack_diagonal_like_gradients(xray_structure: Any, packed: PackedSfGradients
     return RemoteGradients(xray_structure, packed).packed()
 
 
+def psd_target(target: PackedTargetResult) -> PackedTargetResult:
+    """Copy of a TargetResult with per-reflection curvatures clipped at zero.
+
+    J^T H_F J with the exact (A, B)-space curvatures (radial g'', tangential g'/|F|) is the
+    full Hessian minus the d2F/dx2 term and is indefinite whenever g'/|F| < 0 (least squares
+    with |F_o| > k|F_c|, most ML targets in places). For preconditioning and Newton-CG we
+    use the positive semi-definite surrogate with c_t := max(c_t, 0), c_r := max(c_r, 0)
+    (the usual Tronrud / REFMAC choice); the exact operator stays available by passing the
+    unclipped result.
+    """
+    if target.curv_radial is None:
+        return target
+    return PackedTargetResult(
+        target.meta.name,
+        target.meta.value,
+        target.per_reflection,
+        target.d_target_d_f_calc,
+        curv_radial=np.maximum(np.asarray(target.curv_radial, dtype=np.float64), 0.0),
+        curv_tangential=(
+            np.maximum(np.asarray(target.curv_tangential, dtype=np.float64), 0.0)
+            if target.curv_tangential is not None
+            else None
+        ),
+        value_test=target.meta.value_test,
+        scale_factor=target.meta.scale_factor,
+    )
+
+
 def _invert_diag(curvatures, floor: float = 1e-8):
     """Inverse-Hessian diagonal for L-BFGS Hk0; clamp to keep entries positive."""
     flex = _flex()
@@ -337,8 +365,8 @@ class RemoteRefinementTarget:
             self.compute()
         return RemoteTargetResult(self.last["target"], self.functor.arrays["r_free"])
 
-    def curvatures(self, xray_structure: Optional[Any] = None) -> PackedSfCurvatures:
-        """Exact per-atom Gauss-Newton blocks (SfCurvatures)."""
+    def curvatures(self, xray_structure: Optional[Any] = None, *, psd: bool = True) -> PackedSfCurvatures:
+        """Per-atom Gauss-Newton blocks (SfCurvatures); ``psd`` clips negative curvatures (see ``psd_target``)."""
         xs = xray_structure if xray_structure is not None else self.xray_structure
         out = self.compute(xs)
         xray, table = _packed_xray(xs, self.table)
@@ -347,7 +375,7 @@ class RemoteRefinementTarget:
             xray=xray,
             table=table,
             params=self.params,
-            target=out["target"],
+            target=psd_target(out["target"]) if psd else out["target"],
             hkl=_miller_template(self.functor.f_obs),
         )
 
@@ -360,15 +388,18 @@ class RemoteRefinementTarget:
         seed: int = 0,
         as_inverse: bool = True,
         floor: float = 1e-8,
+        psd: bool = True,
     ):
         """Packed GN Hessian diagonal in cctbx packing order.
 
         ``method="blocks"`` uses exact per-atom blocks (site / U* transformed
         to cartesian); ``method="hutchinson"`` uses Rademacher probes.
         When ``as_inverse`` (default) the result is the L-BFGS Hk0 diagonal.
+        ``psd`` (default) clips negative per-reflection curvatures first.
         """
         xs = xray_structure if xray_structure is not None else self.xray_structure
         out = self.compute(xs)
+        tgt = psd_target(out["target"]) if psd else out["target"]
         xray, table = _packed_xray(xs, self.table)
         hkl = _miller_template(self.functor.f_obs)
         if method == "blocks":
@@ -377,7 +408,7 @@ class RemoteRefinementTarget:
                 xray=xray,
                 table=table,
                 params=self.params,
-                target=out["target"],
+                target=tgt,
                 hkl=hkl,
             )
             packed_curv = _pack_block_diagonal(xs, curv)
@@ -387,7 +418,7 @@ class RemoteRefinementTarget:
                 xray=xray,
                 table=table,
                 params=self.params,
-                target=out["target"],
+                target=tgt,
                 hkl=hkl,
                 n_probes=n_probes,
                 seed=seed,
@@ -405,8 +436,12 @@ class RemoteRefinementTarget:
         cg_max_iter: int = 20,
         damping: float = 1e-3,
         step_max: float = 0.05,
+        psd: bool = True,
     ) -> dict:
         """Damped Newton–CG on sites: solve (J^T H J + λ D) p = -∇Q.
+
+        ``psd`` (default) uses the clipped-curvature Gauss-Newton surrogate for both the
+        HVP and the preconditioner (see ``psd_target``).
 
         Uses ``gauss_newton_hvp`` inside CG and the block diagonal as Jacobi
         preconditioner D. Fractional site updates use backtracking line
@@ -422,6 +457,8 @@ class RemoteRefinementTarget:
         for it in range(int(max_iterations)):
             out = self.compute(xs)
             target = float(out["target"].meta.value)
+            if psd:
+                out = dict(out, target=psd_target(out["target"]))
             grads = RemoteGradients(xs, out["gradients"])
             g_frac = np.asarray(grads.raw.d_site_frac, dtype=np.float64)
             xray, table = _packed_xray(xs, self.table)

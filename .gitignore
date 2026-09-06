@@ -13,3 +13,9 @@ build/
 examples/intensity_demo_output/
 *.ccp4
 examples/lysozyme/1iee*
+*.patch
+examples/1ee2/1ee2*
+examples/6czg/6czg*
+examples/6czg/temp.pdb
+examples/6czg/perturbed_models/
+examples/6czg/shake_recover_results/

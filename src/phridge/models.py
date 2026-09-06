@@ -340,6 +340,11 @@ class GeometryRestraints(_Strict):
     n_reference_coords: int = 0
     n_bond_similarities: int = 0
     bond_asu_rt_mx: list[str] = Field(default_factory=list)
+    n_adp_pairs: int = 0
+    n_rigid_bonds: int = 0
+    wilson_b: Optional[float] = None
+    adp_nu: Optional[float] = None
+    adp_level_weight: Optional[float] = None
 
 
 class ScatteringTable(_Strict):

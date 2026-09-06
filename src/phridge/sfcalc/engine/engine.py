@@ -225,8 +225,12 @@ class StructureFactorEngine:
         self.model = model
         self.params = params
         self.device = device
-        self.dtype = torch.float64 if params.dtype == "float64" else torch.float32
-        self.cdtype = torch.complex128 if params.dtype == "float64" else torch.complex64
+        if device.startswith("mps"):
+            self.dtype = torch.float32
+            self.cdtype = torch.complex64
+        else:
+            self.dtype = torch.float64 if params.dtype == "float64" else torch.float32
+            self.cdtype = torch.complex128 if params.dtype == "float64" else torch.complex64
         self.hkl = np.asarray(hkl, dtype=np.int64).reshape(-1, 3)
 
         cell = model.unit_cell
@@ -572,8 +576,11 @@ class StructureFactorEngine:
         e_m2iphi = np.conj(phase) ** 2
         cr = np.asarray(curv_radial, dtype=np.float64)
         ct = np.asarray(curv_tangential, dtype=np.float64)
-        wp = 0.5 * (cr + ct)
-        wm = 0.5 * (cr - ct)
+        # H_ab = sum_h [ c_r Re(d_a u*) Re(d_b u*) + c_t Im(d_a u*) Im(d_b u*) ]
+        #      = sum_h [ (c_r + c_t)/2 Re(conj(d_a) d_b) + (c_r - c_t)/2 Re(d_a d_b e^{-2i phi}) ]
+        # (Tronrud sum/difference split; the two weights coincide only when c_t = 0.)
+        wp = 0.5 * (cr + ct)  # multiplies the conjugate product
+        wm = 0.5 * (cr - ct)  # multiplies the phase-squared product
 
         h = self.hkl.astype(np.float64)
         n_h = h.shape[0]
@@ -694,7 +701,7 @@ def _gn_block_from_df(dF, wm, wp, e_m2iphi):
         for b in range(a, n):
             cprod = np.conj(dF[a]) * dF[b]
             sprod = dF[a] * dF[b] * e_m2iphi
-            val = float(np.sum(wm * cprod.real + wp * sprod.real))
+            val = float(np.sum(wp * cprod.real + wm * sprod.real))
             out[a, b] = out[b, a] = val
     return out
 
@@ -702,7 +709,7 @@ def _gn_block_from_df(dF, wm, wp, e_m2iphi):
 def _gn_scalar_from_df(dF, wm, wp, e_m2iphi):
     cprod = np.conj(dF) * dF
     sprod = dF * dF * e_m2iphi
-    return float(np.sum(wm * cprod.real + wp * sprod.real))
+    return float(np.sum(wp * cprod.real + wm * sprod.real))
 
 
 def _u_star_gradient_transform(R):

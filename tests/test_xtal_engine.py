@@ -652,3 +652,39 @@ def test_newton_cg_vs_lbfgs():
     assert t_lbfgs < 0.2 * t0
     print(f"Newton-CG: iters={result['n_iterations']} target={result['target']:.3e}")
     print(f"L-BFGS:    calls={m.n_calls} target={t_lbfgs:.3e}")
+
+
+def test_gauss_newton_blocks_match_hvp_at_nonzero_residual():
+    """Regression: the Tronrud sum/difference weights were swapped, visible only when the
+    tangential curvature g'/|F| is nonzero (i.e. away from zero residual)."""
+    bridge = _bridge()
+    xs = _structure("P1", n_repeat=2, seed=5)
+    fc = xs.structure_factors(d_min=2.5, algorithm="direct").f_calc()
+    f_obs = fc.amplitudes()
+    xs2 = xs.deep_copy_scatterers()
+    xs2.shake_sites_in_place(rms_difference=0.2)
+    for sc in xs2.scatterers():
+        sc.flags.set_grad_site(True)
+        sc.flags.set_grad_occupancy(False)
+        sc.flags.set_grad_u_iso(False)
+    refiner = RemoteRefinementTarget(
+        bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.5, quality_factor=1000)
+    )
+    from phridge.packing_scattering import PackedSfGradients
+    from phridge.sfcalc.client import _miller_template, _packed_xray, psd_target
+
+    out = refiner.compute(xs2)
+    tgt = out["target"]
+    assert np.asarray(tgt.curv_tangential).min() < 0  # the regime where the sign matters
+    xray, table = _packed_xray(xs2, refiner.table)
+    hkl = _miller_template(f_obs)
+    n = xs2.scatterers().size()
+    for target in (tgt, psd_target(tgt)):
+        blocks = np.asarray(bridge.call("gauss_newton_blocks", xray=xray, table=table, params=refiner.params, target=target, hkl=hkl).site_frac)
+        for i, a in ((0, 0), (1, 2), (n - 1, 1)):
+            e = np.zeros((n, 3))
+            e[i, a] = 1.0
+            v = PackedSfGradients(d_site_frac=e, d_occupancy=np.zeros(n), d_u_iso=np.zeros(n), d_u_star=np.zeros((n, 6)), d_fp=np.zeros(n), d_fdp=np.zeros(n))
+            hv = np.asarray(bridge.call("gauss_newton_hvp", xray=xray, table=table, params=refiner.params, target=target, hkl=hkl, v=v).d_site_frac)
+            assert abs(hv[i, a] - blocks[i, a, a]) < 1e-2 * abs(hv[i, a])  # FFT-vs-direct accuracy; the bug gave 30-50%
+            assert abs(hv[i, (a + 1) % 3] - blocks[i, a, (a + 1) % 3]) < 1e-2 * abs(hv[i, a])

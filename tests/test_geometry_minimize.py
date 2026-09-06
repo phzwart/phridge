@@ -114,8 +114,12 @@ def test_remote_geometry_minimize_triangle():
     assert geo.last_target is not None
     assert geo.last_target["after"] < 0.2 * geo.last_target["before"]
     # packed path returns iotbx hierarchy when prefer_cctbx false → hierarchy_to_cctbx
-    assert out.atoms().size() == 3
-    xyz = np.array([atom.xyz for atom in out.atoms()])
+    if hasattr(out, "atoms"):
+        assert out.atoms().size() == 3
+        xyz = np.array([atom.xyz for atom in out.atoms()])
+    else:
+        assert len(out.xyz) == 3
+        xyz = np.asarray(out.xyz)
     assert abs(np.linalg.norm(xyz[0] - xyz[1]) - 1.5) < 1e-2
 
 

@@ -40,6 +40,9 @@ def _engine_params(params: Any) -> EngineParams:
         p = SfEngineParams.model_validate(params)
     else:
         raise TypeError("params must be SfEngineParams or dict")
+    dtype = p.dtype
+    if _DEVICE["device"].startswith("mps"):
+        dtype = "float32"
     return EngineParams(
         d_min=p.d_min,
         grid_resolution_factor=p.grid_resolution_factor,
@@ -47,7 +50,7 @@ def _engine_params(params: Any) -> EngineParams:
         wing_cutoff=p.wing_cutoff,
         u_extra=p.u_extra,
         n_real=None if p.n_real is None else tuple(p.n_real),
-        dtype=p.dtype,
+        dtype=dtype,
     )
 
 
@@ -141,16 +144,20 @@ def _observations(
 ) -> Observations:
     import torch
 
+    dev = _DEVICE["device"]
+    is_mps = dev.startswith("mps")
+    dtype = torch.float32 if is_mps else torch.float64
+    np_dtype = np.float32 if is_mps else np.float64
     return Observations.from_numpy(
-        device=_DEVICE["device"],
-        dtype=torch.float64,
-        data=_np(f_obs.data, np.float64),
-        sigmas=None if f_obs.sigmas is None else _np(f_obs.sigmas, np.float64),
-        weights=_np(weights),
+        device=dev,
+        dtype=dtype,
+        data=_np(f_obs.data, np_dtype),
+        sigmas=None if f_obs.sigmas is None else _np(f_obs.sigmas, np_dtype),
+        weights=_np(weights, np_dtype),
         r_free=_np(r_free),
-        alpha=_np(alpha),
-        beta=_np(beta),
-        epsilon=_np(epsilon),
+        alpha=_np(alpha, np_dtype),
+        beta=_np(beta, np_dtype),
+        epsilon=_np(epsilon, np_dtype),
         centric=_np(centric),
     )
 
@@ -187,7 +194,11 @@ def target_eval(
         raise ValueError("f_calc and f_obs must be on identical hkl lists")
     tgt = build_target(dict(target))
     obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric)
-    fc = torch.as_tensor(_np(f_calc.data, np.complex128), dtype=torch.complex128, device=_DEVICE["device"])
+    dev = _DEVICE["device"]
+    is_mps = dev.startswith("mps")
+    cdtype = torch.complex64 if is_mps else torch.complex128
+    np_cdtype = np.complex64 if is_mps else np.complex128
+    fc = torch.as_tensor(_np(f_calc.data, np_cdtype), dtype=cdtype, device=dev)
     ev = tgt.evaluate(fc, obs, compute_curvature=bool(compute_curvature))
     return _target_result(tgt.name, ev)
 

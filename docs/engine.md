@@ -192,3 +192,5 @@ Uses `Bridge(memory=True, device="cuda")` (no Redis required). Marked
 Note: in one process, import cctbx before torch. Importing torch first
 crashes cctbx's Boost.Python extensions, which is one more reason the
 client and worker are separate processes.
+
+Second derivatives of the geometry term (sparse Gauss-Newton factorisation, residue block-tridiagonal preconditioner, `gauss_newton` optimizer, joint x-ray + geometry Newton-CG) are described in [geometry_curvature.md](geometry_curvature.md).

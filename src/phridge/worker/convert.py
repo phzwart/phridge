@@ -16,7 +16,11 @@ def resolve_device(device: str) -> str:
         import torch
     except ImportError:
         return "cpu"
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def to_torch(value: Any, device: str, compute_dtype: Any = None) -> Any:
@@ -71,8 +75,14 @@ def _ndarray_to_torch(array: np.ndarray, device: str, compute_dtype: Any) -> Any
     import torch
 
     tensor = torch.from_numpy(np.ascontiguousarray(array))
-    if tensor.is_floating_point():
-        tensor = tensor.to(dtype=compute_dtype)
+    if device.startswith("mps"):
+        if tensor.is_floating_point():
+            tensor = tensor.to(dtype=torch.float32)
+        elif tensor.is_complex():
+            tensor = tensor.to(dtype=torch.complex64)
+    elif tensor.is_floating_point():
+        if compute_dtype is not None:
+            tensor = tensor.to(dtype=compute_dtype)
     return tensor.to(device)
 
 
