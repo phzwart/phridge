@@ -19,3 +19,4 @@ cross-process jobs; use `Bridge(memory=True)` when you do not want a
 server. Drivers and workers are peer processes on separate streams:
 Phenix never imports torch; the torch worker never imports cctbx; the
 CCTBX worker never imports torch. See [redis.md](redis.md).
+- [geometry_curvature.md](geometry_curvature.md) — geometry second derivatives, preconditioners, `gauss_newton`, joint refinement

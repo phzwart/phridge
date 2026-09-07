@@ -24,6 +24,9 @@ description: |
     nonbonded_i_seqs int32[N,2], nonbonded_vdw float64[N]
     refcoord_i_seq int32[R], refcoord_xyz float64[R,3], refcoord_weight float64[R]
     bondsim_pair_i_seqs int32[F,2], bondsim_offsets int32[S+1], bondsim_weight float64[F]
+    adp_pair_i_seqs int32[P,2], adp_pair_weight float64[P], adp_pair_tau float64[P],
+      adp_pair_class int32[P], rigid_bond_i_seqs int32[R,2], rigid_bond_weight float64[R],
+      wilson_b float64, adp_nu float64, adp_level_weight float64, adp_is_aniso uint8[n_sites]
     model_indices int32[n_sites], conformer_indices int32[n_sites] (optional)
 version: "1"
 default_range: string
@@ -84,6 +87,21 @@ classes:
       bond_asu_rt_mx:
         multivalued: true
         description: sgtbx.rt_mx.as_xyz() for each ASU bond, same order as bond_asu_i_seqs
+      n_adp_pairs:
+        range: integer
+        required: false
+      n_rigid_bonds:
+        range: integer
+        required: false
+      wilson_b:
+        range: float
+        required: false
+      adp_nu:
+        range: float
+        required: false
+      adp_level_weight:
+        range: float
+        required: false
 
   ModelGeometry:
     is_a: CctbxObject

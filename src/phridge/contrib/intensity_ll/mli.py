@@ -188,17 +188,27 @@ def _logsumexp_rows(terms: Tensor) -> Tensor:
     return torch.logsumexp(terms, dim=1)
 
 
-def _gl_window(fun_cols: Callable[[Tensor], Tensor], lo: Tensor, hi: Tensor, n_gl: int) -> Tensor:
+def _gl_window_terms(
+    fun_cols: Callable[[Tensor], Tensor], lo: Tensor, hi: Tensor, n_gl: int
+) -> tuple[Tensor, Tensor]:
+    """Gauss-Legendre nodes X (N, n) on [lo, hi] and log(W_j f(X_j)) so that log int f = logsumexp(terms)."""
     x, w = _legendre(n_gl)
     x = torch.as_tensor(x, dtype=lo.dtype, device=lo.device)
     w = torch.as_tensor(w, dtype=lo.dtype, device=lo.device)
     half = 0.5 * (hi - lo)
     X = lo[:, None] + half[:, None] * (x[None, :] + 1.0)
     logW = torch.log(half)[:, None] + torch.log(w)[None, :]
-    return _logsumexp_rows(logW + fun_cols(X))
+    return X, logW + fun_cols(X)
 
 
-def _aghq_I(fun_cols: Callable[[Tensor], Tensor], I0: Tensor, H: Tensor, n: int) -> Tensor:
+def _gl_window(fun_cols: Callable[[Tensor], Tensor], lo: Tensor, hi: Tensor, n_gl: int) -> Tensor:
+    return _logsumexp_rows(_gl_window_terms(fun_cols, lo, hi, n_gl)[1])
+
+
+def _aghq_I_terms(
+    fun_cols: Callable[[Tensor], Tensor], I0: Tensor, H: Tensor, n: int
+) -> tuple[Tensor, Tensor]:
+    """Adaptive Gauss-Hermite nodes X (N, n) in I about the Laplace point and log-terms (dI measure)."""
     x, w = _hermite(n)
     x = torch.as_tensor(x, dtype=I0.dtype, device=I0.device)
     w = torch.as_tensor(w, dtype=I0.dtype, device=I0.device)
@@ -212,11 +222,15 @@ def _aghq_I(fun_cols: Callable[[Tensor], Tensor], I0: Tensor, H: Tensor, n: int)
         + fun_cols(X)
         + torch.log(math.sqrt(2.0) * sig)[:, None]
     )
-    return _logsumexp_rows(terms)
+    return X, terms
+
+
+def _aghq_I(fun_cols: Callable[[Tensor], Tensor], I0: Tensor, H: Tensor, n: int) -> Tensor:
+    return _logsumexp_rows(_aghq_I_terms(fun_cols, I0, H, n)[1])
 
 
 # ---------------------------------------------------------------- main evaluator
-def log_likelihood_normal(
+def quadrature_terms_normal(
     Ec: Tensor,
     sA: Tensor,
     Zo: Tensor,
@@ -228,12 +242,15 @@ def log_likelihood_normal(
     n_legendre: int = 24,
     k_window: float = 8.0,
     differentiate_window: bool = False,
-    return_stats: bool = False,
-) -> Union[Tensor, tuple[Tensor, dict[str, Any]]]:
-    """log L per reflection with normal noise on intensities.
+) -> tuple[Tensor, Tensor, dict[str, Any]]:
+    """Quadrature nodes and log-terms of the intensity likelihood with normal noise.
 
-    Ec, sA, Zo, sZ: tensors (N,) (sA may be (N,) or scalar); centric: bool tensor (N,).
-    Differentiable in Ec and sA.
+    Returns ``(E_nodes, log_terms, stats)`` with shapes (N, J), J = max(n_legendre, n_hermite):
+    ``log L_h = logsumexp_j log_terms[h, j]`` and, since every term is W_j x (prior x noise)
+    at the node, ``softmax_j(log_terms)`` is the posterior of the true amplitude on the nodes
+    (strong reflections are integrated in I; their nodes are reported as E = sqrt(I) and the
+    dI measure is already inside the terms, so posterior averages of any f(E) are the weighted
+    node sums). Unused columns carry E = 1 and log_term = -inf.
     """
     Ec, sA, Zo, sZ = torch.broadcast_tensors(Ec, sA, Zo, sZ)
     centric = torch.as_tensor(centric, device=Ec.device).bool().expand_as(Ec)
@@ -259,11 +276,13 @@ def log_likelihood_normal(
         sig_E = 1 / torch.sqrt((-H_E).clamp_min(1e-300))
         # boundary-dominated: gradient negative at the origin, or no negative curvature
         g_origin = fun_E(torch.full_like(E0, 1e-4))[1]
-        boundary = (H_E >= 0) | (g_origin < 0) | (E0 <= 1e-4)
         E_max = torch.minimum(
             torch.sqrt(Zo_.clamp_min(0.0) + 9.0 * sZ_),
             sA_ * Ec_ + 6.0 * torch.sqrt(a_),
         )
+        # boundary-dominated also when the Laplace width exceeds the physical support
+        # (flat-topped centric integrands at the origin): integrate [0, E_max] instead.
+        boundary = (H_E >= 0) | (g_origin < 0) | (E0 <= 1e-4) | (sig_E > E_max)
         lo = torch.where(boundary, torch.zeros_like(E0), (E0 - k_window * sig_E).clamp_min(0.0))
         hi_curv = torch.where(H_E < 0, torch.minimum(E_max, E0 + k_window * sig_E), E_max)
         # interior: +/- k sigma window, capped by the physical cutoff but never below E0 + 3 sigma
@@ -282,7 +301,9 @@ def log_likelihood_normal(
         strong = strong & (H_I < 0)
 
     # --- quadrature with gradient tracking on the integrand
-    out = torch.empty_like(Ec)
+    J = max(int(n_legendre), int(n_hermite))
+    nodes = torch.ones(Ec.shape[0], J, dtype=Ec.dtype, device=Ec.device)
+    terms = torch.full((Ec.shape[0], J), -math.inf, dtype=Ec.dtype, device=Ec.device)
     weak = ~strong
     if bool(weak.any()):
         w = weak
@@ -292,22 +313,62 @@ def log_likelihood_normal(
             lc = cen_E(X, col(Ec[w]), col(sA[w]), col(Zo[w]), col(sZ[w]))[0]
             return torch.where(col(centric[w]), lc, la)
 
-        out[w] = _gl_window(cols_E, lo[w], hi[w], n_legendre)
+        X, T = _gl_window_terms(cols_E, lo[w], hi[w], n_legendre)
+        nodes[w, : n_legendre] = X
+        terms[w, : n_legendre] = T
     if bool(strong.any()):
         s = strong
 
         def cols_I(X: Tensor) -> Tensor:
             return acen_I(X, col(Ec[s]), col(sA[s]), col(Zo[s]), col(sZ[s]))[0]
 
-        out[s] = _aghq_I(cols_I, I0[s], H_I[s], n_hermite)
+        X, T = _aghq_I_terms(cols_I, I0[s], H_I[s], n_hermite)
+        nodes[s, : n_hermite] = torch.sqrt(X)
+        terms[s, : n_hermite] = T
+    stats = {
+        "n_strong": int(strong.sum()),
+        "n_weak": int(weak.sum()),
+        "n_boundary": int(boundary.sum()),
+        "newton_iters_mean": float(it_E.float().mean()) if it_E.numel() else 0.0,
+        "newton_iters_max": int(it_E.max()) if it_E.numel() else 0,
+    }
+    return nodes, terms, stats
+
+
+def log_likelihood_normal(
+    Ec: Tensor,
+    sA: Tensor,
+    Zo: Tensor,
+    sZ: Tensor,
+    centric: Union[Tensor, bool],
+    *,
+    snr_strong: float = 5.0,
+    n_hermite: int = 7,
+    n_legendre: int = 24,
+    k_window: float = 8.0,
+    differentiate_window: bool = False,
+    return_stats: bool = False,
+) -> Union[Tensor, tuple[Tensor, dict[str, Any]]]:
+    """log L per reflection with normal noise on intensities.
+
+    Ec, sA, Zo, sZ: tensors (N,) (sA may be (N,) or scalar); centric: bool tensor (N,).
+    Differentiable in Ec and sA.
+    """
+    _, terms, stats = quadrature_terms_normal(
+        Ec,
+        sA,
+        Zo,
+        sZ,
+        centric,
+        snr_strong=snr_strong,
+        n_hermite=n_hermite,
+        n_legendre=n_legendre,
+        k_window=k_window,
+        differentiate_window=differentiate_window,
+    )
+    out = _logsumexp_rows(terms)
     if return_stats:
-        return out, {
-            "n_strong": int(strong.sum()),
-            "n_weak": int(weak.sum()),
-            "n_boundary": int(boundary.sum()),
-            "newton_iters_mean": float(it_E.float().mean()),
-            "newton_iters_max": int(it_E.max()),
-        }
+        return out, stats
     return out
 
 

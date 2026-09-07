@@ -54,6 +54,8 @@ Name: phridge
 
 | Slot | Description |
 | --- | --- |
+| [adp_level_weight](adp_level_weight.md) |  |
+| [adp_nu](adp_nu.md) |  |
 | [altloc](altloc.md) | Alternate conformer; empty if none |
 | [anisotropic](anisotropic.md) | If true, npz u_star[i] is live (cctbx u_star, fractional) |
 | [anomalous](anomalous.md) |  |
@@ -103,6 +105,7 @@ Name: phridge
 | [model_id](model_id.md) | Model id string (usually "1") |
 | [mtz_type](mtz_type.md) |  |
 | [mtz_type_raw](mtz_type_raw.md) | Original iotbx |
+| [n_adp_pairs](n_adp_pairs.md) |  |
 | [n_angles](n_angles.md) |  |
 | [n_atoms](n_atoms.md) |  |
 | [n_bond_asu](n_bond_asu.md) |  |
@@ -116,6 +119,7 @@ Name: phridge
 | [n_real](n_real.md) |  |
 | [n_reference_coords](n_reference_coords.md) |  |
 | [n_refl](n_refl.md) |  |
+| [n_rigid_bonds](n_rigid_bonds.md) |  |
 | [n_scatterers](n_scatterers.md) |  |
 | [n_sites](n_sites.md) |  |
 | [n_terms](n_terms.md) | K, number of Gaussian terms per row |
@@ -157,6 +161,7 @@ Name: phridge
 | [value](value.md) | Target on the work set |
 | [value_test](value_test.md) | Target on the test set when r_free flags were given |
 | [wavelength](wavelength.md) | Dataset wavelength (Å) when known |
+| [wilson_b](wilson_b.md) |  |
 | [wing_cutoff](wing_cutoff.md) | Relative density at the sampling cutoff radius (default 1e-4) |
 | [wrapping](wrapping.md) |  |
 

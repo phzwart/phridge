@@ -107,7 +107,10 @@ LinkML/jsonschema when schema changes) live in
 [`src/phridge/contrib/AGENTS.md`](../src/phridge/contrib/AGENTS.md).
 
 Built-in contrib example: `phridge.contrib.intensity_ll` registers
-`{"name": "ml_i", ...}` (crystallographic intensity likelihood via adaptive quadrature).
+`{"name": "ml_i", ...}` (crystallographic intensity likelihood via adaptive quadrature)
+and the `ml_i_maps` op (posterior map coefficients; client wrapper
+`phridge.contrib.intensity_ll.client.RemoteIntensityMaps`) — a worked example of a
+contrib package that ships both a target and an op without new schema.
 
 ## Client side
 

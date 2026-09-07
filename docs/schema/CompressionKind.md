@@ -10,7 +10,7 @@ search:
 
 <div data-search-exclude markdown="1">
 
-URI: [phridge:CompressionKind](https://github.com/phzwart/phridge/schema/phridge/Compression)
+URI: [phridge:CompressionKind](https://github.com/phzwart/phridge/schema/phridge/CompressionKind)
 
 ## Permissible Values
 | Value | Meaning | Description |

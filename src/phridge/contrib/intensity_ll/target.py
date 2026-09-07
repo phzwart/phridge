@@ -125,6 +125,13 @@ class IntensityLogLikelihood(Target):
             return torch.full_like(obs.data, float(self.sigma_wilson))
         raise ValueError("ml_i needs obs.beta (sigma_wilson) or options.sigma_wilson")
 
+    def _nu(self, obs: Observations) -> Any:
+        if getattr(obs, "nu", None) is not None:
+            return obs.nu
+        if self.nu is not None:
+            return self.nu
+        return None
+
     def per_reflection(self, f_calc, obs: Observations):
         import torch
 
@@ -166,8 +173,9 @@ class IntensityLogLikelihood(Target):
             k_window=self.k_window,
             differentiate_window=self.differentiate_window,
         )
-        if self.nu is not None:
-            ll = log_likelihood_t(Ec, sA_n, Zo, sZ, centric, self.nu, n_u=self.n_u, **q_kw)
+        nu = self._nu(obs)
+        if nu is not None:
+            ll = log_likelihood_t(Ec, sA_n, Zo, sZ, centric, nu, n_u=self.n_u, **q_kw)
         else:
             ll = log_likelihood_normal(Ec, sA_n, Zo, sZ, centric, **q_kw)
             assert isinstance(ll, torch.Tensor)

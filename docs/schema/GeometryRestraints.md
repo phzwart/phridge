@@ -3,7 +3,7 @@ search:
   boost: 10.0
 ---
 
-# Class: GeometryRestraints 
+# Class: GeometryRestraints
 
 
 _Canonical cctbx.geometry_restraints.manager proxy tables. i_seq values index the corresponding Hierarchy / XrayStructure._
@@ -28,43 +28,53 @@ URI: [phridge:GeometryRestraints](https://github.com/phzwart/phridge/schema/phri
     click GeometryRestraints href "../GeometryRestraints/"
       CctbxObject <|-- GeometryRestraints
         click CctbxObject href "../CctbxObject/"
-      
+
+      GeometryRestraints : adp_level_weight
+
+      GeometryRestraints : adp_nu
+
       GeometryRestraints : bond_asu_rt_mx
-        
+
       GeometryRestraints : crystal
-        
-          
-    
-        
-        
+
+
+
+
+
         GeometryRestraints --> "0..1" CrystalSymmetry : crystal
         click CrystalSymmetry href "../CrystalSymmetry/"
-    
 
-        
+
+
+      GeometryRestraints : n_adp_pairs
+
       GeometryRestraints : n_angles
-        
+
       GeometryRestraints : n_bond_asu
-        
+
       GeometryRestraints : n_bond_similarities
-        
+
       GeometryRestraints : n_bonds
-        
+
       GeometryRestraints : n_chiralities
-        
+
       GeometryRestraints : n_dihedrals
-        
+
       GeometryRestraints : n_nonbonded
-        
+
       GeometryRestraints : n_parallelities
-        
+
       GeometryRestraints : n_planarities
-        
+
       GeometryRestraints : n_reference_coords
-        
+
+      GeometryRestraints : n_rigid_bonds
+
       GeometryRestraints : n_sites
-        
-      
+
+      GeometryRestraints : wilson_b
+
+
 ```
 
 
@@ -93,6 +103,11 @@ URI: [phridge:GeometryRestraints](https://github.com/phzwart/phridge/schema/phri
 | [n_reference_coords](n_reference_coords.md) | 1 <br/> [Integer](Integer.md) |  | direct |
 | [n_bond_similarities](n_bond_similarities.md) | 1 <br/> [Integer](Integer.md) |  | direct |
 | [bond_asu_rt_mx](bond_asu_rt_mx.md) | * <br/> [String](String.md) | sgtbx | direct |
+| [n_adp_pairs](n_adp_pairs.md) | 0..1 <br/> [Integer](Integer.md) |  | direct |
+| [n_rigid_bonds](n_rigid_bonds.md) | 0..1 <br/> [Integer](Integer.md) |  | direct |
+| [wilson_b](wilson_b.md) | 0..1 <br/> [Float](Float.md) |  | direct |
+| [adp_nu](adp_nu.md) | 0..1 <br/> [Float](Float.md) |  | direct |
+| [adp_level_weight](adp_level_weight.md) | 0..1 <br/> [Float](Float.md) |  | direct |
 
 
 
@@ -268,6 +283,46 @@ attributes:
     domain_of:
     - GeometryRestraints
     multivalued: true
+  n_adp_pairs:
+    name: n_adp_pairs
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    domain_of:
+    - GeometryRestraints
+    range: integer
+    required: false
+  n_rigid_bonds:
+    name: n_rigid_bonds
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    domain_of:
+    - GeometryRestraints
+    range: integer
+    required: false
+  wilson_b:
+    name: wilson_b
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
+  adp_nu:
+    name: adp_nu
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
+  adp_level_weight:
+    name: adp_level_weight
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
 
 ```
 </details>
@@ -416,6 +471,51 @@ attributes:
     - GeometryRestraints
     range: string
     multivalued: true
+  n_adp_pairs:
+    name: n_adp_pairs
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    owner: GeometryRestraints
+    domain_of:
+    - GeometryRestraints
+    range: integer
+    required: false
+  n_rigid_bonds:
+    name: n_rigid_bonds
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    owner: GeometryRestraints
+    domain_of:
+    - GeometryRestraints
+    range: integer
+    required: false
+  wilson_b:
+    name: wilson_b
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    owner: GeometryRestraints
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
+  adp_nu:
+    name: adp_nu
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    owner: GeometryRestraints
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
+  adp_level_weight:
+    name: adp_level_weight
+    from_schema: https://github.com/phzwart/phridge/schema/cctbx_geometry
+    rank: 1000
+    owner: GeometryRestraints
+    domain_of:
+    - GeometryRestraints
+    range: float
+    required: false
 
 ```
 </details></div>

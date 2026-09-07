@@ -315,6 +315,90 @@ register(
 
 register(
     OpSpec(
+        name="geometry_curvature",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
+        inputs={"sites": "CartesianSites", "restraints": "GeometryRestraints", "params": "json"},
+        outputs={
+            "diagonal": "array",
+            "blocks": "array",
+            "gradient": "array",
+            "rows": "array",
+            "cols": "array",
+            "vals": "array",
+            "energy": "json",
+            "stats": "json",
+        },
+    )
+)
+
+register(
+    OpSpec(
+        name="geometry_hvp",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
+        inputs={"sites": "CartesianSites", "restraints": "GeometryRestraints", "v": "array", "params": "json"},
+        outputs={"hv": "array"},
+    )
+)
+
+register(
+    OpSpec(
+        name="geometry_gn_solve",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
+        inputs={
+            "sites": "CartesianSites",
+            "restraints": "GeometryRestraints",
+            "rhs": "array",
+            "params": "json",
+            "extra_diag": "array",
+        },
+        outputs={"solution": "array", "stats": "json"},
+    )
+)
+
+register(
+    OpSpec(
+        name="adp_prior_eval",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
+        inputs={
+            "sites": "CartesianSites",
+            "adp_params": "array",
+            "restraints": "GeometryRestraints",
+            "params": "json",
+        },
+        outputs={
+            "energy": "json",
+            "gradient": "array",
+            "gn_diagonal": "array",
+            "rows": "array",
+            "cols": "array",
+            "vals": "array",
+            "stats": "json",
+        },
+    )
+)
+
+register(
+    OpSpec(
+        name="adp_prior_hvp",
+        schema_version=SCHEMA_VERSION,
+        runtime=WorkerRuntime.torch,
+        inputs={
+            "sites": "CartesianSites",
+            "adp_params": "array",
+            "restraints": "GeometryRestraints",
+            "v": "array",
+            "params": "json",
+        },
+        outputs={"hv": "array"},
+    )
+)
+
+register(
+    OpSpec(
         name="build_geometry_restraints",
         schema_version=SCHEMA_VERSION,
         runtime=WorkerRuntime.cctbx,

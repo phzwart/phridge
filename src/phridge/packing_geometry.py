@@ -73,6 +73,16 @@ class PackedRestraints:
         bondsim_pair_i_seqs: Optional[np.ndarray] = None,
         bondsim_offsets: Optional[np.ndarray] = None,
         bondsim_weight: Optional[np.ndarray] = None,
+        adp_pair_i_seqs: Optional[np.ndarray] = None,
+        adp_pair_weight: Optional[np.ndarray] = None,
+        adp_pair_tau: Optional[np.ndarray] = None,
+        adp_pair_class: Optional[np.ndarray] = None,
+        rigid_bond_i_seqs: Optional[np.ndarray] = None,
+        rigid_bond_weight: Optional[np.ndarray] = None,
+        wilson_b: Optional[float] = None,
+        adp_nu: Optional[float] = None,
+        adp_level_weight: Optional[float] = None,
+        adp_is_aniso: Optional[np.ndarray] = None,
         model_indices: Optional[np.ndarray] = None,
         conformer_indices: Optional[np.ndarray] = None,
     ) -> None:
@@ -151,6 +161,26 @@ class PackedRestraints:
             as_canonical_int(bondsim_offsets.reshape(-1)) if bondsim_offsets is not None else np.array([0], dtype=np.int32)
         )
         self.bondsim_weight = as_canonical_float(bondsim_weight) if bondsim_weight is not None else _empty_float()
+        self.adp_pair_i_seqs = as_canonical_int(adp_pair_i_seqs) if adp_pair_i_seqs is not None else _empty_int(2)
+        self.adp_pair_weight = as_canonical_float(adp_pair_weight) if adp_pair_weight is not None else _empty_float()
+        self.adp_pair_tau = as_canonical_float(adp_pair_tau) if adp_pair_tau is not None else _empty_float()
+        self.adp_pair_class = (
+            as_canonical_int(adp_pair_class.reshape(-1)) if adp_pair_class is not None else np.zeros((0,), dtype=np.int32)
+        )
+        self.rigid_bond_i_seqs = (
+            as_canonical_int(rigid_bond_i_seqs) if rigid_bond_i_seqs is not None else _empty_int(2)
+        )
+        self.rigid_bond_weight = (
+            as_canonical_float(rigid_bond_weight) if rigid_bond_weight is not None else _empty_float()
+        )
+        self.wilson_b = float(wilson_b) if wilson_b is not None else None
+        self.adp_nu = float(adp_nu) if adp_nu is not None else None
+        self.adp_level_weight = float(adp_level_weight) if adp_level_weight is not None else None
+        self.adp_is_aniso = (
+            np.ascontiguousarray(adp_is_aniso, dtype=np.uint8).reshape(-1)
+            if adp_is_aniso is not None
+            else np.zeros((self.n_sites,), dtype=np.uint8)
+        )
         self.model_indices = as_canonical_int(model_indices.reshape(-1)) if model_indices is not None else None
         self.conformer_indices = (
             as_canonical_int(conformer_indices.reshape(-1)) if conformer_indices is not None else None
@@ -169,6 +199,11 @@ class PackedRestraints:
             n_reference_coords=int(self.refcoord_i_seq.shape[0]),
             n_bond_similarities=int(len(self.bondsim_offsets) - 1),
             bond_asu_rt_mx=self.bond_asu_rt_mx,
+            n_adp_pairs=int(self.adp_pair_i_seqs.shape[0]),
+            n_rigid_bonds=int(self.rigid_bond_i_seqs.shape[0]),
+            wilson_b=self.wilson_b,
+            adp_nu=self.adp_nu,
+            adp_level_weight=self.adp_level_weight,
         )
 
     def pack(self) -> bytes:
@@ -215,6 +250,44 @@ class PackedRestraints:
             bondsim_offsets=self.bondsim_offsets,
             bondsim_weight=self.bondsim_weight,
             **(
+                {
+                    "adp_pair_i_seqs": self.adp_pair_i_seqs,
+                    "adp_pair_weight": self.adp_pair_weight,
+                    "adp_pair_tau": self.adp_pair_tau,
+                    "adp_pair_class": self.adp_pair_class,
+                }
+                if self.adp_pair_i_seqs.size
+                else {}
+            ),
+            **(
+                {
+                    "rigid_bond_i_seqs": self.rigid_bond_i_seqs,
+                    "rigid_bond_weight": self.rigid_bond_weight,
+                }
+                if self.rigid_bond_i_seqs.size
+                else {}
+            ),
+            **(
+                {"adp_is_aniso": self.adp_is_aniso}
+                if self.adp_is_aniso.any()
+                else {}
+            ),
+            **(
+                {"wilson_b": np.array([self.wilson_b], dtype=np.float64)}
+                if self.wilson_b is not None
+                else {}
+            ),
+            **(
+                {"adp_nu": np.array([self.adp_nu], dtype=np.float64)}
+                if self.adp_nu is not None
+                else {}
+            ),
+            **(
+                {"adp_level_weight": np.array([self.adp_level_weight], dtype=np.float64)}
+                if self.adp_level_weight is not None
+                else {}
+            ),
+            **(
                 {"model_indices": self.model_indices}
                 if self.model_indices is not None
                 else {}
@@ -231,6 +304,12 @@ def unpack_restraints(blob: bytes, meta: GeometryRestraints) -> PackedRestraints
     with np.load(io.BytesIO(blob), allow_pickle=False) as zf:
         def get(name, default):
             return zf[name] if name in zf.files else default
+
+        def get_scalar(name, default):
+            if name in zf.files:
+                val = zf[name]
+                return float(val.reshape(-1)[0])
+            return default
 
         return PackedRestraints(
             n_sites=meta.n_sites,
@@ -277,6 +356,16 @@ def unpack_restraints(blob: bytes, meta: GeometryRestraints) -> PackedRestraints
             bondsim_pair_i_seqs=get("bondsim_pair_i_seqs", None),
             bondsim_offsets=get("bondsim_offsets", None),
             bondsim_weight=get("bondsim_weight", None),
+            adp_pair_i_seqs=get("adp_pair_i_seqs", None),
+            adp_pair_weight=get("adp_pair_weight", None),
+            adp_pair_tau=get("adp_pair_tau", None),
+            adp_pair_class=get("adp_pair_class", None),
+            rigid_bond_i_seqs=get("rigid_bond_i_seqs", None),
+            rigid_bond_weight=get("rigid_bond_weight", None),
+            wilson_b=get_scalar("wilson_b", meta.wilson_b),
+            adp_nu=get_scalar("adp_nu", meta.adp_nu),
+            adp_level_weight=get_scalar("adp_level_weight", meta.adp_level_weight),
+            adp_is_aniso=get("adp_is_aniso", None),
             model_indices=zf["model_indices"] if "model_indices" in zf.files else None,
             conformer_indices=zf["conformer_indices"] if "conformer_indices" in zf.files else None,
         )

@@ -69,4 +69,5 @@ class MaximumLikelihoodAmplitude(Target):
             - ln_cosh(0.5 * x)
         )
         t = torch.where(centric, cen, acen)
-        return torch.where(ok, t, torch.zeros_like(t))
+        res = torch.where(ok, t, torch.zeros_like(t))
+        return torch.nan_to_num(res, nan=0.0, posinf=0.0, neginf=0.0)
