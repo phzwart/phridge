@@ -61,6 +61,9 @@ def test_register_op_catalog_and_impl():
     )
     assert get_op("test_double").inputs["array"] == "array"
     assert get_implementation("test_double") is double
+    assert get_implementation("test_double", runtime="torch") is double
+    with pytest.raises(RuntimeError, match="cannot execute on cctbx worker"):
+        get_implementation("test_double", runtime="cctbx")
     assert "test_double" in {s.name for s in list_ops()}
 
 

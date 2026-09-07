@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>phridge Zero-Server 3D Map & Model Viewer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/molstar@4.17.0/build/viewer/molstar.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0e0e11;
+      color: #f1f5f9;
+    }
+    #top-bar {
+      height: 52px;
+      background: #18181b;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 20;
+      position: relative;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .brand .logo {
+      color: #38bdf8;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+    }
+    .file-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .file-input-label {
+      background: #2563eb;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .file-input-label:hover { background: #1d4ed8; }
+    #file-picker { display: none; }
+    .badge-list {
+      display: flex;
+      gap: 8px;
+    }
+    .badge {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .badge.active {
+      background: #0f172a;
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    #viewer-container {
+      width: 100%;
+      height: calc(100% - 52px);
+      position: relative;
+    }
+    #drop-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(14, 14, 17, 0.88);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10;
+      pointer-events: all;
+      transition: opacity 0.2s;
+    }
+    #drop-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .drop-box {
+      border: 2px dashed #475569;
+      border-radius: 12px;
+      padding: 36px 50px;
+      text-align: center;
+      background: rgba(30, 41, 59, 0.45);
+      cursor: pointer;
+      max-width: 540px;
+      transition: all 0.2s;
+    }
+    .drop-box:hover, .drop-box.drag-over {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .drop-box h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+    .drop-box p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .drop-box .hint {
+      margin-top: 14px;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .file-guide {
+      margin-top: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 11px;
+      text-align: left;
+      width: 100%;
+      color: #cbd5e1;
+    }
+    .file-guide div {
+      margin-bottom: 4px;
+    }
+    .file-guide div:last-child {
+      margin-bottom: 0;
+    }
+    .file-guide code {
+      color: #38bdf8;
+      font-family: monospace;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    #status-toast {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #334155;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #e2e8f0;
+      z-index: 30;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/molstar@4.17.0/build/viewer/molstar.js"></script>
+</head>
+<body>
+  <div id="top-bar">
+    <div class="brand">
+      <span class="logo">phridge</span>
+      <span>Zero-Server 3D Molecular & Map Viewer</span>
+    </div>
+    <div class="badge-list" id="loaded-badges"></div>
+    <div class="file-actions">
+      <label class="file-input-label" for="file-picker">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Open PDB / CCP4 Files
+      </label>
+      <input type="file" id="file-picker" multiple accept=".pdb,.ent,.cif,.ccp4,.map,.mrc,.dsn6" />
+    </div>
+  </div>
+
+  <div id="viewer-container">
+    <div id="app" style="width: 100%; height: 100%;"></div>
+
+    <div id="drop-overlay">
+      <div class="drop-box" id="drop-zone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.5" style="margin-bottom: 12px;"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9m-4-4 4-4 4 4"/></svg>
+        <h3>Drop PDB and CCP4 Map Files Here</h3>
+        <p>Drop your <b>.pdb</b> atomic model and <b>.ccp4 / .map</b> density or gradient difference maps directly into this window.</p>
+        <div class="file-guide" id="file-guide">
+          %%FILE_GUIDE_HTML%%
+        </div>
+        <p class="hint">Zero local server required — everything runs 100% client-side via WebGL inside your browser.</p>
+      </div>
+    </div>
+
+    <div id="status-toast">
+      <span id="toast-msg">Loading...</span>
+    </div>
+  </div>
+
+  <script type="text/plain" id="embedded-pdb">%%EMBEDDED_PDB%%</script>
+
+  <script>
+    let viewerInstance = null;
+    const dropOverlay = document.getElementById("drop-overlay");
+    const dropZone = document.getElementById("drop-zone");
+    const filePicker = document.getElementById("file-picker");
+    const badgesContainer = document.getElementById("loaded-badges");
+    const toast = document.getElementById("status-toast");
+    const toastMsg = document.getElementById("toast-msg");
+
+    function showToast(msg, duration = 3000) {
+      toastMsg.textContent = msg;
+      toast.style.display = "flex";
+      if (duration > 0) {
+        setTimeout(() => { toast.style.display = "none"; }, duration);
+      }
+    }
+
+    async function initViewer() {
+      viewerInstance = await molstar.Viewer.create(document.getElementById("app"), {
+        layoutIsExpanded: false,
+        layoutShowControls: true,
+        layoutShowRemoteState: false,
+        layoutShowSequence: true,
+        layoutShowLog: false,
+        layoutShowLeftPanel: true,
+        viewportShowExpand: true,
+        viewportShowSelectionMode: true,
+        viewportShowAnimation: false,
+        pdbProvider: "rcsb",
+        emdbProvider: "rcsb",
+      });
+
+      // Check for embedded PDB
+      const embeddedPdbEl = document.getElementById("embedded-pdb");
+      if (embeddedPdbEl && embeddedPdbEl.textContent.trim().length > 0) {
+        try {
+          const blob = new Blob([embeddedPdbEl.textContent], { type: "text/plain" });
+          const url = URL.createObjectURL(blob);
+          await viewerInstance.loadStructureFromUrl(url, "pdb", false);
+          dropOverlay.classList.add("hidden");
+
+          const badge = document.createElement("span");
+          badge.className = "badge active";
+          badge.textContent = "Embedded Model (Active)";
+          badgesContainer.appendChild(badge);
+          showToast("Atomic model loaded successfully");
+        } catch (e) {
+          console.error("Error loading embedded PDB:", e);
+        }
+      }
+    }
+
+    async function loadFiles(files) {
+      if (!viewerInstance) await initViewer();
+      dropOverlay.classList.add("hidden");
+
+      for (const file of files) {
+        const name = file.name.toLowerCase();
+        const url = URL.createObjectURL(file);
+        showToast("Loading " + file.name + "...", 0);
+
+        const badge = document.createElement("span");
+        badge.className = "badge active";
+        badge.textContent = file.name;
+        badgesContainer.appendChild(badge);
+
+        if (name.endsWith(".pdb") || name.endsWith(".ent") || name.endsWith(".cif")) {
+          const fmt = name.endsWith(".cif") ? "mmcif" : "pdb";
+          try {
+            await viewerInstance.loadStructureFromUrl(url, fmt, false);
+            showToast("Loaded model: " + file.name);
+          } catch (e) {
+            console.error(e);
+            showToast("Failed to load model: " + e.message, 4000);
+          }
+        } else if (name.endsWith(".ccp4") || name.endsWith(".map") || name.endsWith(".mrc")) {
+          const isGrad = name.includes("grad");
+          const isFofc = name.includes("fofc") && !name.includes("2fofc");
+
+          try {
+            if (isGrad || isFofc) {
+              await viewerInstance.loadVolumeFromUrl(
+                { url, format: "ccp4", isBinary: true },
+                [
+                  { type: "relative", value: 3.0, color: 0x22c55e, alpha: 0.55 },
+                  { type: "relative", value: -3.0, color: 0xef4444, alpha: 0.55 },
+                ]
+              );
+              showToast("Loaded difference map (+3σ Green, -3σ Red): " + file.name);
+            } else {
+              await viewerInstance.loadVolumeFromUrl(
+                { url, format: "ccp4", isBinary: true },
+                [
+                  { type: "relative", value: 1.5, color: 0x3362b2, alpha: 0.45 },
+                ]
+              );
+              showToast("Loaded electron density (1.5σ Blue): " + file.name);
+            }
+          } catch (e) {
+            console.error(e);
+            showToast("Failed to load map: " + e.message, 4000);
+          }
+        }
+      }
+    }
+
+    window.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+    window.addEventListener("dragleave", (e) => {
+      if (e.clientX <= 0 || e.clientY <= 0) {
+        dropZone.classList.remove("drag-over");
+      }
+    });
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        loadFiles(e.dataTransfer.files);
+      }
+    });
+
+    filePicker.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        loadFiles(e.target.files);
+      }
+    });
+
+    dropZone.addEventListener("click", () => filePicker.click());
+    window.addEventListener("DOMContentLoaded", initViewer);
+  </script>
+</body>
+</html>

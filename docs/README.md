@@ -20,3 +20,5 @@ server. Drivers and workers are peer processes on separate streams:
 Phenix never imports torch; the torch worker never imports cctbx; the
 CCTBX worker never imports torch. See [redis.md](redis.md).
 - [geometry_curvature.md](geometry_curvature.md) — geometry second derivatives, preconditioners, `gauss_newton`, joint refinement
+- [presentation/presentation_kit.md](presentation/presentation_kit.md) — Phridge Validation & Benchmark Presentation Kit (Water Omission, CHD Grid Scan, and Re-Refinement) with companion [interactive HTML slide deck](presentation/index.html)
+

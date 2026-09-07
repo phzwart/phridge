@@ -467,7 +467,11 @@ def em_map_to_map_manager(packed: Any) -> Any:
     from scitbx.array_family import flex
 
     grid = flex.grid(tuple(int(n) for n in packed.meta.n_real))
-    data = flex.double(packed.data.reshape(-1).tolist())
+    flat = np.ascontiguousarray(packed.data.reshape(-1), dtype=np.float64)
+    try:
+        data = flex.double(flat)
+    except Exception:
+        data = flex.double(list(flat))
     data.reshape(grid)
     mm = map_manager(
         map_data=data,

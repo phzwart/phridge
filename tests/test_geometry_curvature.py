@@ -229,3 +229,64 @@ def test_block_tridiagonal_exact_on_chain_and_op():
     )
     np.testing.assert_allclose(np.asarray(out["solution"]).reshape(-1), tri.solve(r), rtol=1e-12)
     assert out["stats"]["method"] == "tridiagonal" and out["stats"]["n_groups"] == len(groups)
+
+
+def test_geometry_gn_solve_adp_and_joint_fallback():
+    """Verify geometry_gn_solve works when adp_params is omitted (testing math.log fallback)."""
+    from phridge.client.adp_restraints import ADPPriorOptions, build_adp_restraints
+    from phridge.worker.geometry.adp import ADPPriorTables
+
+    n = 10
+    xyz = np.random.randn(n, 3) * 2.0
+    bonds = np.array([[i, i + 1] for i in range(n - 1)], dtype=np.int32)
+    angles = np.array([[i, i + 1, i + 2] for i in range(n - 2)], dtype=np.int32)
+    is_aniso = np.array([False, True] * 5, dtype=bool)
+
+    pr = PackedRestraints(
+        n_sites=n,
+        bond_i_seqs=bonds,
+        bond_distance_ideal=np.full(len(bonds), 1.5),
+        bond_weight=np.ones(len(bonds)),
+        bond_slack=np.zeros(len(bonds)),
+        angle_i_seqs=angles,
+        angle_ideal=np.full(len(angles), 110.0),
+        angle_weight=np.ones(len(angles)),
+    )
+
+    opts = ADPPriorOptions(
+        tau_1_2=0.15,
+        tau_1_3=0.20,
+        tau_sphere=0.35,
+        sphere_radius=4.5,
+        wilson_b=25.0,
+        nu=4.0,
+        level_weight=0.5,
+    )
+    pr_adp = build_adp_restraints(xyz, pr, options=opts, is_aniso=is_aniso)
+    tables = ADPPriorTables.from_packed(pr_adp)
+    n_adp = tables.n_params
+    packed_sites = PackedCartesian(xyz=xyz)
+
+    bridge = Bridge(memory=True)
+
+    # 1. ADP block solve without adp_params
+    rhs_adp = np.random.randn(n_adp)
+    out_adp = bridge.call(
+        "geometry_gn_solve",
+        rhs=rhs_adp,
+        sites=packed_sites,
+        restraints=pr_adp,
+        params={"blocks": ["adp"], "weight": 1.0, "damping": 1e-3, "method": "sparse"},
+    )
+    assert len(out_adp["solution"]) == n_adp
+
+    # 2. Joint solve without adp_params
+    rhs_joint = np.random.randn(3 * n + n_adp)
+    out_joint = bridge.call(
+        "geometry_gn_solve",
+        rhs=rhs_joint,
+        sites=packed_sites,
+        restraints=pr_adp,
+        params={"blocks": ["sites", "adp"], "weight": 1.0, "damping": 1e-3, "method": "sparse"},
+    )
+    assert len(out_joint["solution"]) == len(rhs_joint)

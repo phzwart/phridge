@@ -15,13 +15,19 @@ class JobTimeoutError(TimeoutError):
 
 
 class Protocol:
-    def __init__(self, store: RedisStore) -> None:
+    def __init__(self, store: RedisStore, stream_maxlen: int = 10000) -> None:
         self.store = store
+        self.stream_maxlen = stream_maxlen
 
     def enqueue(self, envelope: JobEnvelope) -> str:
         self.store.put_envelope(envelope)
         stream = jobs_stream(get_op(envelope.op).runtime)
-        self.store.client.xadd(stream, {"job_id": envelope.job_id})
+        self.store.client.xadd(
+            stream,
+            {"job_id": envelope.job_id},
+            maxlen=self.stream_maxlen,
+            approximate=True,
+        )
         return envelope.job_id
 
     def wait(self, job_id: str, timeout: float) -> JobEnvelope:

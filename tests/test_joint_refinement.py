@@ -87,3 +87,24 @@ def test_joint_newton_cg_geometry_preconditioner():
     assert rms_pre <= rms_plain
     assert pre["n_hvp"] < plain["n_hvp"]  # the factorised geometry GN cuts CG work
     assert all(h["accepted"] for h in pre["history"])
+
+
+def test_joint_refinement_sites_and_adp_blocks():
+    xs, xs2, refiner, geo = _setup()
+    for sc in xs2.scatterers():
+        sc.flags.set_grad_u_iso(True)
+    j_joint = JointSiteRefinement(
+        refiner,
+        geo,
+        weight=1.0,
+        weight_adp=1.0,
+        refine=("sites", "adp"),
+        hessian_geom="diagonal",
+    )
+    t0 = j_joint.total(xs2)
+    assert not np.isnan(t0)
+    assert not np.isinf(t0)
+    out = j_joint.newton_cg(xs2, max_iterations=3, cg_max_iter=10, precondition=True)
+    assert out["final_target"] <= t0
+    assert not np.isnan(out["final_target"])
+

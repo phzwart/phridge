@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>phridge Molecular & Map Viewer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/molstar@4.17.0/build/viewer/molstar.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0e0e10; color: #f0f0f2; }
+    #header {
+      height: 48px;
+      background: #17171a;
+      border-bottom: 1px solid #2d2d33;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 13px;
+      z-index: 10;
+      position: relative;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .brand span.phridge {
+      color: #60a5fa;
+      font-weight: 700;
+    }
+    .file-badges {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge {
+      background: #27272a;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #a1a1aa;
+      border: 1px solid #3f3f46;
+    }
+    .badge.active {
+      color: #93c5fd;
+      border-color: #3b82f6;
+      background: #1e293b;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn.secondary {
+      background: #3f3f46;
+      color: #e4e4e7;
+    }
+    .btn.secondary:hover { background: #52525b; }
+    #app {
+      width: 100%;
+      height: calc(100% - 48px);
+      position: relative;
+    }
+    #status-bar {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(24, 24, 27, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid #3f3f46;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #cbd5e1;
+      z-index: 100;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #60a5fa;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/molstar@4.17.0/build/viewer/molstar.js"></script>
+</head>
+<body>
+  <div id="header">
+    <div class="brand">
+      <span class="phridge">phridge</span>
+      <span>Crystallographic Map & Model Viewer</span>
+    </div>
+    <div class="file-badges" id="badges"></div>
+    <div class="controls">
+      <button class="btn secondary" id="btn-toggle-grad">Toggle Gradient Map</button>
+      <button class="btn secondary" id="btn-toggle-2fofc">Toggle 2mFo-DFc</button>
+      <button class="btn" id="btn-recenter">Recenter</button>
+    </div>
+  </div>
+
+  <div id="app"></div>
+  <div id="status-bar">
+    <div class="spinner" id="spinner"></div>
+    <span id="status-text">Initializing Mol* 3D Canvas...</span>
+  </div>
+
+  <script>
+    const CONFIG = %%CONFIG_JSON%%;
+
+    const statusEl = document.getElementById("status-text");
+    const spinnerEl = document.getElementById("spinner");
+    const badgesEl = document.getElementById("badges");
+
+    function setStatus(text, loading = false) {
+      statusEl.textContent = text;
+      spinnerEl.style.display = loading ? "inline-block" : "none";
+    }
+
+    // Populate badges
+    if (CONFIG.pdb) {
+      const b = document.createElement("span");
+      b.className = "badge active";
+      b.textContent = "Model: " + CONFIG.pdb.split("/").pop();
+      badgesEl.appendChild(b);
+    }
+    if (CONFIG.gradient_map) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      b.textContent = "Grad: " + CONFIG.gradient_map.split("/").pop();
+      badgesEl.appendChild(b);
+    }
+    if (CONFIG.map_2fofc) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      b.textContent = "2mFo-DFc: " + CONFIG.map_2fofc.split("/").pop();
+      badgesEl.appendChild(b);
+    }
+
+    async function init() {
+      try {
+        setStatus("Creating Mol* Viewer...", true);
+        const viewer = await molstar.Viewer.create(document.getElementById("app"), {
+          layoutIsExpanded: false,
+          layoutShowControls: true,
+          layoutShowRemoteState: false,
+          layoutShowSequence: true,
+          layoutShowLog: false,
+          layoutShowLeftPanel: true,
+          viewportShowExpand: true,
+          viewportShowSelectionMode: true,
+          viewportShowAnimation: false,
+          pdbProvider: "rcsb",
+          emdbProvider: "rcsb",
+        });
+
+        // 1. Load PDB Structure
+        if (CONFIG.pdb) {
+          setStatus(`Loading model ${CONFIG.pdb.split('/').pop()}...`, true);
+          await viewer.loadStructureFromUrl(CONFIG.pdb, "pdb", false);
+        }
+
+        // 2. Load 2mFo-DFc Density Map (Blue wireframe at 1.5 sigma)
+        if (CONFIG.map_2fofc) {
+          setStatus(`Loading 2mFo-DFc map...`, true);
+          try {
+            await viewer.loadVolumeFromUrl(
+              { url: CONFIG.map_2fofc, format: "ccp4", isBinary: true },
+              [
+                { type: "relative", value: 1.5, color: 0x3362b2, alpha: 0.45 },
+              ]
+            );
+          } catch (e) {
+            console.warn("Could not load 2mFo-DFc map:", e);
+          }
+        }
+
+        // 3. Load Target Gradient Map (+3.0 sigma Green, -3.0 sigma Red)
+        if (CONFIG.gradient_map) {
+          setStatus(`Loading target gradient map...`, true);
+          try {
+            await viewer.loadVolumeFromUrl(
+              { url: CONFIG.gradient_map, format: "ccp4", isBinary: true },
+              [
+                { type: "relative", value: 3.0, color: 0x22c55e, alpha: 0.55 },
+                { type: "relative", value: -3.0, color: 0xef4444, alpha: 0.55 },
+              ]
+            );
+          } catch (e) {
+            console.warn("Could not load gradient map:", e);
+          }
+        }
+
+        // 4. Load mFo-DFc if gradient not present
+        if (!CONFIG.gradient_map && CONFIG.map_fofc) {
+          setStatus(`Loading mFo-DFc difference map...`, true);
+          try {
+            await viewer.loadVolumeFromUrl(
+              { url: CONFIG.map_fofc, format: "ccp4", isBinary: true },
+              [
+                { type: "relative", value: 3.0, color: 0x22c55e, alpha: 0.55 },
+                { type: "relative", value: -3.0, color: 0xef4444, alpha: 0.55 },
+              ]
+            );
+          } catch (e) {
+            console.warn("Could not load mFo-DFc map:", e);
+          }
+        }
+
+        setStatus("Ready. Inspect model & map in 3D.");
+
+        document.getElementById("btn-recenter").addEventListener("click", () => {
+          viewer.plugin?.canvas3d?.requestCameraReset();
+        });
+
+      } catch (err) {
+        console.error("Mol* initialization failed:", err);
+        setStatus("Error: " + err.message, false);
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

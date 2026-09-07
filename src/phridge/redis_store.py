@@ -131,14 +131,23 @@ class RedisStore:
         self.client.rpush(key, b"1")
         self.client.expire(key, self.ttl_seconds)
 
+    def delete_job(self, job_id: str) -> None:
+        """Explicitly remove envelope and ready notification keys for a job."""
+        keys = [self.job_key(job_id), self.ready_key(job_id)]
+        try:
+            self.client.delete(*keys)
+        except Exception:
+            pass
+
     def ensure_consumer_group(
         self,
         runtime: Union[str, WorkerRuntime, None] = None,
+        id: str = "$",
     ) -> None:
         stream = jobs_stream(runtime)
         group = worker_group(runtime)
         try:
-            self.client.xgroup_create(stream, group, id="0", mkstream=True)
+            self.client.xgroup_create(stream, group, id=id, mkstream=True)
         except redis.ResponseError as exc:
             if "BUSYGROUP" not in str(exc):
                 raise

@@ -1,0 +1,4984 @@
+{
+  "cases": {
+    "Noise-Free (0.0x)": {
+      "intensity": {
+        "n_total_peaks": 2696,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.655616970329443,
+          "q25": 5.522025880571446,
+          "median": 6.448362077903081,
+          "mean": 6.559699740989016,
+          "q75": 7.538484924171784,
+          "max": 9.994860326826814
+        },
+        "water_distances": {
+          "min": 0.03229046169935558,
+          "median": 0.1545666380728698,
+          "mean": 0.17048347224701654,
+          "max": 0.3860628957810051
+        },
+        "b_correlation": -0.8292172978567539,
+        "noise_peaks": {
+          "count": 2621,
+          "min": -0.2157608172878155,
+          "median": 1.3592491218488063,
+          "mean": 1.374743275939459,
+          "p90": 2.0231711193888793,
+          "p95": 2.208732862093292,
+          "p99": 2.508630687604245,
+          "max": 2.996419638292724,
+          "n_above_3sig": 0,
+          "n_above_25sig": 29,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.6591973320367193,
+        "gap_p99": 1.1469862827251984,
+        "gap_median": 3.451942439610357,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.994860326826814,
+            "is_water": true,
+            "water_dist": 0.09912177227960718,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.534145373598081,
+            "is_water": true,
+            "water_dist": 0.16193978213447746,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 3,
+            "height": 9.515518432612565,
+            "is_water": true,
+            "water_dist": 0.11538306057322763,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 4,
+            "height": 9.09174800467108,
+            "is_water": true,
+            "water_dist": 0.04951658762399274,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 9.086800150093522,
+            "is_water": true,
+            "water_dist": 0.2817063547099049,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.979237521977597,
+            "is_water": true,
+            "water_dist": 0.16604527034046165,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.633747608420485,
+            "is_water": true,
+            "water_dist": 0.14448548917534879,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.566209087536198,
+            "is_water": true,
+            "water_dist": 0.03229046169935212,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 9,
+            "height": 8.441426868829307,
+            "is_water": true,
+            "water_dist": 0.15698549123004774,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 10,
+            "height": 8.427938768068808,
+            "is_water": true,
+            "water_dist": 0.17329406799767014,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 11,
+            "height": 8.37939277368174,
+            "is_water": true,
+            "water_dist": 0.20675318347942562,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 12,
+            "height": 8.238694529215543,
+            "is_water": true,
+            "water_dist": 0.16684312743568452,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 13,
+            "height": 8.236293216315142,
+            "is_water": true,
+            "water_dist": 0.1922811369681496,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 14,
+            "height": 8.196714852288242,
+            "is_water": true,
+            "water_dist": 0.2083858655136226,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 15,
+            "height": 7.658575139818893,
+            "is_water": true,
+            "water_dist": 0.10290568610471457,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 16,
+            "height": 7.594238231287425,
+            "is_water": true,
+            "water_dist": 0.15033578992206276,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 17,
+            "height": 7.591129283373971,
+            "is_water": true,
+            "water_dist": 0.2110396286688747,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 18,
+            "height": 7.562563157247158,
+            "is_water": true,
+            "water_dist": 0.25486577833400176,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 19,
+            "height": 7.530458846479992,
+            "is_water": true,
+            "water_dist": 0.08794363173304616,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 20,
+            "height": 7.462420500554127,
+            "is_water": true,
+            "water_dist": 0.2146723176517587,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 21,
+            "height": 7.3596316921780955,
+            "is_water": true,
+            "water_dist": 0.07360640448300569,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 22,
+            "height": 7.355861425145055,
+            "is_water": true,
+            "water_dist": 0.06988645922026825,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 23,
+            "height": 7.340398637768057,
+            "is_water": true,
+            "water_dist": 0.1177955959144095,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 24,
+            "height": 7.229934655499553,
+            "is_water": true,
+            "water_dist": 0.10732740421044785,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 25,
+            "height": 7.126032625469031,
+            "is_water": true,
+            "water_dist": 0.2864295159131849,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3754059374332428,
+          "k_sol": 0.3311157822608948,
+          "b_sol": 20.841594696044922
+        },
+        "elapsed_s": 22.038809061050415
+      },
+      "amplitude": {
+        "n_total_peaks": 2541,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.033292913872453,
+          "q25": 5.038379367867305,
+          "median": 6.1137792035811085,
+          "mean": 6.121821804377873,
+          "q75": 7.022719693723835,
+          "max": 9.11759504880689
+        },
+        "water_distances": {
+          "min": 0.054880746808081346,
+          "median": 0.16641609765197676,
+          "mean": 0.18130551669616823,
+          "max": 0.3829587343170813
+        },
+        "b_correlation": -0.8156769428912276,
+        "noise_peaks": {
+          "count": 2467,
+          "min": -0.5650427279481678,
+          "median": 1.4240882527631555,
+          "mean": 1.434600457249264,
+          "p90": 2.1318394860028156,
+          "p95": 2.336907302261935,
+          "p99": 2.6934860301885983,
+          "max": 3.4548263064119817,
+          "n_above_3sig": 4,
+          "n_above_25sig": 56,
+          "n_above_wmin": 4
+        },
+        "gap_clean": -0.4215333925395286,
+        "gap_p99": 0.3398068836838548,
+        "gap_median": 2.6589528971691268,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.11759504880689,
+            "is_water": true,
+            "water_dist": 0.0869612961778516,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.781338039928519,
+            "is_water": true,
+            "water_dist": 0.07492935030166546,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.703023736085168,
+            "is_water": true,
+            "water_dist": 0.15379038175630186,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 8.485379300817364,
+            "is_water": true,
+            "water_dist": 0.2747681094116794,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.453499112479607,
+            "is_water": true,
+            "water_dist": 0.08708534079371462,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.285244390880743,
+            "is_water": true,
+            "water_dist": 0.21213202237588646,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.176931984987343,
+            "is_water": true,
+            "water_dist": 0.05709810422827859,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 8,
+            "height": 8.128212515106533,
+            "is_water": true,
+            "water_dist": 0.2185981517655479,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 9,
+            "height": 8.098934613158669,
+            "is_water": true,
+            "water_dist": 0.12592392474829667,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 10,
+            "height": 7.9273564728407075,
+            "is_water": true,
+            "water_dist": 0.22219055978647925,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 11,
+            "height": 7.902190700607403,
+            "is_water": true,
+            "water_dist": 0.18767713258988128,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 12,
+            "height": 7.660219448280166,
+            "is_water": true,
+            "water_dist": 0.15056008380482172,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 13,
+            "height": 7.599282469293597,
+            "is_water": true,
+            "water_dist": 0.22833024648520747,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 14,
+            "height": 7.590002449723011,
+            "is_water": true,
+            "water_dist": 0.17060440558131681,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 15,
+            "height": 7.483892984101785,
+            "is_water": true,
+            "water_dist": 0.24361512631984153,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 7.097931769266324,
+            "is_water": true,
+            "water_dist": 0.08053212776572366,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 17,
+            "height": 7.087729682645362,
+            "is_water": true,
+            "water_dist": 0.184345360067941,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 18,
+            "height": 7.052037291146925,
+            "is_water": true,
+            "water_dist": 0.29002068035907247,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 19,
+            "height": 7.012947161249472,
+            "is_water": true,
+            "water_dist": 0.15516689236730988,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 20,
+            "height": 6.937580550557967,
+            "is_water": true,
+            "water_dist": 0.22296756272214044,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 21,
+            "height": 6.922817157625048,
+            "is_water": true,
+            "water_dist": 0.12914291926740165,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 22,
+            "height": 6.902852328151825,
+            "is_water": true,
+            "water_dist": 0.12990201694268363,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 23,
+            "height": 6.838648687568024,
+            "is_water": true,
+            "water_dist": 0.22545232236107934,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 24,
+            "height": 6.826055914629144,
+            "is_water": true,
+            "water_dist": 0.15906689611609084,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 25,
+            "height": 6.81485083958368,
+            "is_water": true,
+            "water_dist": 0.07945128280089996,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.375411719083786,
+          "k_sol": 0.3311213552951813,
+          "b_sol": 20.83218002319336
+        },
+        "elapsed_s": 18.759345054626465
+      }
+    },
+    "Synthetic 1x": {
+      "intensity": {
+        "n_total_peaks": 2739,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.5998310752490763,
+          "q25": 5.514411680131095,
+          "median": 6.4154684215886535,
+          "mean": 6.542099596888881,
+          "q75": 7.4899999416292875,
+          "max": 9.869022743994554
+        },
+        "water_distances": {
+          "min": 0.028298261871900255,
+          "median": 0.16051839919419492,
+          "mean": 0.1740788463377381,
+          "max": 0.39840950696448646
+        },
+        "b_correlation": -0.8334046215236068,
+        "noise_peaks": {
+          "count": 2665,
+          "min": -0.1638090652102519,
+          "median": 1.3595895906179218,
+          "mean": 1.3730095682689034,
+          "p90": 2.0278887460831334,
+          "p95": 2.2178422496960555,
+          "p99": 2.48744621891692,
+          "max": 2.9907629908029474,
+          "n_above_3sig": 0,
+          "n_above_25sig": 25,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.6090680844461289,
+        "gap_p99": 1.1123848563321563,
+        "gap_median": 3.424705430785706,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.869022743994554,
+            "is_water": true,
+            "water_dist": 0.09363002402978486,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.568760869552266,
+            "is_water": true,
+            "water_dist": 0.16416632952153787,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 3,
+            "height": 9.453672913518295,
+            "is_water": true,
+            "water_dist": 0.12648661894870336,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 4,
+            "height": 9.02066589226316,
+            "is_water": true,
+            "water_dist": 0.16803384001031296,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 5,
+            "height": 8.978080356707224,
+            "is_water": true,
+            "water_dist": 0.28207441271815514,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.960105187179082,
+            "is_water": true,
+            "water_dist": 0.04830570469119669,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 7,
+            "height": 8.613713830964894,
+            "is_water": true,
+            "water_dist": 0.1455174654937126,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.522832040944026,
+            "is_water": true,
+            "water_dist": 0.02829826187189662,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 9,
+            "height": 8.519879455615415,
+            "is_water": true,
+            "water_dist": 0.1829584556101556,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 8.48354922061745,
+            "is_water": true,
+            "water_dist": 0.16148221125776524,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 11,
+            "height": 8.324033633678082,
+            "is_water": true,
+            "water_dist": 0.19688317557929308,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 12,
+            "height": 8.263520129390471,
+            "is_water": true,
+            "water_dist": 0.19770989304552966,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 13,
+            "height": 8.20854614686958,
+            "is_water": true,
+            "water_dist": 0.16025333685944226,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 14,
+            "height": 8.146731971583485,
+            "is_water": true,
+            "water_dist": 0.19727199217639257,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 15,
+            "height": 7.633465521381936,
+            "is_water": true,
+            "water_dist": 0.1143359911893668,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 16,
+            "height": 7.598902602049429,
+            "is_water": true,
+            "water_dist": 0.14684977603869032,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 17,
+            "height": 7.558267034965184,
+            "is_water": true,
+            "water_dist": 0.26176763029385275,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 18,
+            "height": 7.529025212324814,
+            "is_water": true,
+            "water_dist": 0.21367757275261462,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 19,
+            "height": 7.4769915180641116,
+            "is_water": true,
+            "water_dist": 0.07343775532757268,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 20,
+            "height": 7.473516120614409,
+            "is_water": true,
+            "water_dist": 0.20727668947243635,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 21,
+            "height": 7.466408417253326,
+            "is_water": true,
+            "water_dist": 0.09784597405032838,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 22,
+            "height": 7.367064276486926,
+            "is_water": true,
+            "water_dist": 0.07878046423922008,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 23,
+            "height": 7.296852370451919,
+            "is_water": true,
+            "water_dist": 0.12188571054137423,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 24,
+            "height": 7.232611606591057,
+            "is_water": true,
+            "water_dist": 0.10304070784308272,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 25,
+            "height": 7.109457387388215,
+            "is_water": true,
+            "water_dist": 0.2195742399622199,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3753059506416321,
+          "k_sol": 0.33111682534217834,
+          "b_sol": 20.838115692138672
+        },
+        "elapsed_s": 21.249345064163208
+      },
+      "amplitude": {
+        "n_total_peaks": 2540,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 71,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 2.9792833021386547,
+          "q25": 5.051596687779224,
+          "median": 6.057381749881014,
+          "mean": 6.104828344946408,
+          "q75": 6.9743699057982225,
+          "max": 9.011872607562209
+        },
+        "water_distances": {
+          "min": 0.04713952191235173,
+          "median": 0.17479197805375257,
+          "mean": 0.18441039212224852,
+          "max": 0.39377402971143594
+        },
+        "b_correlation": -0.820643730294391,
+        "noise_peaks": {
+          "count": 2466,
+          "min": -0.5630721480076574,
+          "median": 1.4196182236680681,
+          "mean": 1.4340246174116864,
+          "p90": 2.1099185269874523,
+          "p95": 2.328348688276086,
+          "p99": 2.6704327086098565,
+          "max": 3.488850175442022,
+          "n_above_3sig": 4,
+          "n_above_25sig": 63,
+          "n_above_wmin": 4
+        },
+        "gap_clean": -0.5095668733033674,
+        "gap_p99": 0.3088505935287982,
+        "gap_median": 2.5685315744389916,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.011872607562209,
+            "is_water": true,
+            "water_dist": 0.0847634386831372,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.730598231026864,
+            "is_water": true,
+            "water_dist": 0.08747453903090342,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.717922899372809,
+            "is_water": true,
+            "water_dist": 0.15676931680354836,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 8.380420186435426,
+            "is_water": true,
+            "water_dist": 0.27326524062217433,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.344730923825143,
+            "is_water": true,
+            "water_dist": 0.08055652418006749,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.317557822132061,
+            "is_water": true,
+            "water_dist": 0.2085280406086167,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.143237029129983,
+            "is_water": true,
+            "water_dist": 0.058061983315632754,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 8,
+            "height": 8.087875378625109,
+            "is_water": true,
+            "water_dist": 0.12473824327483106,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 9,
+            "height": 8.083445252275771,
+            "is_water": true,
+            "water_dist": 0.2027505423878919,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 10,
+            "height": 7.9777768315511315,
+            "is_water": true,
+            "water_dist": 0.22474814545764518,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 11,
+            "height": 7.900213248995299,
+            "is_water": true,
+            "water_dist": 0.18446774270207542,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 12,
+            "height": 7.6840289738145025,
+            "is_water": true,
+            "water_dist": 0.1832761945849454,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 13,
+            "height": 7.682743425233258,
+            "is_water": true,
+            "water_dist": 0.15892090132544426,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 14,
+            "height": 7.578330299619092,
+            "is_water": true,
+            "water_dist": 0.22085644056030976,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 15,
+            "height": 7.48624443515915,
+            "is_water": true,
+            "water_dist": 0.2530728371232693,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 7.09450363964903,
+            "is_water": true,
+            "water_dist": 0.09369040198275554,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 17,
+            "height": 7.0289316152497685,
+            "is_water": true,
+            "water_dist": 0.15950182243191655,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 18,
+            "height": 7.001214903882042,
+            "is_water": true,
+            "water_dist": 0.22180975816410475,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 19,
+            "height": 6.965421573103616,
+            "is_water": true,
+            "water_dist": 0.3005605442490936,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 20,
+            "height": 6.940222930582309,
+            "is_water": true,
+            "water_dist": 0.17857637910723403,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 21,
+            "height": 6.920380922548437,
+            "is_water": true,
+            "water_dist": 0.12733542925466274,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 22,
+            "height": 6.895795254934953,
+            "is_water": true,
+            "water_dist": 0.06918455542737316,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 23,
+            "height": 6.829104606579768,
+            "is_water": true,
+            "water_dist": 0.2327528086457772,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 24,
+            "height": 6.8174364391066185,
+            "is_water": true,
+            "water_dist": 0.171468386770155,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 25,
+            "height": 6.8043362036979715,
+            "is_water": true,
+            "water_dist": 0.13144639396036023,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3752467930316925,
+          "k_sol": 0.3311268389225006,
+          "b_sol": 20.83185386657715
+        },
+        "elapsed_s": 19.0045907497406
+      }
+    },
+    "Synthetic 1.5x": {
+      "intensity": {
+        "n_total_peaks": 2726,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.6124211807593958,
+          "q25": 5.442876688586676,
+          "median": 6.471283365673637,
+          "mean": 6.533508671576217,
+          "q75": 7.492615807277239,
+          "max": 9.880186027488772
+        },
+        "water_distances": {
+          "min": 0.03290675144978481,
+          "median": 0.16015415293508978,
+          "mean": 0.17103767251123886,
+          "max": 0.3924117029762445
+        },
+        "b_correlation": -0.8285597653628535,
+        "noise_peaks": {
+          "count": 2652,
+          "min": -0.20553366013106897,
+          "median": 1.3702460506933365,
+          "mean": 1.3799723572218978,
+          "p90": 2.043229512871669,
+          "p95": 2.2144691457321715,
+          "p99": 2.5442385013553346,
+          "max": 2.9838100640247496,
+          "n_above_3sig": 0,
+          "n_above_25sig": 30,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.6286111167346462,
+        "gap_p99": 1.0681826794040612,
+        "gap_median": 3.4874733016488872,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.880186027488772,
+            "is_water": true,
+            "water_dist": 0.09829333780155754,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.534336491439271,
+            "is_water": true,
+            "water_dist": 0.12009920150074994,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 9.510831936079011,
+            "is_water": true,
+            "water_dist": 0.16805725059466156,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 9.052119382207533,
+            "is_water": true,
+            "water_dist": 0.04272065301274401,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.999560543324433,
+            "is_water": true,
+            "water_dist": 0.3081043765650236,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.89360816842393,
+            "is_water": true,
+            "water_dist": 0.1566675063299328,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.626210333702932,
+            "is_water": true,
+            "water_dist": 0.15936720615292285,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.477022402201074,
+            "is_water": true,
+            "water_dist": 0.032906751449782716,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 9,
+            "height": 8.471275292738078,
+            "is_water": true,
+            "water_dist": 0.16449200751256962,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 10,
+            "height": 8.459818449731781,
+            "is_water": true,
+            "water_dist": 0.15674260956277353,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 11,
+            "height": 8.420051428258965,
+            "is_water": true,
+            "water_dist": 0.17462414744124474,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 12,
+            "height": 8.261785951138462,
+            "is_water": true,
+            "water_dist": 0.21733795014760973,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 13,
+            "height": 8.139641877416116,
+            "is_water": true,
+            "water_dist": 0.24172740012537397,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 14,
+            "height": 8.138493366700327,
+            "is_water": true,
+            "water_dist": 0.1799192820032607,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 15,
+            "height": 7.662212330485197,
+            "is_water": true,
+            "water_dist": 0.09372100320795879,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 16,
+            "height": 7.620053995739475,
+            "is_water": true,
+            "water_dist": 0.0849388065694048,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 17,
+            "height": 7.577379814748226,
+            "is_water": true,
+            "water_dist": 0.24537016136053647,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 18,
+            "height": 7.556895011429652,
+            "is_water": true,
+            "water_dist": 0.22142923278436183,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 19,
+            "height": 7.471189405893101,
+            "is_water": true,
+            "water_dist": 0.14291587041332693,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 20,
+            "height": 7.403306713786853,
+            "is_water": true,
+            "water_dist": 0.06337362851787791,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 21,
+            "height": 7.394527423248735,
+            "is_water": true,
+            "water_dist": 0.07758539051355046,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 22,
+            "height": 7.384999269047954,
+            "is_water": true,
+            "water_dist": 0.22331934098317918,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 23,
+            "height": 7.185254151008831,
+            "is_water": true,
+            "water_dist": 0.07576742926703649,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 24,
+            "height": 7.180873708517128,
+            "is_water": true,
+            "water_dist": 0.2958838899050916,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 25,
+            "height": 7.160266135919941,
+            "is_water": true,
+            "water_dist": 0.23700656864281072,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3750018775463104,
+          "k_sol": 0.33097419142723083,
+          "b_sol": 20.704299926757812
+        },
+        "elapsed_s": 21.339268922805786
+      },
+      "amplitude": {
+        "n_total_peaks": 2564,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.0662076514888827,
+          "q25": 5.151925061120982,
+          "median": 6.100675159942982,
+          "mean": 6.1140905012850775,
+          "q75": 7.1148064500845685,
+          "max": 9.041958700523194
+        },
+        "water_distances": {
+          "min": 0.04542543780540673,
+          "median": 0.1751716242790362,
+          "mean": 0.1822496376536732,
+          "max": 0.38752099708564913
+        },
+        "b_correlation": -0.8133553325366629,
+        "noise_peaks": {
+          "count": 2490,
+          "min": -0.4082202467846607,
+          "median": 1.422109729538959,
+          "mean": 1.4370877432166524,
+          "p90": 2.142986834662226,
+          "p95": 2.3461384764744833,
+          "p99": 2.696247551491911,
+          "max": 3.341624082025788,
+          "n_above_3sig": 3,
+          "n_above_25sig": 58,
+          "n_above_wmin": 3
+        },
+        "gap_clean": -0.2754164305369051,
+        "gap_p99": 0.3699600999969719,
+        "gap_median": 2.7590510779171944,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.041958700523194,
+            "is_water": true,
+            "water_dist": 0.08480531880651239,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.83918409825579,
+            "is_water": true,
+            "water_dist": 0.07093429584282805,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.706237368257046,
+            "is_water": true,
+            "water_dist": 0.1593094884037539,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 8.40381638307507,
+            "is_water": true,
+            "water_dist": 0.294732590633432,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.388264808369527,
+            "is_water": true,
+            "water_dist": 0.0825906618899427,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.20195006072573,
+            "is_water": true,
+            "water_dist": 0.20601403485710743,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.123808056974854,
+            "is_water": true,
+            "water_dist": 0.20024544320732007,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 8,
+            "height": 8.104407573277982,
+            "is_water": true,
+            "water_dist": 0.1380223708896728,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 9,
+            "height": 8.058558311892009,
+            "is_water": true,
+            "water_dist": 0.0572694682435029,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 8.047475919823748,
+            "is_water": true,
+            "water_dist": 0.2281030158025438,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 11,
+            "height": 7.877684829293836,
+            "is_water": true,
+            "water_dist": 0.20882877623349203,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 12,
+            "height": 7.70717791438426,
+            "is_water": true,
+            "water_dist": 0.15922251783615468,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 13,
+            "height": 7.598312425867568,
+            "is_water": true,
+            "water_dist": 0.25459116527329206,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 14,
+            "height": 7.5746891259123625,
+            "is_water": true,
+            "water_dist": 0.16412778369367054,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 15,
+            "height": 7.553633954361133,
+            "is_water": true,
+            "water_dist": 0.2391992345537455,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 7.151025807643281,
+            "is_water": true,
+            "water_dist": 0.1916640276568331,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 17,
+            "height": 7.136995935878431,
+            "is_water": true,
+            "water_dist": 0.3059725236718275,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 18,
+            "height": 7.127819544923972,
+            "is_water": true,
+            "water_dist": 0.06806019668512324,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 19,
+            "height": 7.110468751804767,
+            "is_water": true,
+            "water_dist": 0.1646954084083217,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 20,
+            "height": 7.036238181555269,
+            "is_water": true,
+            "water_dist": 0.12777119980333712,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 21,
+            "height": 6.912134806841953,
+            "is_water": true,
+            "water_dist": 0.25241171101031207,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 22,
+            "height": 6.888584034939828,
+            "is_water": true,
+            "water_dist": 0.1508768311585123,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 23,
+            "height": 6.8724983649915625,
+            "is_water": true,
+            "water_dist": 0.23568879430620956,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 24,
+            "height": 6.831360816686004,
+            "is_water": true,
+            "water_dist": 0.06295936755311349,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 25,
+            "height": 6.782596872660451,
+            "is_water": true,
+            "water_dist": 0.1300101747629967,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3748738169670105,
+          "k_sol": 0.3310004770755768,
+          "b_sol": 20.70941162109375
+        },
+        "elapsed_s": 19.091273069381714
+      }
+    },
+    "Synthetic 2x": {
+      "intensity": {
+        "n_total_peaks": 2690,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.591905947111412,
+          "q25": 5.439432333424934,
+          "median": 6.458760680620296,
+          "mean": 6.4895154407621645,
+          "q75": 7.422120827127333,
+          "max": 9.905155026432869
+        },
+        "water_distances": {
+          "min": 0.0183239949727761,
+          "median": 0.1680757930448924,
+          "mean": 0.1758686616324052,
+          "max": 0.37234409371576677
+        },
+        "b_correlation": -0.8244470473772023,
+        "noise_peaks": {
+          "count": 2616,
+          "min": -0.33315970405287815,
+          "median": 1.3694856620162623,
+          "mean": 1.380254979789031,
+          "p90": 2.0455063991536164,
+          "p95": 2.2131935803501825,
+          "p99": 2.594627451213598,
+          "max": 3.1226079241961435,
+          "n_above_3sig": 2,
+          "n_above_25sig": 40,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.46929802291526856,
+        "gap_p99": 0.997278495897814,
+        "gap_median": 3.3361527564241524,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.905155026432869,
+            "is_water": true,
+            "water_dist": 0.09596204997145101,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.378701041610848,
+            "is_water": true,
+            "water_dist": 0.1283316230080555,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 9.223938043137265,
+            "is_water": true,
+            "water_dist": 0.1571724115224428,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 9.21880263876638,
+            "is_water": true,
+            "water_dist": 0.2696758586536688,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.985386597750853,
+            "is_water": true,
+            "water_dist": 0.180272530263111,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 6,
+            "height": 8.913124546011623,
+            "is_water": true,
+            "water_dist": 0.04889916151758381,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 7,
+            "height": 8.755438163194901,
+            "is_water": true,
+            "water_dist": 0.15320281022773088,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.273816706946798,
+            "is_water": true,
+            "water_dist": 0.13852413890405985,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 9,
+            "height": 8.271212184200566,
+            "is_water": true,
+            "water_dist": 0.17807559367464176,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 8.259108879996461,
+            "is_water": true,
+            "water_dist": 0.20570552081757487,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 11,
+            "height": 8.232852215138537,
+            "is_water": true,
+            "water_dist": 0.018323994972772366,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 12,
+            "height": 8.147917865037284,
+            "is_water": true,
+            "water_dist": 0.23382319905025048,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 13,
+            "height": 8.140881263099361,
+            "is_water": true,
+            "water_dist": 0.20343535665850113,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 14,
+            "height": 8.021771005421574,
+            "is_water": true,
+            "water_dist": 0.1704579235642197,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 15,
+            "height": 7.690121476784225,
+            "is_water": true,
+            "water_dist": 0.073929675840766,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 16,
+            "height": 7.602282453834724,
+            "is_water": true,
+            "water_dist": 0.19367780604543575,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 17,
+            "height": 7.51565190726171,
+            "is_water": true,
+            "water_dist": 0.09029977081215483,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 18,
+            "height": 7.43428504398806,
+            "is_water": true,
+            "water_dist": 0.15271046814753636,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 19,
+            "height": 7.418066088173758,
+            "is_water": true,
+            "water_dist": 0.07576272724464735,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 20,
+            "height": 7.405256495809665,
+            "is_water": true,
+            "water_dist": 0.20311960614190508,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 21,
+            "height": 7.33869524372,
+            "is_water": true,
+            "water_dist": 0.0648048699912381,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 22,
+            "height": 7.323139353138317,
+            "is_water": true,
+            "water_dist": 0.2522227951769325,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 23,
+            "height": 7.205281526747992,
+            "is_water": true,
+            "water_dist": 0.2853998290620036,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 24,
+            "height": 7.187960676036299,
+            "is_water": true,
+            "water_dist": 0.09701186601551898,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 25,
+            "height": 7.117521119090887,
+            "is_water": true,
+            "water_dist": 0.23762152402600487,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3751422166824341,
+          "k_sol": 0.3307953178882599,
+          "b_sol": 21.10004425048828
+        },
+        "elapsed_s": 21.429190158843994
+      },
+      "amplitude": {
+        "n_total_peaks": 2559,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 71,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 2.9714134501364375,
+          "q25": 4.990259287123559,
+          "median": 6.05057580063781,
+          "mean": 6.05911114772625,
+          "q75": 6.993720560540279,
+          "max": 9.083034408628844
+        },
+        "water_distances": {
+          "min": 0.06273468400275739,
+          "median": 0.16572589117921874,
+          "mean": 0.18610411813819885,
+          "max": 0.3798264969972501
+        },
+        "b_correlation": -0.8152635766953719,
+        "noise_peaks": {
+          "count": 2484,
+          "min": -0.7060435475022513,
+          "median": 1.445137356830774,
+          "mean": 1.448202098664614,
+          "p90": 2.1684428686613324,
+          "p95": 2.3534155144154556,
+          "p99": 2.6781651585380697,
+          "max": 3.608439660581534,
+          "n_above_3sig": 4,
+          "n_above_25sig": 65,
+          "n_above_wmin": 6
+        },
+        "gap_clean": -0.6370262104450966,
+        "gap_p99": 0.29324829159836785,
+        "gap_median": 2.4421361400562756,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.083034408628844,
+            "is_water": true,
+            "water_dist": 0.08000430641811694,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.685070532874894,
+            "is_water": true,
+            "water_dist": 0.09779531181899001,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.512728739317934,
+            "is_water": true,
+            "water_dist": 0.26629235054359474,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 4,
+            "height": 8.382556625580131,
+            "is_water": true,
+            "water_dist": 0.16275701370415457,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 5,
+            "height": 8.320887838561388,
+            "is_water": true,
+            "water_dist": 0.21578208176269936,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 6,
+            "height": 8.263114151285906,
+            "is_water": true,
+            "water_dist": 0.08133193562185691,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 7,
+            "height": 8.218350319893434,
+            "is_water": true,
+            "water_dist": 0.14655107619172578,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.008956988800737,
+            "is_water": true,
+            "water_dist": 0.21203221122542387,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 9,
+            "height": 7.9000339485864055,
+            "is_water": true,
+            "water_dist": 0.07683440847063351,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 7.879844522159578,
+            "is_water": true,
+            "water_dist": 0.24173045612802305,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 11,
+            "height": 7.7250603577301185,
+            "is_water": true,
+            "water_dist": 0.19392975137464397,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 12,
+            "height": 7.589549738274949,
+            "is_water": true,
+            "water_dist": 0.13113292144519367,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 13,
+            "height": 7.5075229893754365,
+            "is_water": true,
+            "water_dist": 0.2431853274762837,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 14,
+            "height": 7.476859773905735,
+            "is_water": true,
+            "water_dist": 0.1568785056449575,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 15,
+            "height": 7.2753372275854025,
+            "is_water": true,
+            "water_dist": 0.2386175500793816,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 7.151306351872635,
+            "is_water": true,
+            "water_dist": 0.15507324790945234,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 17,
+            "height": 7.134450474512777,
+            "is_water": true,
+            "water_dist": 0.2873046573356252,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 18,
+            "height": 7.0216001495925315,
+            "is_water": true,
+            "water_dist": 0.06273468400275992,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 19,
+            "height": 6.984427364189528,
+            "is_water": true,
+            "water_dist": 0.1392878659055652,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 20,
+            "height": 6.911002573753638,
+            "is_water": true,
+            "water_dist": 0.09906981014709411,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 21,
+            "height": 6.909473885826831,
+            "is_water": true,
+            "water_dist": 0.12265468927990016,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 22,
+            "height": 6.891841285057091,
+            "is_water": true,
+            "water_dist": 0.21743225492828636,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 23,
+            "height": 6.8266605503302475,
+            "is_water": true,
+            "water_dist": 0.1343843438073036,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 24,
+            "height": 6.75439556990842,
+            "is_water": true,
+            "water_dist": 0.12954867227663636,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 25,
+            "height": 6.623272645522815,
+            "is_water": true,
+            "water_dist": 0.09838540013876036,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3749072849750519,
+          "k_sol": 0.33086392283439636,
+          "b_sol": 21.13117218017578
+        },
+        "elapsed_s": 19.053369998931885
+      }
+    },
+    "Synthetic 3x": {
+      "intensity": {
+        "n_total_peaks": 2707,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.420021683280236,
+          "q25": 5.536780273220008,
+          "median": 6.4098225336052685,
+          "mean": 6.461883163907093,
+          "q75": 7.316373888547659,
+          "max": 9.979361078934224
+        },
+        "water_distances": {
+          "min": 0.03411645951926677,
+          "median": 0.17118442708046813,
+          "mean": 0.1792963535033472,
+          "max": 0.41474891541283027
+        },
+        "b_correlation": -0.8199657623789067,
+        "noise_peaks": {
+          "count": 2633,
+          "min": -0.30449452132709326,
+          "median": 1.3989945680034328,
+          "mean": 1.3950009548043532,
+          "p90": 2.04642480769957,
+          "p95": 2.2231212052901146,
+          "p99": 2.623218273023451,
+          "max": 3.043966713617044,
+          "n_above_3sig": 3,
+          "n_above_25sig": 41,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.3760549696631923,
+        "gap_p99": 0.7968034102567851,
+        "gap_median": 3.3658558199882247,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.979361078934224,
+            "is_water": true,
+            "water_dist": 0.12916492912635305,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.699673041478764,
+            "is_water": true,
+            "water_dist": 0.11407541372796991,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 9.443199947790703,
+            "is_water": true,
+            "water_dist": 0.18769617358276838,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 8.932961062788053,
+            "is_water": true,
+            "water_dist": 0.2667336019485146,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.774990538671728,
+            "is_water": true,
+            "water_dist": 0.07486057643892162,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.726133288897378,
+            "is_water": true,
+            "water_dist": 0.16520434038244425,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 7,
+            "height": 8.458292602011475,
+            "is_water": true,
+            "water_dist": 0.18168285945767643,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 8,
+            "height": 8.350280287559315,
+            "is_water": true,
+            "water_dist": 0.21818658081923376,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 9,
+            "height": 8.318561234868518,
+            "is_water": true,
+            "water_dist": 0.17385927360034414,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 8.257013680148884,
+            "is_water": true,
+            "water_dist": 0.03411645951926541,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 11,
+            "height": 8.237670563560046,
+            "is_water": true,
+            "water_dist": 0.13035822579591727,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 12,
+            "height": 8.213073871204,
+            "is_water": true,
+            "water_dist": 0.15552933675790806,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 13,
+            "height": 7.986625352568028,
+            "is_water": true,
+            "water_dist": 0.22537231767430507,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 14,
+            "height": 7.96704247698514,
+            "is_water": true,
+            "water_dist": 0.18534981122061414,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 15,
+            "height": 7.556391103615671,
+            "is_water": true,
+            "water_dist": 0.08894722050469064,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 16,
+            "height": 7.516959029673523,
+            "is_water": true,
+            "water_dist": 0.11689504110251449,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 17,
+            "height": 7.453861091407328,
+            "is_water": true,
+            "water_dist": 0.22292698576674266,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 18,
+            "height": 7.347861725171936,
+            "is_water": true,
+            "water_dist": 0.16051170702688924,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 19,
+            "height": 7.305877943006233,
+            "is_water": true,
+            "water_dist": 0.09235938570971013,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 20,
+            "height": 7.28550908129906,
+            "is_water": true,
+            "water_dist": 0.2849211524181353,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 21,
+            "height": 7.196545892955975,
+            "is_water": true,
+            "water_dist": 0.18507129449851817,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 22,
+            "height": 7.184010230715813,
+            "is_water": true,
+            "water_dist": 0.04890472793930618,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 23,
+            "height": 7.132327805345114,
+            "is_water": true,
+            "water_dist": 0.07424555010321827,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 24,
+            "height": 7.110151806178699,
+            "is_water": true,
+            "water_dist": 0.2367285026099903,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 25,
+            "height": 7.0976811854624025,
+            "is_water": true,
+            "water_dist": 0.16190063698718488,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3746417164802551,
+          "k_sol": 0.3306031823158264,
+          "b_sol": 20.889183044433594
+        },
+        "elapsed_s": 21.23298716545105
+      },
+      "amplitude": {
+        "n_total_peaks": 2594,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 71,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 2.9508738273761965,
+          "q25": 4.906944270185868,
+          "median": 5.985906998553029,
+          "mean": 6.034927563095664,
+          "q75": 6.9402386490996495,
+          "max": 9.116463848144438
+        },
+        "water_distances": {
+          "min": 0.0431013787571396,
+          "median": 0.18022649437806731,
+          "mean": 0.18523114338219437,
+          "max": 0.39819053342995203
+        },
+        "b_correlation": -0.8090114002284163,
+        "noise_peaks": {
+          "count": 2521,
+          "min": -0.6417366145280514,
+          "median": 1.4258513246164206,
+          "mean": 1.4455246113806557,
+          "p90": 2.155380966955133,
+          "p95": 2.3662466235341957,
+          "p99": 2.741272650748052,
+          "max": 3.268264621132259,
+          "n_above_3sig": 4,
+          "n_above_25sig": 75,
+          "n_above_wmin": 5
+        },
+        "gap_clean": -0.3173907937560623,
+        "gap_p99": 0.2096011766281447,
+        "gap_median": 2.71764237742077,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.116463848144438,
+            "is_water": true,
+            "water_dist": 0.11231948493342636,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.974198523671252,
+            "is_water": true,
+            "water_dist": 0.0705049101804814,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.66303188128152,
+            "is_water": true,
+            "water_dist": 0.1825266154461407,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 4,
+            "height": 8.336340693188847,
+            "is_water": true,
+            "water_dist": 0.2831287776137735,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.182914333855482,
+            "is_water": true,
+            "water_dist": 0.09831280359395307,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.151642451168925,
+            "is_water": true,
+            "water_dist": 0.18054576726714153,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 7,
+            "height": 8.007300546573145,
+            "is_water": true,
+            "water_dist": 0.0431013787571396,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 8,
+            "height": 7.942701596607301,
+            "is_water": true,
+            "water_dist": 0.20612421218523305,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 9,
+            "height": 7.8308654445114,
+            "is_water": true,
+            "water_dist": 0.27537743826052186,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 10,
+            "height": 7.770021708015631,
+            "is_water": true,
+            "water_dist": 0.2189952562936097,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 11,
+            "height": 7.714143780241384,
+            "is_water": true,
+            "water_dist": 0.10832560094246932,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 12,
+            "height": 7.6169282880356635,
+            "is_water": true,
+            "water_dist": 0.24071092382052087,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 13,
+            "height": 7.500530219347251,
+            "is_water": true,
+            "water_dist": 0.18768489818018808,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 14,
+            "height": 7.442885180705176,
+            "is_water": true,
+            "water_dist": 0.14654621685520774,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 15,
+            "height": 7.3286038567476215,
+            "is_water": true,
+            "water_dist": 0.2596137389076085,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 7.183131965835076,
+            "is_water": true,
+            "water_dist": 0.08600710204208123,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 17,
+            "height": 7.097109391199885,
+            "is_water": true,
+            "water_dist": 0.29531259377691305,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 18,
+            "height": 6.957306927883045,
+            "is_water": true,
+            "water_dist": 0.20352619880600745,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 19,
+            "height": 6.934549222838518,
+            "is_water": true,
+            "water_dist": 0.15202333673799878,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 20,
+            "height": 6.89313941614525,
+            "is_water": true,
+            "water_dist": 0.17750119561798053,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 21,
+            "height": 6.802579145165626,
+            "is_water": true,
+            "water_dist": 0.13776666396684448,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 22,
+            "height": 6.675524610331251,
+            "is_water": true,
+            "water_dist": 0.25234745914196505,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 23,
+            "height": 6.665961377919232,
+            "is_water": true,
+            "water_dist": 0.13058228915950065,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 24,
+            "height": 6.630869972977497,
+            "is_water": true,
+            "water_dist": 0.1365623439246369,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 25,
+            "height": 6.611821301016937,
+            "is_water": true,
+            "water_dist": 0.09360475542926432,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.37407058477401733,
+          "k_sol": 0.33076444268226624,
+          "b_sol": 20.911462783813477
+        },
+        "elapsed_s": 19.30000591278076
+      }
+    },
+    "Synthetic 5x": {
+      "intensity": {
+        "n_total_peaks": 2685,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.389446045511546,
+          "q25": 5.397332760628771,
+          "median": 6.41103899001542,
+          "mean": 6.385416104441359,
+          "q75": 7.218993188282196,
+          "max": 9.597575430773691
+        },
+        "water_distances": {
+          "min": 0.04449428119855229,
+          "median": 0.1815512033865637,
+          "mean": 0.19773529031902293,
+          "max": 0.455356689379494
+        },
+        "b_correlation": -0.7888266548198287,
+        "noise_peaks": {
+          "count": 2613,
+          "min": -0.128671974838038,
+          "median": 1.3957775700929864,
+          "mean": 1.4073084798879465,
+          "p90": 2.1071108914954193,
+          "p95": 2.2930185374933747,
+          "p99": 2.635312191272451,
+          "max": 3.120719031871084,
+          "n_above_3sig": 2,
+          "n_above_25sig": 51,
+          "n_above_wmin": 0
+        },
+        "gap_clean": 0.26872701364046225,
+        "gap_p99": 0.754133854239095,
+        "gap_median": 3.2903199581443365,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.597575430773691,
+            "is_water": true,
+            "water_dist": 0.12137126770229915,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.268747235697672,
+            "is_water": true,
+            "water_dist": 0.1627293989251563,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 3,
+            "height": 9.140935684181498,
+            "is_water": true,
+            "water_dist": 0.1339577220447772,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 4,
+            "height": 8.914653907580123,
+            "is_water": true,
+            "water_dist": 0.10244352229636153,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 5,
+            "height": 8.819012972294145,
+            "is_water": true,
+            "water_dist": 0.17920919120599701,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 6,
+            "height": 8.7723082107357,
+            "is_water": true,
+            "water_dist": 0.2826243196205953,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 7,
+            "height": 8.544678391011972,
+            "is_water": true,
+            "water_dist": 0.1392002743700095,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 8.47620640201856,
+            "is_water": true,
+            "water_dist": 0.17538005887076094,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 9,
+            "height": 8.295403336320373,
+            "is_water": true,
+            "water_dist": 0.1561714120224599,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 10,
+            "height": 8.25037750930213,
+            "is_water": true,
+            "water_dist": 0.26127506110083615,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 11,
+            "height": 8.239617835371794,
+            "is_water": true,
+            "water_dist": 0.19350891474414797,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 12,
+            "height": 8.235200306559548,
+            "is_water": true,
+            "water_dist": 0.04449428119854922,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 13,
+            "height": 7.91286214914235,
+            "is_water": true,
+            "water_dist": 0.14091092669619312,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 14,
+            "height": 7.8359118178863,
+            "is_water": true,
+            "water_dist": 0.23886528357916983,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 15,
+            "height": 7.759109560672127,
+            "is_water": true,
+            "water_dist": 0.13026557441614903,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 16,
+            "height": 7.61443746124795,
+            "is_water": true,
+            "water_dist": 0.15559684927057355,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 17,
+            "height": 7.398847352469216,
+            "is_water": true,
+            "water_dist": 0.16461269592878044,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 18,
+            "height": 7.2564221540068505,
+            "is_water": true,
+            "water_dist": 0.16270758698370655,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 19,
+            "height": 7.2065168663739785,
+            "is_water": true,
+            "water_dist": 0.24194709916789062,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          },
+          {
+            "rank": 20,
+            "height": 7.173520435757625,
+            "is_water": true,
+            "water_dist": 0.2623531264847531,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 21,
+            "height": 7.12059320130243,
+            "is_water": true,
+            "water_dist": 0.07452609693132208,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 22,
+            "height": 7.115087552709203,
+            "is_water": true,
+            "water_dist": 0.19472892841032582,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 23,
+            "height": 7.100218019758193,
+            "is_water": true,
+            "water_dist": 0.22050369934681796,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 24,
+            "height": 7.052765058587951,
+            "is_water": true,
+            "water_dist": 0.09971915419691164,
+            "nearest_water_idx": 35,
+            "water_label": "A:HOH236"
+          },
+          {
+            "rank": 25,
+            "height": 6.9162368922400175,
+            "is_water": true,
+            "water_dist": 0.2971016746185546,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.37267976999282837,
+          "k_sol": 0.33120647072792053,
+          "b_sol": 20.438430786132812
+        },
+        "elapsed_s": 21.598533868789673
+      },
+      "amplitude": {
+        "n_total_peaks": 2536,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 70,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 2.8490725627973514,
+          "q25": 4.975239374239738,
+          "median": 5.8053558796863785,
+          "mean": 5.900124439375807,
+          "q75": 6.713065257952978,
+          "max": 8.678084070638993
+        },
+        "water_distances": {
+          "min": 0.03863397655176478,
+          "median": 0.19830384484481717,
+          "mean": 0.20684244998414847,
+          "max": 0.44323588128290187
+        },
+        "b_correlation": -0.7759956944254615,
+        "noise_peaks": {
+          "count": 2462,
+          "min": -0.4284011253715607,
+          "median": 1.4493818811176469,
+          "mean": 1.4741357217919773,
+          "p90": 2.2219847562355355,
+          "p95": 2.403312116133127,
+          "p99": 2.7985428222782347,
+          "max": 3.456480155869941,
+          "n_above_3sig": 7,
+          "n_above_25sig": 80,
+          "n_above_wmin": 21
+        },
+        "gap_clean": -0.6074075930725895,
+        "gap_p99": 0.05052974051911674,
+        "gap_median": 2.3488757238164375,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 8.678084070638993,
+            "is_water": true,
+            "water_dist": 0.09341568461973777,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.577554217296587,
+            "is_water": true,
+            "water_dist": 0.1620163958732195,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 3,
+            "height": 8.423827503435545,
+            "is_water": true,
+            "water_dist": 0.08925390204160895,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 4,
+            "height": 8.39018852607985,
+            "is_water": true,
+            "water_dist": 0.1662459572802043,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 5,
+            "height": 8.235954954961578,
+            "is_water": true,
+            "water_dist": 0.13422368196029474,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 6,
+            "height": 8.186484685976554,
+            "is_water": true,
+            "water_dist": 0.21800935466551688,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 7,
+            "height": 8.037360336114046,
+            "is_water": true,
+            "water_dist": 0.1486951303313769,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 8,
+            "height": 7.995369010896103,
+            "is_water": true,
+            "water_dist": 0.2707834920837132,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 9,
+            "height": 7.792601609999683,
+            "is_water": true,
+            "water_dist": 0.03863397655176287,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 10,
+            "height": 7.660500146275217,
+            "is_water": true,
+            "water_dist": 0.22770924747117963,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 11,
+            "height": 7.5119525891073105,
+            "is_water": true,
+            "water_dist": 0.16449184214873835,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 12,
+            "height": 7.408703681127869,
+            "is_water": true,
+            "water_dist": 0.283753789925318,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 13,
+            "height": 7.318012167538226,
+            "is_water": true,
+            "water_dist": 0.1764882396128567,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 14,
+            "height": 7.260229990232069,
+            "is_water": true,
+            "water_dist": 0.14858657206926823,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 15,
+            "height": 7.217499244507549,
+            "is_water": true,
+            "water_dist": 0.2402707633869812,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 6.886315380308504,
+            "is_water": true,
+            "water_dist": 0.23627628444280707,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 17,
+            "height": 6.879236783438387,
+            "is_water": true,
+            "water_dist": 0.18577601412102457,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 18,
+            "height": 6.782545795179171,
+            "is_water": true,
+            "water_dist": 0.11891335247115131,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 19,
+            "height": 6.689905078877581,
+            "is_water": true,
+            "water_dist": 0.2479821062574452,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 20,
+            "height": 6.670541390515048,
+            "is_water": true,
+            "water_dist": 0.14705680966671217,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 21,
+            "height": 6.657965657779231,
+            "is_water": true,
+            "water_dist": 0.3157205536470584,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          },
+          {
+            "rank": 22,
+            "height": 6.5295016773209,
+            "is_water": true,
+            "water_dist": 0.15641339719014902,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 23,
+            "height": 6.5004393548690915,
+            "is_water": true,
+            "water_dist": 0.08649645080061924,
+            "nearest_water_idx": 35,
+            "water_label": "A:HOH236"
+          },
+          {
+            "rank": 24,
+            "height": 6.4983650546107485,
+            "is_water": true,
+            "water_dist": 0.23430263946372934,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 25,
+            "height": 6.444630974813156,
+            "is_water": true,
+            "water_dist": 0.2200213878044122,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.37093663215637207,
+          "k_sol": 0.33166399598121643,
+          "b_sol": 20.516523361206055
+        },
+        "elapsed_s": 18.729995012283325
+      }
+    },
+    "Synthetic 10x": {
+      "intensity": {
+        "n_total_peaks": 2561,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 72,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 3.210679485371667,
+          "q25": 4.881021540755173,
+          "median": 5.690442241211968,
+          "mean": 5.976867073711122,
+          "q75": 6.902345557780397,
+          "max": 9.668297186666598
+        },
+        "water_distances": {
+          "min": 0.06438891059342154,
+          "median": 0.19733596726909658,
+          "mean": 0.22684218236114675,
+          "max": 0.5266533337797562
+        },
+        "b_correlation": -0.7257323090039994,
+        "noise_peaks": {
+          "count": 2485,
+          "min": -0.6339390150727415,
+          "median": 1.4882567707517775,
+          "mean": 1.5181514476287734,
+          "p90": 2.3015314718530773,
+          "p95": 2.5887580151315395,
+          "p99": 2.975662046712466,
+          "max": 3.51630280837671,
+          "n_above_3sig": 23,
+          "n_above_25sig": 156,
+          "n_above_wmin": 9
+        },
+        "gap_clean": -0.3056233230050429,
+        "gap_p99": 0.235017438659201,
+        "gap_median": 2.1741394328352577,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 9.668297186666598,
+            "is_water": true,
+            "water_dist": 0.14306571037534624,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 9.178570860929254,
+            "is_water": true,
+            "water_dist": 0.14042352552196422,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 3,
+            "height": 8.820722253908455,
+            "is_water": true,
+            "water_dist": 0.2749409948159591,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 4,
+            "height": 8.230316025416228,
+            "is_water": true,
+            "water_dist": 0.16246960336169974,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 5,
+            "height": 8.083828339289214,
+            "is_water": true,
+            "water_dist": 0.11223731491349258,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 6,
+            "height": 8.065397460147878,
+            "is_water": true,
+            "water_dist": 0.1667107625264745,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 7,
+            "height": 8.040522103728378,
+            "is_water": true,
+            "water_dist": 0.09934709054707064,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 8,
+            "height": 7.9654641303829425,
+            "is_water": true,
+            "water_dist": 0.16341502130819993,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 9,
+            "height": 7.951275936909056,
+            "is_water": true,
+            "water_dist": 0.14041535791419152,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 10,
+            "height": 7.758756952833981,
+            "is_water": true,
+            "water_dist": 0.08321702782947737,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 11,
+            "height": 7.62382703691309,
+            "is_water": true,
+            "water_dist": 0.20863984320361983,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 12,
+            "height": 7.308979237279406,
+            "is_water": true,
+            "water_dist": 0.12571771974299267,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 13,
+            "height": 7.296195862395272,
+            "is_water": true,
+            "water_dist": 0.19227214386574829,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 14,
+            "height": 7.291390112181727,
+            "is_water": true,
+            "water_dist": 0.3449735235498765,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 15,
+            "height": 7.2232420628168015,
+            "is_water": true,
+            "water_dist": 0.14748030926454916,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 16,
+            "height": 7.200856026129247,
+            "is_water": true,
+            "water_dist": 0.20927564730105994,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 17,
+            "height": 7.139473995498441,
+            "is_water": true,
+            "water_dist": 0.09869697136851777,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 18,
+            "height": 7.005156755620971,
+            "is_water": true,
+            "water_dist": 0.10081523957281482,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 19,
+            "height": 6.868075158500206,
+            "is_water": true,
+            "water_dist": 0.2736340255198028,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          },
+          {
+            "rank": 20,
+            "height": 6.723460402428321,
+            "is_water": true,
+            "water_dist": 0.16800581935255823,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 21,
+            "height": 6.673409166734912,
+            "is_water": true,
+            "water_dist": 0.15042492066957705,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 22,
+            "height": 6.5496620384463275,
+            "is_water": true,
+            "water_dist": 0.31685455654550165,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 23,
+            "height": 6.51491646491017,
+            "is_water": true,
+            "water_dist": 0.48562915831781683,
+            "nearest_water_idx": 1,
+            "water_label": "A:HOH202"
+          },
+          {
+            "rank": 24,
+            "height": 6.513255569857707,
+            "is_water": true,
+            "water_dist": 0.227850130491728,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 25,
+            "height": 6.456809272625079,
+            "is_water": true,
+            "water_dist": 0.15276009366554402,
+            "nearest_water_idx": 21,
+            "water_label": "A:HOH222"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.36915844678878784,
+          "k_sol": 0.3318187892436981,
+          "b_sol": 21.714086532592773
+        },
+        "elapsed_s": 20.229196071624756
+      },
+      "amplitude": {
+        "n_total_peaks": 2507,
+        "n_waters": 72,
+        "n_matched_08A": 72,
+        "n_matched_10A": 72,
+        "n_above_3sig": 69,
+        "n_above_25sig": 72,
+        "n_above_2sig": 72,
+        "water_heights": {
+          "min": 2.560875069580856,
+          "q25": 4.259644898992628,
+          "median": 5.141113146180259,
+          "mean": 5.249890503098005,
+          "q75": 6.103681484449666,
+          "max": 8.551022474202405
+        },
+        "water_distances": {
+          "min": 0.0464586802957163,
+          "median": 0.2243213466264231,
+          "mean": 0.2375682453807261,
+          "max": 0.5212726893723729
+        },
+        "b_correlation": -0.6899317062641813,
+        "noise_peaks": {
+          "count": 2431,
+          "min": -0.5499254970815445,
+          "median": 1.555961909687311,
+          "mean": 1.5542144218106764,
+          "p90": 2.3623288213879965,
+          "p95": 2.6299569301441243,
+          "p99": 3.044611425662444,
+          "max": 4.041616890408614,
+          "n_above_3sig": 31,
+          "n_above_25sig": 164,
+          "n_above_wmin": 145
+        },
+        "gap_clean": -1.4807418208277578,
+        "gap_p99": -0.48373635608158816,
+        "gap_median": 1.099496255771645,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 8.551022474202405,
+            "is_water": true,
+            "water_dist": 0.12433395084511985,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 2,
+            "height": 8.141565427644084,
+            "is_water": true,
+            "water_dist": 0.27628875682469806,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 3,
+            "height": 7.996401391679428,
+            "is_water": true,
+            "water_dist": 0.12348159163310482,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 4,
+            "height": 7.4874034513301995,
+            "is_water": true,
+            "water_dist": 0.23897449720237962,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 5,
+            "height": 7.231016691643148,
+            "is_water": true,
+            "water_dist": 0.33720806501461575,
+            "nearest_water_idx": 9,
+            "water_label": "A:HOH210"
+          },
+          {
+            "rank": 6,
+            "height": 7.216730492695452,
+            "is_water": true,
+            "water_dist": 0.09845189370907023,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 7,
+            "height": 7.212906651557851,
+            "is_water": true,
+            "water_dist": 0.05067697695949754,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 8,
+            "height": 7.139127199133044,
+            "is_water": true,
+            "water_dist": 0.22049132021744375,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 9,
+            "height": 6.928544358854129,
+            "is_water": true,
+            "water_dist": 0.0464586802957163,
+            "nearest_water_idx": 61,
+            "water_label": "B:HOH225"
+          },
+          {
+            "rank": 10,
+            "height": 6.921729433933919,
+            "is_water": true,
+            "water_dist": 0.32884081012094485,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 11,
+            "height": 6.7385980979591,
+            "is_water": true,
+            "water_dist": 0.14642154245015981,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 12,
+            "height": 6.718743660982705,
+            "is_water": true,
+            "water_dist": 0.1725093279942346,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 13,
+            "height": 6.681588311959006,
+            "is_water": true,
+            "water_dist": 0.15449076063177103,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 14,
+            "height": 6.2848145280486,
+            "is_water": true,
+            "water_dist": 0.19223908916628932,
+            "nearest_water_idx": 39,
+            "water_label": "B:HOH203"
+          },
+          {
+            "rank": 15,
+            "height": 6.259396688125734,
+            "is_water": true,
+            "water_dist": 0.2959871630825935,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 16,
+            "height": 6.259156613780106,
+            "is_water": true,
+            "water_dist": 0.21797214525979858,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 17,
+            "height": 6.254730883925939,
+            "is_water": true,
+            "water_dist": 0.19696992548053932,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 18,
+            "height": 6.221568893611168,
+            "is_water": true,
+            "water_dist": 0.12050451886344182,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 19,
+            "height": 6.169631435289074,
+            "is_water": true,
+            "water_dist": 0.42365640791136244,
+            "nearest_water_idx": 1,
+            "water_label": "A:HOH202"
+          },
+          {
+            "rank": 20,
+            "height": 6.064385681395833,
+            "is_water": true,
+            "water_dist": 0.12021911268300904,
+            "nearest_water_idx": 26,
+            "water_label": "A:HOH227"
+          },
+          {
+            "rank": 21,
+            "height": 6.047561472588992,
+            "is_water": true,
+            "water_dist": 0.08879034464461014,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 22,
+            "height": 6.00706485282833,
+            "is_water": true,
+            "water_dist": 0.32018583005382073,
+            "nearest_water_idx": 1,
+            "water_label": "A:HOH202"
+          },
+          {
+            "rank": 23,
+            "height": 5.98583576457152,
+            "is_water": true,
+            "water_dist": 0.38778323823821514,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 24,
+            "height": 5.89696784030677,
+            "is_water": true,
+            "water_dist": 0.15080205351714104,
+            "nearest_water_idx": 60,
+            "water_label": "B:HOH224"
+          },
+          {
+            "rank": 25,
+            "height": 5.841643296612974,
+            "is_water": true,
+            "water_dist": 0.3914182875130093,
+            "nearest_water_idx": 55,
+            "water_label": "B:HOH219"
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.36130234599113464,
+          "k_sol": 0.3328727185726166,
+          "b_sol": 22.028728485107422
+        },
+        "elapsed_s": 18.930520057678223
+      }
+    },
+    "Synthetic 50x": {
+      "intensity": {
+        "n_total_peaks": 2645,
+        "n_waters": 72,
+        "n_matched_08A": 59,
+        "n_matched_10A": 66,
+        "n_above_3sig": 41,
+        "n_above_25sig": 49,
+        "n_above_2sig": 55,
+        "water_heights": {
+          "min": 1.2787645945720572,
+          "q25": 2.7165508364394246,
+          "median": 3.2381365812978498,
+          "mean": 3.3315976497010933,
+          "q75": 3.958248807295246,
+          "max": 5.841092736962944
+        },
+        "water_distances": {
+          "min": 0.08600919629962804,
+          "median": 0.5040816667572849,
+          "mean": 0.572736129527137,
+          "max": 1.4812012940861647
+        },
+        "b_correlation": -0.3012436481066455,
+        "noise_peaks": {
+          "count": 2580,
+          "min": -0.18969093086027486,
+          "median": 1.8223768006537688,
+          "mean": 1.8335686874922839,
+          "p90": 2.7879205071398214,
+          "p95": 3.076629559978645,
+          "p99": 3.539623644721909,
+          "max": 4.2638138762355595,
+          "n_above_3sig": 154,
+          "n_above_25sig": 452,
+          "n_above_wmin": 1985
+        },
+        "gap_clean": -2.9850492816635024,
+        "gap_p99": -2.260859050149852,
+        "gap_median": -1.0256772949377098,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 5.841092736962944,
+            "is_water": true,
+            "water_dist": 0.5831815136887227,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 2,
+            "height": 5.605424981017178,
+            "is_water": true,
+            "water_dist": 0.2622505897602483,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 3,
+            "height": 5.232262646921976,
+            "is_water": true,
+            "water_dist": 0.4360056361606649,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 4,
+            "height": 5.0582501173209184,
+            "is_water": true,
+            "water_dist": 0.27234675887839693,
+            "nearest_water_idx": 29,
+            "water_label": "A:HOH230"
+          },
+          {
+            "rank": 5,
+            "height": 5.04899745030988,
+            "is_water": true,
+            "water_dist": 0.1697018685023685,
+            "nearest_water_idx": 22,
+            "water_label": "A:HOH223"
+          },
+          {
+            "rank": 6,
+            "height": 4.904934513669914,
+            "is_water": true,
+            "water_dist": 0.34182527244404676,
+            "nearest_water_idx": 53,
+            "water_label": "B:HOH217"
+          },
+          {
+            "rank": 7,
+            "height": 4.756645404142689,
+            "is_water": true,
+            "water_dist": 0.24947586464410088,
+            "nearest_water_idx": 35,
+            "water_label": "A:HOH236"
+          },
+          {
+            "rank": 8,
+            "height": 4.740000423260732,
+            "is_water": true,
+            "water_dist": 0.6611423396386157,
+            "nearest_water_idx": 44,
+            "water_label": "B:HOH208"
+          },
+          {
+            "rank": 9,
+            "height": 4.639155931759866,
+            "is_water": true,
+            "water_dist": 0.7319197844280776,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 10,
+            "height": 4.463251969037233,
+            "is_water": true,
+            "water_dist": 0.4933555828145449,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 11,
+            "height": 4.4609395815176045,
+            "is_water": true,
+            "water_dist": 0.08600919629962804,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 12,
+            "height": 4.454920531926229,
+            "is_water": true,
+            "water_dist": 0.32782425069349147,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 13,
+            "height": 4.440495064409262,
+            "is_water": true,
+            "water_dist": 0.37176545307578673,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 14,
+            "height": 4.414881436130653,
+            "is_water": true,
+            "water_dist": 0.4818654312651844,
+            "nearest_water_idx": 4,
+            "water_label": "A:HOH205"
+          },
+          {
+            "rank": 15,
+            "height": 4.289649932843185,
+            "is_water": true,
+            "water_dist": 0.7927009905803201,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 16,
+            "height": 4.2638138762355595,
+            "is_water": false,
+            "water_dist": 0.8270969656409662,
+            "nearest_water_idx": 40,
+            "water_label": null
+          },
+          {
+            "rank": 17,
+            "height": 4.22365477722891,
+            "is_water": true,
+            "water_dist": 0.7344975110710417,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 18,
+            "height": 4.216800522127176,
+            "is_water": true,
+            "water_dist": 0.46459202040714515,
+            "nearest_water_idx": 10,
+            "water_label": "A:HOH211"
+          },
+          {
+            "rank": 19,
+            "height": 4.185181080172906,
+            "is_water": false,
+            "water_dist": 5.424023039724684,
+            "nearest_water_idx": 63,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 4.157835063051969,
+            "is_water": false,
+            "water_dist": 6.253392045562475,
+            "nearest_water_idx": 18,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 4.157827355588001,
+            "is_water": true,
+            "water_dist": 0.5572289739379571,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 22,
+            "height": 4.134984440646239,
+            "is_water": true,
+            "water_dist": 0.4983236047239222,
+            "nearest_water_idx": 36,
+            "water_label": "A:HOH237"
+          },
+          {
+            "rank": 23,
+            "height": 4.099253417994908,
+            "is_water": true,
+            "water_dist": 0.3885759703184779,
+            "nearest_water_idx": 32,
+            "water_label": "A:HOH233"
+          },
+          {
+            "rank": 24,
+            "height": 4.072496119118958,
+            "is_water": false,
+            "water_dist": 3.7750607530993574,
+            "nearest_water_idx": 38,
+            "water_label": null
+          },
+          {
+            "rank": 25,
+            "height": 4.045116910290091,
+            "is_water": false,
+            "water_dist": 3.7101988936034336,
+            "nearest_water_idx": 32,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3423999845981598,
+          "k_sol": 0.3304104208946228,
+          "b_sol": 26.885009765625
+        },
+        "elapsed_s": 21.87923526763916
+      },
+      "amplitude": {
+        "n_total_peaks": 1858,
+        "n_waters": 72,
+        "n_matched_08A": 36,
+        "n_matched_10A": 47,
+        "n_above_3sig": 8,
+        "n_above_25sig": 15,
+        "n_above_2sig": 23,
+        "water_heights": {
+          "min": 0.22567885150358055,
+          "q25": 1.5706555692643438,
+          "median": 2.1507791580189553,
+          "mean": 2.185664740208265,
+          "q75": 2.8437378327756617,
+          "max": 4.02052097037003
+        },
+        "water_distances": {
+          "min": 0.15680826287143462,
+          "median": 0.7971866853066507,
+          "mean": 0.9269921690645107,
+          "max": 2.9297935847076753
+        },
+        "b_correlation": -0.25822796978580254,
+        "noise_peaks": {
+          "count": 1817,
+          "min": -0.5234416437952002,
+          "median": 1.7250751631453791,
+          "mean": 1.774070155259943,
+          "p90": 2.761273654097576,
+          "p95": 3.013220625506773,
+          "p99": 3.6286892584663826,
+          "max": 4.383316196159392,
+          "n_above_3sig": 93,
+          "n_above_25sig": 333,
+          "n_above_wmin": 1791
+        },
+        "gap_clean": -4.157637344655811,
+        "gap_p99": -3.403010406962802,
+        "gap_median": -2.2325370381404364,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 4.383316196159392,
+            "is_water": false,
+            "water_dist": 4.995275065465683,
+            "nearest_water_idx": 51,
+            "water_label": null
+          },
+          {
+            "rank": 2,
+            "height": 4.350830883059563,
+            "is_water": false,
+            "water_dist": 2.8015870118257316,
+            "nearest_water_idx": 34,
+            "water_label": null
+          },
+          {
+            "rank": 3,
+            "height": 4.155248624867018,
+            "is_water": false,
+            "water_dist": 7.364473510311486,
+            "nearest_water_idx": 51,
+            "water_label": null
+          },
+          {
+            "rank": 4,
+            "height": 4.02052097037003,
+            "is_water": false,
+            "water_dist": 1.3655629734608397,
+            "nearest_water_idx": 40,
+            "water_label": null
+          },
+          {
+            "rank": 5,
+            "height": 4.004461971846616,
+            "is_water": false,
+            "water_dist": 6.295288886666301,
+            "nearest_water_idx": 11,
+            "water_label": null
+          },
+          {
+            "rank": 6,
+            "height": 3.9605149460183338,
+            "is_water": false,
+            "water_dist": 6.283327304910707,
+            "nearest_water_idx": 11,
+            "water_label": null
+          },
+          {
+            "rank": 7,
+            "height": 3.945673873031938,
+            "is_water": false,
+            "water_dist": 6.583856647570149,
+            "nearest_water_idx": 7,
+            "water_label": null
+          },
+          {
+            "rank": 8,
+            "height": 3.9158935965150037,
+            "is_water": false,
+            "water_dist": 7.039655710473852,
+            "nearest_water_idx": 5,
+            "water_label": null
+          },
+          {
+            "rank": 9,
+            "height": 3.9107458063734732,
+            "is_water": true,
+            "water_dist": 0.2003787128008739,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 10,
+            "height": 3.8917374848877255,
+            "is_water": false,
+            "water_dist": 5.320360824483825,
+            "nearest_water_idx": 48,
+            "water_label": null
+          },
+          {
+            "rank": 11,
+            "height": 3.8580152435183805,
+            "is_water": false,
+            "water_dist": 7.0696922379187725,
+            "nearest_water_idx": 60,
+            "water_label": null
+          },
+          {
+            "rank": 12,
+            "height": 3.785276951162835,
+            "is_water": false,
+            "water_dist": 9.640749524033163,
+            "nearest_water_idx": 30,
+            "water_label": null
+          },
+          {
+            "rank": 13,
+            "height": 3.7365880320505753,
+            "is_water": false,
+            "water_dist": 4.2185687362915845,
+            "nearest_water_idx": 25,
+            "water_label": null
+          },
+          {
+            "rank": 14,
+            "height": 3.715822353886091,
+            "is_water": false,
+            "water_dist": 6.296281759388348,
+            "nearest_water_idx": 7,
+            "water_label": null
+          },
+          {
+            "rank": 15,
+            "height": 3.6985227812291273,
+            "is_water": true,
+            "water_dist": 0.45653061926595623,
+            "nearest_water_idx": 15,
+            "water_label": "A:HOH216"
+          },
+          {
+            "rank": 16,
+            "height": 3.6927251854951355,
+            "is_water": false,
+            "water_dist": 5.694104848445341,
+            "nearest_water_idx": 32,
+            "water_label": null
+          },
+          {
+            "rank": 17,
+            "height": 3.6765917823345156,
+            "is_water": false,
+            "water_dist": 4.203515084852877,
+            "nearest_water_idx": 20,
+            "water_label": null
+          },
+          {
+            "rank": 18,
+            "height": 3.658574516413019,
+            "is_water": true,
+            "water_dist": 0.4162921853968455,
+            "nearest_water_idx": 29,
+            "water_label": "A:HOH230"
+          },
+          {
+            "rank": 19,
+            "height": 3.6567926672679185,
+            "is_water": false,
+            "water_dist": 5.1662660696809075,
+            "nearest_water_idx": 6,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 3.6369546011095846,
+            "is_water": false,
+            "water_dist": 9.095197549369813,
+            "nearest_water_idx": 45,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 3.6290617370549496,
+            "is_water": false,
+            "water_dist": 6.2753764666781615,
+            "nearest_water_idx": 7,
+            "water_label": null
+          },
+          {
+            "rank": 22,
+            "height": 3.628958043998567,
+            "is_water": false,
+            "water_dist": 3.082735647049797,
+            "nearest_water_idx": 28,
+            "water_label": null
+          },
+          {
+            "rank": 23,
+            "height": 3.6272781344224168,
+            "is_water": false,
+            "water_dist": 6.060700245465392,
+            "nearest_water_idx": 13,
+            "water_label": null
+          },
+          {
+            "rank": 24,
+            "height": 3.6148143856210906,
+            "is_water": false,
+            "water_dist": 6.10488601790232,
+            "nearest_water_idx": 13,
+            "water_label": null
+          },
+          {
+            "rank": 25,
+            "height": 3.5786812871346205,
+            "is_water": false,
+            "water_dist": 0.9399378536028531,
+            "nearest_water_idx": 39,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.2615223228931427,
+          "k_sol": 0.37754303216934204,
+          "b_sol": 35.84463882446289
+        },
+        "elapsed_s": 14.512501955032349
+      }
+    },
+    "Synthetic 100x": {
+      "intensity": {
+        "n_total_peaks": 3231,
+        "n_waters": 72,
+        "n_matched_08A": 32,
+        "n_matched_10A": 46,
+        "n_above_3sig": 15,
+        "n_above_25sig": 23,
+        "n_above_2sig": 27,
+        "water_heights": {
+          "min": 0.7508668100884306,
+          "q25": 2.1296626911507204,
+          "median": 2.604383041538031,
+          "mean": 2.5761656074543993,
+          "q75": 3.104444143193977,
+          "max": 4.573253884188719
+        },
+        "water_distances": {
+          "min": 0.13120879289337997,
+          "median": 0.8136462480231313,
+          "mean": 0.9096976901049716,
+          "max": 2.3012787262772796
+        },
+        "b_correlation": -0.07353591394574452,
+        "noise_peaks": {
+          "count": 3192,
+          "min": -0.588119577503775,
+          "median": 1.7766935729601072,
+          "mean": 1.812594579736559,
+          "p90": 2.7933231357009567,
+          "p95": 3.0995077990055164,
+          "p99": 3.6376650339710426,
+          "max": 4.243285335774307,
+          "n_above_3sig": 196,
+          "n_above_25sig": 613,
+          "n_above_wmin": 2974
+        },
+        "gap_clean": -3.492418525685877,
+        "gap_p99": -2.8867982238826118,
+        "gap_median": -1.638902294236276,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 4.573253884188719,
+            "is_water": true,
+            "water_dist": 0.13120879289337997,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 2,
+            "height": 4.243285335774307,
+            "is_water": false,
+            "water_dist": 8.675200079203588,
+            "nearest_water_idx": 61,
+            "water_label": null
+          },
+          {
+            "rank": 3,
+            "height": 4.198766047919054,
+            "is_water": false,
+            "water_dist": 2.771775011118857,
+            "nearest_water_idx": 10,
+            "water_label": null
+          },
+          {
+            "rank": 4,
+            "height": 4.192030943131679,
+            "is_water": false,
+            "water_dist": 3.4384339762242035,
+            "nearest_water_idx": 19,
+            "water_label": null
+          },
+          {
+            "rank": 5,
+            "height": 4.0927222229125055,
+            "is_water": false,
+            "water_dist": 2.7939822272823025,
+            "nearest_water_idx": 10,
+            "water_label": null
+          },
+          {
+            "rank": 6,
+            "height": 4.083850929288193,
+            "is_water": false,
+            "water_dist": 7.457990635467991,
+            "nearest_water_idx": 50,
+            "water_label": null
+          },
+          {
+            "rank": 7,
+            "height": 4.022867442572523,
+            "is_water": false,
+            "water_dist": 5.500731254892518,
+            "nearest_water_idx": 59,
+            "water_label": null
+          },
+          {
+            "rank": 8,
+            "height": 3.9887988974858604,
+            "is_water": false,
+            "water_dist": 2.103092132860977,
+            "nearest_water_idx": 41,
+            "water_label": null
+          },
+          {
+            "rank": 9,
+            "height": 3.9788998291174758,
+            "is_water": false,
+            "water_dist": 5.526823169273022,
+            "nearest_water_idx": 49,
+            "water_label": null
+          },
+          {
+            "rank": 10,
+            "height": 3.9697568066889746,
+            "is_water": false,
+            "water_dist": 3.0870472854230706,
+            "nearest_water_idx": 25,
+            "water_label": null
+          },
+          {
+            "rank": 11,
+            "height": 3.9520634469625584,
+            "is_water": false,
+            "water_dist": 5.533569953315523,
+            "nearest_water_idx": 59,
+            "water_label": null
+          },
+          {
+            "rank": 12,
+            "height": 3.9379107772472333,
+            "is_water": false,
+            "water_dist": 8.148555406945325,
+            "nearest_water_idx": 44,
+            "water_label": null
+          },
+          {
+            "rank": 13,
+            "height": 3.932665290969554,
+            "is_water": false,
+            "water_dist": 3.475518816141483,
+            "nearest_water_idx": 0,
+            "water_label": null
+          },
+          {
+            "rank": 14,
+            "height": 3.9309555268577445,
+            "is_water": false,
+            "water_dist": 3.0620592727455858,
+            "nearest_water_idx": 25,
+            "water_label": null
+          },
+          {
+            "rank": 15,
+            "height": 3.9234004843080186,
+            "is_water": false,
+            "water_dist": 5.724790010194828,
+            "nearest_water_idx": 49,
+            "water_label": null
+          },
+          {
+            "rank": 16,
+            "height": 3.879402480653068,
+            "is_water": false,
+            "water_dist": 4.9483473987667566,
+            "nearest_water_idx": 41,
+            "water_label": null
+          },
+          {
+            "rank": 17,
+            "height": 3.8685778758948115,
+            "is_water": false,
+            "water_dist": 2.639197890892663,
+            "nearest_water_idx": 39,
+            "water_label": null
+          },
+          {
+            "rank": 18,
+            "height": 3.8458399234575285,
+            "is_water": false,
+            "water_dist": 2.5863515519674274,
+            "nearest_water_idx": 17,
+            "water_label": null
+          },
+          {
+            "rank": 19,
+            "height": 3.834747278659287,
+            "is_water": false,
+            "water_dist": 6.543757299695768,
+            "nearest_water_idx": 2,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 3.818592558054391,
+            "is_water": false,
+            "water_dist": 2.734873531623694,
+            "nearest_water_idx": 18,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 3.794510994799926,
+            "is_water": false,
+            "water_dist": 5.647948245034098,
+            "nearest_water_idx": 53,
+            "water_label": null
+          },
+          {
+            "rank": 22,
+            "height": 3.792506167227463,
+            "is_water": false,
+            "water_dist": 3.9059755049885427,
+            "nearest_water_idx": 63,
+            "water_label": null
+          },
+          {
+            "rank": 23,
+            "height": 3.755556138899949,
+            "is_water": false,
+            "water_dist": 8.01018131730692,
+            "nearest_water_idx": 43,
+            "water_label": null
+          },
+          {
+            "rank": 24,
+            "height": 3.7249430227167597,
+            "is_water": false,
+            "water_dist": 6.063641845308561,
+            "nearest_water_idx": 0,
+            "water_label": null
+          },
+          {
+            "rank": 25,
+            "height": 3.7080604375297206,
+            "is_water": false,
+            "water_dist": 4.073352287282662,
+            "nearest_water_idx": 2,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3396323621273041,
+          "k_sol": 0.32666629552841187,
+          "b_sol": 20.24852180480957
+        },
+        "elapsed_s": 27.08891487121582
+      },
+      "amplitude": {
+        "n_total_peaks": 1795,
+        "n_waters": 72,
+        "n_matched_08A": 22,
+        "n_matched_10A": 32,
+        "n_above_3sig": 5,
+        "n_above_25sig": 12,
+        "n_above_2sig": 16,
+        "water_heights": {
+          "min": 0.5809114234121185,
+          "q25": 1.7740678533836098,
+          "median": 2.190204785697877,
+          "mean": 2.2960420876247674,
+          "q75": 2.866730034282755,
+          "max": 4.270090231260107
+        },
+        "water_distances": {
+          "min": 0.37728129627632395,
+          "median": 1.086672355204894,
+          "mean": 1.206100701252885,
+          "max": 2.9730509584365166
+        },
+        "b_correlation": 0.03014041770862281,
+        "noise_peaks": {
+          "count": 1772,
+          "min": -0.623772919847551,
+          "median": 1.700984949258098,
+          "mean": 1.757890535768412,
+          "p90": 2.7685209368405514,
+          "p95": 3.0925169637039063,
+          "p99": 3.5061738209817492,
+          "max": 4.84934315019588,
+          "n_above_3sig": 109,
+          "n_above_25sig": 312,
+          "n_above_wmin": 1687
+        },
+        "gap_clean": -4.268431726783762,
+        "gap_p99": -2.9252623975696306,
+        "gap_median": -2.659138364498003,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 4.84934315019588,
+            "is_water": false,
+            "water_dist": 8.519549568171035,
+            "nearest_water_idx": 33,
+            "water_label": null
+          },
+          {
+            "rank": 2,
+            "height": 4.426276980095635,
+            "is_water": false,
+            "water_dist": 8.501867764282958,
+            "nearest_water_idx": 63,
+            "water_label": null
+          },
+          {
+            "rank": 3,
+            "height": 4.270090231260107,
+            "is_water": false,
+            "water_dist": 1.2182847449938132,
+            "nearest_water_idx": 25,
+            "water_label": null
+          },
+          {
+            "rank": 4,
+            "height": 4.259866373143191,
+            "is_water": true,
+            "water_dist": 0.38180312913599695,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 5,
+            "height": 4.054624838074947,
+            "is_water": false,
+            "water_dist": 5.02738267647271,
+            "nearest_water_idx": 57,
+            "water_label": null
+          },
+          {
+            "rank": 6,
+            "height": 4.0014965063118835,
+            "is_water": false,
+            "water_dist": 6.586804653569949,
+            "nearest_water_idx": 38,
+            "water_label": null
+          },
+          {
+            "rank": 7,
+            "height": 3.999461989091958,
+            "is_water": false,
+            "water_dist": 3.946068974803095,
+            "nearest_water_idx": 61,
+            "water_label": null
+          },
+          {
+            "rank": 8,
+            "height": 3.784969165351194,
+            "is_water": false,
+            "water_dist": 2.218726518862192,
+            "nearest_water_idx": 48,
+            "water_label": null
+          },
+          {
+            "rank": 9,
+            "height": 3.7484616744763453,
+            "is_water": false,
+            "water_dist": 7.2423501414318086,
+            "nearest_water_idx": 18,
+            "water_label": null
+          },
+          {
+            "rank": 10,
+            "height": 3.7319489396984378,
+            "is_water": false,
+            "water_dist": 4.376412174895376,
+            "nearest_water_idx": 2,
+            "water_label": null
+          },
+          {
+            "rank": 11,
+            "height": 3.710001029710546,
+            "is_water": false,
+            "water_dist": 6.946848977142348,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 12,
+            "height": 3.6772754527604716,
+            "is_water": false,
+            "water_dist": 3.7713511701474194,
+            "nearest_water_idx": 28,
+            "water_label": null
+          },
+          {
+            "rank": 13,
+            "height": 3.675435768096758,
+            "is_water": false,
+            "water_dist": 5.330888956497765,
+            "nearest_water_idx": 3,
+            "water_label": null
+          },
+          {
+            "rank": 14,
+            "height": 3.6641768186122547,
+            "is_water": true,
+            "water_dist": 0.4953509567736663,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 15,
+            "height": 3.6500586057393787,
+            "is_water": false,
+            "water_dist": 5.483088876835757,
+            "nearest_water_idx": 4,
+            "water_label": null
+          },
+          {
+            "rank": 16,
+            "height": 3.646229238929115,
+            "is_water": false,
+            "water_dist": 4.87514837744662,
+            "nearest_water_idx": 5,
+            "water_label": null
+          },
+          {
+            "rank": 17,
+            "height": 3.635343532048266,
+            "is_water": false,
+            "water_dist": 5.697232574823169,
+            "nearest_water_idx": 2,
+            "water_label": null
+          },
+          {
+            "rank": 18,
+            "height": 3.6011880274179178,
+            "is_water": true,
+            "water_dist": 0.4416301186332791,
+            "nearest_water_idx": 5,
+            "water_label": "A:HOH206"
+          },
+          {
+            "rank": 19,
+            "height": 3.598180440169838,
+            "is_water": false,
+            "water_dist": 6.1929040480481055,
+            "nearest_water_idx": 6,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 3.5955991919709067,
+            "is_water": false,
+            "water_dist": 5.867684592422076,
+            "nearest_water_idx": 48,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 3.539405648294488,
+            "is_water": false,
+            "water_dist": 5.834827372149301,
+            "nearest_water_idx": 11,
+            "water_label": null
+          },
+          {
+            "rank": 22,
+            "height": 3.4991275971787044,
+            "is_water": true,
+            "water_dist": 0.7951700909296393,
+            "nearest_water_idx": 57,
+            "water_label": "B:HOH221"
+          },
+          {
+            "rank": 23,
+            "height": 3.4926002577131685,
+            "is_water": false,
+            "water_dist": 5.042339986333144,
+            "nearest_water_idx": 10,
+            "water_label": null
+          },
+          {
+            "rank": 24,
+            "height": 3.467160051329554,
+            "is_water": false,
+            "water_dist": 6.936192313572512,
+            "nearest_water_idx": 50,
+            "water_label": null
+          },
+          {
+            "rank": 25,
+            "height": 3.452111490581165,
+            "is_water": false,
+            "water_dist": 8.302440929981627,
+            "nearest_water_idx": 63,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.27029258012771606,
+          "k_sol": 0.3521793782711029,
+          "b_sol": 14.513781547546387
+        },
+        "elapsed_s": 14.30303692817688
+      }
+    },
+    "Experimental (6czg.mtz)": {
+      "intensity": {
+        "n_total_peaks": 2207,
+        "n_waters": 72,
+        "n_matched_08A": 71,
+        "n_matched_10A": 71,
+        "n_above_3sig": 53,
+        "n_above_25sig": 68,
+        "n_above_2sig": 71,
+        "water_heights": {
+          "min": 1.9116529908184994,
+          "q25": 2.9775749385837997,
+          "median": 3.443602376396525,
+          "mean": 3.6113236465261576,
+          "q75": 4.272587491867714,
+          "max": 5.8505500541973365
+        },
+        "water_distances": {
+          "min": 0.045453681831161476,
+          "median": 0.25842867163950023,
+          "mean": 0.30319538295465404,
+          "max": 1.0346148367653671
+        },
+        "b_correlation": -0.6550819578604247,
+        "noise_peaks": {
+          "count": 2123,
+          "min": -0.8555384365398517,
+          "median": 1.6665310918276806,
+          "mean": 1.7295696504161666,
+          "p90": 2.7597779078101996,
+          "p95": 3.0910743900840454,
+          "p99": 3.849046398562364,
+          "max": 4.790618173941515,
+          "n_above_3sig": 134,
+          "n_above_25sig": 339,
+          "n_above_wmin": 804
+        },
+        "gap_clean": -2.8789651831230154,
+        "gap_p99": -1.9373934077438646,
+        "gap_median": -1.34701579754499,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 5.8505500541973365,
+            "is_water": true,
+            "water_dist": 0.09217551849069107,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 2,
+            "height": 5.594804040717931,
+            "is_water": true,
+            "water_dist": 0.4828528718051115,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 3,
+            "height": 5.405344864030901,
+            "is_water": true,
+            "water_dist": 0.3501115024475215,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 4,
+            "height": 5.248443823666942,
+            "is_water": true,
+            "water_dist": 0.22956867279720516,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 5,
+            "height": 5.157662457676488,
+            "is_water": true,
+            "water_dist": 0.15404840014422203,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 6,
+            "height": 4.893186270081649,
+            "is_water": true,
+            "water_dist": 0.46220109689995925,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 7,
+            "height": 4.816371031433715,
+            "is_water": true,
+            "water_dist": 0.13067864090010337,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 8,
+            "height": 4.790618173941515,
+            "is_water": false,
+            "water_dist": 6.5759236123790075,
+            "nearest_water_idx": 70,
+            "water_label": null
+          },
+          {
+            "rank": 9,
+            "height": 4.707954152440872,
+            "is_water": true,
+            "water_dist": 0.34434855847961415,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 10,
+            "height": 4.697641940826939,
+            "is_water": true,
+            "water_dist": 0.2731391071884374,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 11,
+            "height": 4.647039716203111,
+            "is_water": true,
+            "water_dist": 0.12635182036946482,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          },
+          {
+            "rank": 12,
+            "height": 4.6425826838348145,
+            "is_water": true,
+            "water_dist": 0.3456858524702177,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 13,
+            "height": 4.610296843700613,
+            "is_water": true,
+            "water_dist": 0.21722846769374762,
+            "nearest_water_idx": 6,
+            "water_label": "A:HOH207"
+          },
+          {
+            "rank": 14,
+            "height": 4.569740234057151,
+            "is_water": true,
+            "water_dist": 0.05674802297932497,
+            "nearest_water_idx": 14,
+            "water_label": "A:HOH215"
+          },
+          {
+            "rank": 15,
+            "height": 4.500344370069966,
+            "is_water": true,
+            "water_dist": 0.4095438267020662,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 16,
+            "height": 4.498258261329092,
+            "is_water": true,
+            "water_dist": 0.23424241188540415,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 17,
+            "height": 4.449276322082681,
+            "is_water": true,
+            "water_dist": 0.21444265140482358,
+            "nearest_water_idx": 20,
+            "water_label": "A:HOH221"
+          },
+          {
+            "rank": 18,
+            "height": 4.417973759588587,
+            "is_water": true,
+            "water_dist": 0.2577066680926521,
+            "nearest_water_idx": 43,
+            "water_label": "B:HOH207"
+          },
+          {
+            "rank": 19,
+            "height": 4.4028365754616,
+            "is_water": false,
+            "water_dist": 6.894128940449823,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 4.365657321590457,
+            "is_water": false,
+            "water_dist": 6.835556491496379,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 4.35819797390067,
+            "is_water": true,
+            "water_dist": 0.26672986410075744,
+            "nearest_water_idx": 18,
+            "water_label": "A:HOH219"
+          },
+          {
+            "rank": 22,
+            "height": 4.310246564258079,
+            "is_water": false,
+            "water_dist": 5.087200147960219,
+            "nearest_water_idx": 32,
+            "water_label": null
+          },
+          {
+            "rank": 23,
+            "height": 4.2498973478355975,
+            "is_water": false,
+            "water_dist": 7.575838294852293,
+            "nearest_water_idx": 7,
+            "water_label": null
+          },
+          {
+            "rank": 24,
+            "height": 4.244050664523396,
+            "is_water": true,
+            "water_dist": 0.051645085679073825,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 25,
+            "height": 4.243667033307532,
+            "is_water": false,
+            "water_dist": 7.743555872337631,
+            "nearest_water_idx": 21,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3313086926937103,
+          "k_sol": 0.3433404862880707,
+          "b_sol": 17.827062606811523
+        },
+        "elapsed_s": 19.405999898910522
+      },
+      "amplitude": {
+        "n_total_peaks": 2127,
+        "n_waters": 72,
+        "n_matched_08A": 71,
+        "n_matched_10A": 71,
+        "n_above_3sig": 48,
+        "n_above_25sig": 59,
+        "n_above_2sig": 69,
+        "water_heights": {
+          "min": 1.2236561718020944,
+          "q25": 2.839521195849411,
+          "median": 3.460945129806518,
+          "mean": 3.403784451043554,
+          "q75": 3.9207411404540555,
+          "max": 5.2872011946195565
+        },
+        "water_distances": {
+          "min": 0.037369711664404226,
+          "median": 0.26417216718036607,
+          "mean": 0.30790942588344167,
+          "max": 1.022623030332825
+        },
+        "b_correlation": -0.6880363303776612,
+        "noise_peaks": {
+          "count": 2045,
+          "min": -0.5244964457429289,
+          "median": 1.7063375280717894,
+          "mean": 1.7593353134129974,
+          "p90": 2.8219888001056797,
+          "p95": 3.192245458899883,
+          "p99": 3.8021366768533835,
+          "max": 4.601680149153264,
+          "n_above_3sig": 141,
+          "n_above_25sig": 333,
+          "n_above_wmin": 1523
+        },
+        "gap_clean": -3.3780239773511695,
+        "gap_p99": -2.578480505051289,
+        "gap_median": -1.1407350193467458,
+        "top_peaks": [
+          {
+            "rank": 1,
+            "height": 5.2872011946195565,
+            "is_water": true,
+            "water_dist": 0.12383225563627372,
+            "nearest_water_idx": 13,
+            "water_label": "A:HOH214"
+          },
+          {
+            "rank": 2,
+            "height": 5.2567421956650255,
+            "is_water": true,
+            "water_dist": 0.4778948214273064,
+            "nearest_water_idx": 40,
+            "water_label": "B:HOH204"
+          },
+          {
+            "rank": 3,
+            "height": 5.088563652046043,
+            "is_water": true,
+            "water_dist": 0.49712823326287653,
+            "nearest_water_idx": 8,
+            "water_label": "A:HOH209"
+          },
+          {
+            "rank": 4,
+            "height": 5.0335772264326915,
+            "is_water": true,
+            "water_dist": 0.12034523719128196,
+            "nearest_water_idx": 51,
+            "water_label": "B:HOH215"
+          },
+          {
+            "rank": 5,
+            "height": 4.719325983113653,
+            "is_water": true,
+            "water_dist": 0.10868768872171576,
+            "nearest_water_idx": 49,
+            "water_label": "B:HOH213"
+          },
+          {
+            "rank": 6,
+            "height": 4.68560461618376,
+            "is_water": true,
+            "water_dist": 0.16447606604296955,
+            "nearest_water_idx": 38,
+            "water_label": "B:HOH202"
+          },
+          {
+            "rank": 7,
+            "height": 4.601680149153264,
+            "is_water": false,
+            "water_dist": 6.557018208888595,
+            "nearest_water_idx": 70,
+            "water_label": null
+          },
+          {
+            "rank": 8,
+            "height": 4.583150203597714,
+            "is_water": true,
+            "water_dist": 0.21933432189793367,
+            "nearest_water_idx": 45,
+            "water_label": "B:HOH209"
+          },
+          {
+            "rank": 9,
+            "height": 4.555257496617295,
+            "is_water": false,
+            "water_dist": 6.874582984290315,
+            "nearest_water_idx": 48,
+            "water_label": null
+          },
+          {
+            "rank": 10,
+            "height": 4.516009930149788,
+            "is_water": true,
+            "water_dist": 0.15594738840116668,
+            "nearest_water_idx": 58,
+            "water_label": "B:HOH222"
+          },
+          {
+            "rank": 11,
+            "height": 4.4833769310133595,
+            "is_water": false,
+            "water_dist": 6.881651338644391,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 12,
+            "height": 4.468318595792626,
+            "is_water": true,
+            "water_dist": 0.2678693313479159,
+            "nearest_water_idx": 25,
+            "water_label": "A:HOH226"
+          },
+          {
+            "rank": 13,
+            "height": 4.465163812574111,
+            "is_water": false,
+            "water_dist": 6.921148036095798,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 14,
+            "height": 4.425193619945133,
+            "is_water": false,
+            "water_dist": 6.8794932289627,
+            "nearest_water_idx": 62,
+            "water_label": null
+          },
+          {
+            "rank": 15,
+            "height": 4.424369954814192,
+            "is_water": true,
+            "water_dist": 0.24219788825157446,
+            "nearest_water_idx": 11,
+            "water_label": "A:HOH212"
+          },
+          {
+            "rank": 16,
+            "height": 4.42370292926668,
+            "is_water": false,
+            "water_dist": 5.035461033495117,
+            "nearest_water_idx": 32,
+            "water_label": null
+          },
+          {
+            "rank": 17,
+            "height": 4.279169856345845,
+            "is_water": true,
+            "water_dist": 0.34514713209878484,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 18,
+            "height": 4.271741339713194,
+            "is_water": true,
+            "water_dist": 0.3516165231849588,
+            "nearest_water_idx": 46,
+            "water_label": "B:HOH210"
+          },
+          {
+            "rank": 19,
+            "height": 4.269266384745004,
+            "is_water": false,
+            "water_dist": 3.1960584017895113,
+            "nearest_water_idx": 63,
+            "water_label": null
+          },
+          {
+            "rank": 20,
+            "height": 4.231460195357571,
+            "is_water": false,
+            "water_dist": 7.485853702268111,
+            "nearest_water_idx": 40,
+            "water_label": null
+          },
+          {
+            "rank": 21,
+            "height": 4.2307365732922415,
+            "is_water": true,
+            "water_dist": 0.29509341960095353,
+            "nearest_water_idx": 17,
+            "water_label": "A:HOH218"
+          },
+          {
+            "rank": 22,
+            "height": 4.224399277002461,
+            "is_water": false,
+            "water_dist": 7.455899454883927,
+            "nearest_water_idx": 40,
+            "water_label": null
+          },
+          {
+            "rank": 23,
+            "height": 4.183682606399598,
+            "is_water": true,
+            "water_dist": 0.2766197988045879,
+            "nearest_water_idx": 62,
+            "water_label": "B:HOH226"
+          },
+          {
+            "rank": 24,
+            "height": 4.139587367476036,
+            "is_water": true,
+            "water_dist": 0.1899262675121607,
+            "nearest_water_idx": 2,
+            "water_label": "A:HOH203"
+          },
+          {
+            "rank": 25,
+            "height": 4.126593372944562,
+            "is_water": false,
+            "water_dist": 3.874273425691175,
+            "nearest_water_idx": 6,
+            "water_label": null
+          }
+        ],
+        "solvent_params": {
+          "k_total": 0.3312508165836334,
+          "k_sol": 0.3432270586490631,
+          "b_sol": 17.718181610107422
+        },
+        "elapsed_s": 16.972080945968628
+      }
+    }
+  }
+}

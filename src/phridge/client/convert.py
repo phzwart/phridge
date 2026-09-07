@@ -139,8 +139,6 @@ def _cctbx_to_canonical(value: Any) -> Any:
         return xtal.reflections_from_mtz(value)
     if isinstance(value, pdb.hierarchy.root):
         return xtal.hierarchy_from_cctbx(value)
-    if isinstance(value, xray.structure):
-        return xtal.xray_from_cctbx(value)
     if isinstance(value, maptbx.crystal_gridding):
         return xtal.gridding_from_cctbx(value)
     if isinstance(value, map_manager):
@@ -230,15 +228,32 @@ def miller_to_cctbx(packed: PackedMiller) -> Any:
     from scitbx.array_family import flex
 
     crystal = crystal_to_cctbx(packed.meta.crystal)
-    indices = cctbx_flex.miller_index([tuple(int(x) for x in row) for row in packed.hkl])
+    try:
+        hkl_arr = np.ascontiguousarray(packed.hkl, dtype=np.int32)
+        indices = cctbx_flex.miller_index(hkl_arr)
+    except Exception:
+        indices = cctbx_flex.miller_index([tuple(int(x) for x in row) for row in packed.hkl])
     miller_set = miller.set(crystal, indices, anomalous_flag=packed.meta.anomalous)
     if np.iscomplexobj(packed.data):
-        data = flex.complex_double(list(packed.data))
+        cdata = np.ascontiguousarray(packed.data, dtype=np.complex128)
+        try:
+            data = flex.complex_double(cdata)
+        except Exception:
+            data = flex.complex_double(list(cdata))
     else:
-        data = flex.double(list(packed.data))
+        rdata = np.ascontiguousarray(packed.data, dtype=np.float64)
+        try:
+            data = flex.double(rdata)
+        except Exception:
+            data = flex.double(list(rdata))
     result = miller.array(miller_set=miller_set, data=data)
     if packed.sigmas is not None:
-        result = result.customized_copy(sigmas=flex.double(list(packed.sigmas)))
+        sdata = np.ascontiguousarray(packed.sigmas, dtype=np.float64)
+        try:
+            sigmas_flex = flex.double(sdata)
+        except Exception:
+            sigmas_flex = flex.double(list(sdata))
+        result = result.customized_copy(sigmas=sigmas_flex)
     return result
 
 
@@ -258,9 +273,12 @@ def map_from_cctbx(
 def map_to_cctbx(packed: PackedMap) -> Any:
     from scitbx.array_family import flex
 
-    flat = packed.data.reshape(-1)
+    flat = np.ascontiguousarray(packed.data.reshape(-1), dtype=np.float64)
     grid = flex.grid(tuple(int(n) for n in packed.meta.n_real))
-    result = flex.double(list(flat))
+    try:
+        result = flex.double(flat)
+    except Exception:
+        result = flex.double(list(flat))
     result.reshape(grid)
     return result
 

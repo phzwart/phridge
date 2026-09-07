@@ -619,6 +619,35 @@ def test_adp_ops_roundtrip_and_schema_validation():
     )
     assert len(solve_res["solution"]) == len(rhs_joint)
 
+    # Test geometry_gn_solve without explicit adp_params (covers math.log fallback)
+    solve_adp_fallback = bridge.call(
+        "geometry_gn_solve",
+        rhs=rhs_adp,
+        sites=packed_sites,
+        restraints=pr_adp,
+        params={
+            "blocks": ["adp"],
+            "weight": 1.0,
+            "damping": 1e-3,
+            "method": "sparse",
+        },
+    )
+    assert len(solve_adp_fallback["solution"]) == len(rhs_adp)
+
+    solve_joint_fallback = bridge.call(
+        "geometry_gn_solve",
+        rhs=rhs_joint,
+        sites=packed_sites,
+        restraints=pr_adp,
+        params={
+            "blocks": ["sites", "adp"],
+            "weight": 1.0,
+            "damping": 1e-3,
+            "method": "sparse",
+        },
+    )
+    assert len(solve_joint_fallback["solution"]) == len(rhs_joint)
+
 
 # -----------------------------------------------------------------------------
 # Test 9: Held-Out Check

@@ -9,9 +9,10 @@ venv/
 dist/
 build/
 *.npz
-.DS_Store
-examples/intensity_demo_output/
 *.ccp4
+*.pdb
+*.mtz
+.DS_Store
 examples/lysozyme/1iee*
 *.patch
 examples/1ee2/1ee2*

@@ -57,8 +57,45 @@ class MemoryRedis:
                 return name, bucket.pop(0)
         return None
 
-    def xadd(self, name: str, fields: dict[Any, Any], id: str = "*") -> bytes:
-        del id
+    def delete(self, *names: Any) -> int:
+        count = 0
+        for name in names:
+            n = name.decode("utf-8") if isinstance(name, bytes) else str(name)
+            if n in self._kv:
+                del self._kv[n]
+                count += 1
+            if n in self._lists:
+                del self._lists[n]
+                count += 1
+            if n in self._streams:
+                del self._streams[n]
+                count += 1
+        return count
+
+    def xlen(self, name: str) -> int:
+        return len(self._streams.get(name, []))
+
+    def xgroup_create(
+        self,
+        name: str,
+        groupname: str,
+        id: str = "$",
+        mkstream: bool = False,
+    ) -> bool:
+        del groupname, id
+        if mkstream and name not in self._streams:
+            self._streams[name] = []
+        return True
+
+    def xadd(
+        self,
+        name: str,
+        fields: dict[Any, Any],
+        id: str = "*",
+        maxlen: Optional[int] = None,
+        approximate: bool = False,
+    ) -> bytes:
+        del id, approximate
         self._stream_seq += 1
         entry_id = f"0-{self._stream_seq}".encode("utf-8")
         encoded: dict[bytes, bytes] = {}
@@ -71,5 +108,8 @@ class MemoryRedis:
             else:
                 v = str(value).encode("utf-8")
             encoded[k] = v
-        self._streams.setdefault(name, []).append((entry_id, encoded))
+        stream = self._streams.setdefault(name, [])
+        stream.append((entry_id, encoded))
+        if maxlen is not None and len(stream) > maxlen:
+            del stream[:-maxlen]
         return entry_id

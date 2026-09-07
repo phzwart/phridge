@@ -91,10 +91,19 @@ def get_implementation(name: str, *, runtime: Optional[Union[str, WorkerRuntime]
 
     Looks in the late-bound map first, then the built-in table for the op's
     ``runtime`` (``phridge.worker.ops`` or ``phridge.cctbx_worker.ops``).
+    Validates that the op's registered runtime matches ``runtime`` if specified.
     """
+    spec = _SPECS.get(name)
+    if spec is not None and runtime is not None:
+        target_rt = WorkerRuntime(runtime) if not isinstance(runtime, WorkerRuntime) else runtime
+        actual_rt = WorkerRuntime(spec.runtime)
+        if actual_rt != target_rt:
+            raise RuntimeError(
+                f"Op {name!r} has runtime={actual_rt.value}, cannot execute on {target_rt.value} worker"
+            )
+
     if name in _IMPLS:
         return _IMPLS[name]
-    spec = _SPECS.get(name)
     if runtime is not None:
         rt = WorkerRuntime(runtime) if not isinstance(runtime, WorkerRuntime) else runtime
     elif spec is not None:
