@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
 from phridge.models import ScatteringTable, SfCurvatures, SfGradients, TargetResult
 from phridge.packing import as_canonical_complex, as_canonical_float
 from phridge.packing_xtal import _load_npz, _savez
+
+
+def _to_numpy(x: Any) -> Optional[np.ndarray]:
+    if x is None:
+        return None
+    if hasattr(x, "detach"):
+        x = x.detach().cpu().numpy()
+    return np.asarray(x)
 
 
 class PackedScatteringTable:
@@ -65,15 +73,15 @@ class PackedSfGradients:
         *,
         target: Optional[float] = None,
     ) -> None:
-        self.d_site_frac = as_canonical_float(np.asarray(d_site_frac))
+        self.d_site_frac = as_canonical_float(_to_numpy(d_site_frac))
         n = self.d_site_frac.shape[0]
         if self.d_site_frac.shape != (n, 3):
             raise ValueError("d_site_frac must be (N, 3)")
-        self.d_occupancy = as_canonical_float(np.asarray(d_occupancy))
-        self.d_u_iso = as_canonical_float(np.asarray(d_u_iso))
-        self.d_u_star = as_canonical_float(np.asarray(d_u_star))
-        self.d_fp = as_canonical_float(np.asarray(d_fp))
-        self.d_fdp = as_canonical_float(np.asarray(d_fdp))
+        self.d_occupancy = as_canonical_float(_to_numpy(d_occupancy))
+        self.d_u_iso = as_canonical_float(_to_numpy(d_u_iso))
+        self.d_u_star = as_canonical_float(_to_numpy(d_u_star))
+        self.d_fp = as_canonical_float(_to_numpy(d_fp))
+        self.d_fdp = as_canonical_float(_to_numpy(d_fdp))
         for name in ("d_occupancy", "d_u_iso", "d_fp", "d_fdp"):
             if getattr(self, name).shape != (n,):
                 raise ValueError(f"{name} must be (N,)")
@@ -105,15 +113,15 @@ class PackedSfCurvatures:
         fp: np.ndarray,
         fdp: np.ndarray,
     ) -> None:
-        self.site_frac = as_canonical_float(np.asarray(site_frac))
+        self.site_frac = as_canonical_float(_to_numpy(site_frac))
         n = self.site_frac.shape[0]
         if self.site_frac.shape != (n, 3, 3):
             raise ValueError("site_frac must be (N, 3, 3)")
-        self.occupancy = as_canonical_float(np.asarray(occupancy))
-        self.u_iso = as_canonical_float(np.asarray(u_iso))
-        self.u_star = as_canonical_float(np.asarray(u_star))
-        self.fp = as_canonical_float(np.asarray(fp))
-        self.fdp = as_canonical_float(np.asarray(fdp))
+        self.occupancy = as_canonical_float(_to_numpy(occupancy))
+        self.u_iso = as_canonical_float(_to_numpy(u_iso))
+        self.u_star = as_canonical_float(_to_numpy(u_star))
+        self.fp = as_canonical_float(_to_numpy(fp))
+        self.fdp = as_canonical_float(_to_numpy(fdp))
         for name in ("occupancy", "u_iso", "fp", "fdp"):
             if getattr(self, name).shape != (n,):
                 raise ValueError(f"{name} must be (N,)")
@@ -157,13 +165,13 @@ class PackedTargetResult:
         value_test: Optional[float] = None,
         scale_factor: Optional[float] = None,
     ) -> None:
-        self.per_reflection = as_canonical_float(np.asarray(per_reflection))
-        self.d_target_d_f_calc = as_canonical_complex(np.asarray(d_target_d_f_calc))
+        self.per_reflection = as_canonical_float(_to_numpy(per_reflection))
+        self.d_target_d_f_calc = as_canonical_complex(_to_numpy(d_target_d_f_calc))
         n = self.per_reflection.shape[0]
         if self.d_target_d_f_calc.shape != (n,):
             raise ValueError("d_target_d_f_calc length mismatch")
-        self.curv_radial = None if curv_radial is None else as_canonical_float(np.asarray(curv_radial))
-        self.curv_tangential = None if curv_tangential is None else as_canonical_float(np.asarray(curv_tangential))
+        self.curv_radial = None if curv_radial is None else as_canonical_float(_to_numpy(curv_radial))
+        self.curv_tangential = None if curv_tangential is None else as_canonical_float(_to_numpy(curv_tangential))
         for arr in (self.curv_radial, self.curv_tangential):
             if arr is not None and arr.shape != (n,):
                 raise ValueError("curvature length mismatch")

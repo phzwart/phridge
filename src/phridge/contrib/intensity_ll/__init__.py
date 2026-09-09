@@ -8,8 +8,12 @@ from __future__ import annotations
 from typing import Any
 
 from phridge.contrib.intensity_ll import target as _target  # noqa: F401
-from phridge.contrib.intensity_ll.ops import NUISANCE_FIT_OP_NAME, OP_NAME as MAPS_OP_NAME
-from phridge.contrib.intensity_ll.ops import register_ops
+from phridge.contrib.intensity_ll.ops import (
+    NUISANCE_FIT_OP_NAME,
+    OP_NAME as MAPS_OP_NAME,
+    TARGET_AND_GRADIENTS_OP_NAME,
+    register_ops,
+)
 from phridge.contrib.intensity_ll.target import IntensityLogLikelihood, IntensityLogLikelihoodOptions
 
 __all__ = [
@@ -17,14 +21,16 @@ __all__ = [
     "IntensityLogLikelihoodOptions",
     "MAPS_OP_NAME",
     "NUISANCE_FIT_OP_NAME",
+    "TARGET_AND_GRADIENTS_OP_NAME",
     "log_likelihood_normal",
     "log_likelihood_t",
     "normalize",
+    "posterior_mode_E",
     "register",
 ]
 
 
-_LAZY_MLI = {"log_likelihood_normal", "log_likelihood_t", "normalize"}
+_LAZY_MLI = {"log_likelihood_normal", "log_likelihood_t", "normalize", "posterior_mode_E"}
 
 
 def __getattr__(name: str) -> Any:

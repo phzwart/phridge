@@ -129,10 +129,10 @@ def _cctbx_to_canonical(value: Any) -> Any:
 
     if isinstance(value, xray.structure):  # subclass of crystal.symmetry: test first
         return xtal.xray_from_cctbx(value)
-    if isinstance(value, crystal.symmetry):
-        return crystal_from_cctbx(value)
     if isinstance(value, miller.array):
         return xtal.miller_or_hl_from_cctbx(value)
+    if isinstance(value, crystal.symmetry):
+        return crystal_from_cctbx(value)
     if isinstance(value, miller.fft_map):
         return map_from_cctbx(value, value.crystal_symmetry())
     if isinstance(value, mtz.object):
@@ -147,8 +147,10 @@ def _cctbx_to_canonical(value: Any) -> Any:
         from phridge.client.convert_geometry import restraints_from_cctbx
 
         return restraints_from_cctbx(value)
-    if isinstance(value, flex.double) and getattr(value, "nd", 1) == 3:
-        raise TypeError("3-D flex maps need crystal symmetry; use map_from_cctbx(data, crystal)")
+    if isinstance(value, (flex.double, flex.bool, flex.int, flex.size_t, flex.complex_double, flex.float)):
+        if getattr(value, "nd", 1) == 3:
+            raise TypeError("3-D flex maps need crystal symmetry; use map_from_cctbx(data, crystal)")
+        return np.asarray(value)
     raise TypeError(f"no cctbx converter for {type(value)!r}")
 
 

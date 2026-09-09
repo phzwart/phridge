@@ -62,7 +62,13 @@ def _extract_adp_vec(xs: Any) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(vals, dtype=np.float64), is_aniso
 
 
-def _apply_adp_vec(xs: Any, adp_vec: np.ndarray, is_aniso: np.ndarray) -> None:
+def _apply_adp_vec(
+    xs: Any,
+    adp_vec: np.ndarray,
+    is_aniso: np.ndarray,
+    min_b: float = 0.5,
+    max_b: float = 300.0,
+) -> None:
     """Update scatterers in xray_structure in-place from flat adp_vec."""
     from cctbx import adptbx
 
@@ -76,7 +82,7 @@ def _apply_adp_vec(xs: Any, adp_vec: np.ndarray, is_aniso: np.ndarray) -> None:
             s00, s11, s22, s01, s02, s12 = s_vec
             S_mat = np.array([[s00, s01, s02], [s01, s11, s12], [s02, s12, s22]], dtype=np.float64)
             eigvals, eigvecs = np.linalg.eigh(S_mat)
-            b_mat = eigvecs @ np.diag(np.exp(eigvals)) @ eigvecs.T
+            b_mat = eigvecs @ np.diag(np.clip(np.exp(eigvals), min_b, max_b)) @ eigvecs.T
             u_cart = (1.0 / (8.0 * np.pi**2)) * np.array(
                 [b_mat[0, 0], b_mat[1, 1], b_mat[2, 2], b_mat[0, 1], b_mat[0, 2], b_mat[1, 2]]
             )
@@ -85,7 +91,7 @@ def _apply_adp_vec(xs: Any, adp_vec: np.ndarray, is_aniso: np.ndarray) -> None:
         else:
             beta = float(adp_vec[offset])
             offset += 1
-            b_iso = float(np.exp(beta))
+            b_iso = float(np.clip(np.exp(beta), min_b, max_b))
             sc.u_iso = b_iso / (8.0 * np.pi**2)
 
 
@@ -270,6 +276,9 @@ class JointSiteRefinement:
         cg_tol: float = 1e-4,
         damping: float = 1e-3,
         step_max: float = 0.3,
+        step_max_adp: float = 0.5,
+        min_b: float = 0.5,
+        max_b: float = 300.0,
         precondition: bool = True,
         method: str = "sparse",
         groups: Optional[list[Any]] = None,
@@ -351,13 +360,18 @@ class JointSiteRefinement:
             mu = damping * float(np.median(d_x[d_x > 0])) if np.any(d_x > 0) else damping
             p_flat, cg_iters = _pcg(lambda v: hvp(v) + mu * v, -g_flat, msolve, max_iter=int(cg_max_iter), tol=cg_tol)
 
-            # Enforce max step on sites
+            # Enforce max step on sites and adp
             p_step = p_flat.copy()
             if "sites" in self.refine:
                 p_s = p_step[:n3].reshape(-1, 3)
                 step_s = float(np.abs(p_s).max())
                 if step_s > step_max:
                     p_step[:n3] *= step_max / step_s
+            if "adp" in self.refine:
+                p_a = p_step[n3:]
+                step_a = float(np.abs(p_a).max()) if p_a.size > 0 else 0.0
+                if step_a > step_max_adp:
+                    p_step[n3:] *= step_max_adp / step_a
 
             alpha, gp = 1.0, float(g_flat @ p_step)
             accepted = False
@@ -371,7 +385,7 @@ class JointSiteRefinement:
                     c_idx += n3
                 if "adp" in self.refine and adp_vec is not None and is_aniso is not None:
                     p_a = p_cur[c_idx:]
-                    _apply_adp_vec(xs_try, adp_vec + p_a, is_aniso)
+                    _apply_adp_vec(xs_try, adp_vec + p_a, is_aniso, min_b=min_b, max_b=max_b)
 
                 f1 = self.total(xs_try)
                 if f1 <= f0 + 1e-4 * alpha * gp:

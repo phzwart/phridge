@@ -170,9 +170,18 @@ class IntensityRefineMixin:
         seed: Optional[int] = 42,
         min_b: float = 1.0,
         max_b: float = 200.0,
+        *,
+        rmsd: Optional[float] = None,
+        reset_b: Optional[bool] = None,
+        rng: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Convenience function to perturbation-test a model by shaking coordinates, B-factors, or both."""
-        rng = np.random.default_rng(seed)
+        if rmsd is not None and sites_rmsd is None:
+            sites_rmsd = rmsd
+        if reset_b is not None:
+            b_reset = reset_b
+        if rng is None:
+            rng = np.random.default_rng(seed)
         result: Dict[str, Any] = {"seed": seed}
 
         if sites_rmsd is not None and sites_rmsd > 0:

@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from phridge.sfcalc.targets.base import Observations, Target, register_target
+from phridge.sfcalc.targets.base import Observations, Target, TargetEval, register_target
 
 
 class IntensityLogLikelihoodOptions(BaseModel):
@@ -180,3 +180,32 @@ class IntensityLogLikelihood(Target):
             ll = log_likelihood_normal(Ec, sA_n, Zo, sZ, centric, **q_kw)
             assert isinstance(ll, torch.Tensor)
         return torch.where(ok, -ll, torch.zeros_like(ll))
+
+    def evaluate(self, f_calc, obs: Observations, compute_curvature: bool = True) -> TargetEval:
+        import time
+
+        t0 = time.perf_counter()
+        res = super().evaluate(f_calc, obs, compute_curvature=compute_curvature)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+        import os
+
+        env_verb = os.environ.get("PHRIDGE_VERBOSE_TARGET", "0").strip().lower()
+        if env_verb in ("1", "true", "yes", "on"):
+            nu_val = self._nu(obs)
+            if nu_val is not None:
+                if hasattr(nu_val, "numel") and nu_val.numel() > 1:
+                    nu_str = f"nu={float(nu_val.mean().item()):.1f} (mean)"
+                else:
+                    nu_f = float(nu_val.item()) if hasattr(nu_val, "item") else float(nu_val)
+                    nu_str = f"nu={nu_f:.1f}"
+            else:
+                nu_str = "Gaussian"
+            test_val = f"{res.value_test:.6f}" if res.value_test is not None else "N/A"
+            curv_str = f"curv={'yes' if compute_curvature else 'no'}"
+            print(
+                f">>> [mli_quad worker] Target (work) = {res.value:.6f} | Free = {test_val} | "
+                f"PyTorch eval: {elapsed_ms:.2f} ms | {nu_str} | {curv_str}",
+                flush=True,
+            )
+        return res

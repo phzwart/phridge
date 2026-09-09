@@ -43,6 +43,7 @@ from phridge.contrib.intensity_ll.mli import (
     _loggamma_rule,
     _ratio,
     normalize,
+    posterior_mode_E,
     quadrature_terms_normal,
 )
 from phridge.sfcalc.targets.base import Observations
@@ -200,6 +201,7 @@ class IntensityMapSet:
     f_post: np.ndarray  # <F>  (robust, model-conditioned French-Wilson amplitude)
     d_loglik_d_nu: Optional[np.ndarray]
     stats: dict[str, Any]
+    f_mode: Optional[np.ndarray] = None  # F_mode = scale * E_mode (posterior mode amplitude)
 
 
 def _radial_curvature(target: Any, f_calc: Tensor, obs: Observations, differentiate_window: bool) -> Tensor:
@@ -288,6 +290,8 @@ def intensity_map_coefficients(
         information_weight_acentric="2 sigma_A / (1 - sigma_A^2) / sqrt(eps Sigma)",
         newton_damping_abs=float(mu),
     )
+    f_mode_E, _ = posterior_mode_E(Ec, sA_n, Zo, sZ, centric)
+
     return IntensityMapSet(
         difference=_c(scale * diff_E),
         model=_c(scale * model_E),
@@ -299,4 +303,5 @@ def intensity_map_coefficients(
         f_post=_r(scale * post.E_mean),
         d_loglik_d_nu=None if post.d_loglik_d_nu is None else _r(post.d_loglik_d_nu),
         stats=stats,
+        f_mode=_r(scale * f_mode_E),
     )

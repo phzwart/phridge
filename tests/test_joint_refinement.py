@@ -99,7 +99,7 @@ def test_joint_refinement_sites_and_adp_blocks():
         weight=1.0,
         weight_adp=1.0,
         refine=("sites", "adp"),
-        hessian_geom="diagonal",
+        hessian_geom="gn",
     )
     t0 = j_joint.total(xs2)
     assert not np.isnan(t0)

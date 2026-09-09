@@ -17,15 +17,15 @@ from phridge.client.intensity import from_files
 
 
 def print_detailed_comparison(rep: Any) -> None:
-    """Print a comprehensive held-out test reflection comparison report."""
+    """Print a comprehensive audit set comparison report."""
     print("\n" + "-" * 85)
-    print(f" HELD-OUT COMPARISON: {rep.name_B} vs {rep.name_A}")
+    print(f" AUDIT SET COMPARISON: {rep.name_B} vs {rep.name_A}")
     print("-" * 85)
-    print(f"  Scored Test Reflections: {rep.n_test} (Tune: {rep.n_tune}, Work: {rep.n_work})")
-    print(f"  Model A NLL (test):      {rep.nll_A:.4f} nats/refl")
-    print(f"  Model B NLL (test):      {rep.nll_B:.4f} nats/refl")
+    print(f"  Scored Audit Reflections: {rep.n_test} (Tune: {rep.n_tune}, Work: {rep.n_work})")
+    print(f"  Model A NLL (audit):     {rep.nll_A:.4f} nats/refl")
+    print(f"  Model B NLL (audit):     {rep.nll_B:.4f} nats/refl")
     print(f"  Delta NLL (B - A):       {rep.delta_nll:+.4f} nats/refl (Gain: {rep.delta_gain:+.4f} nats/refl)")
-    print(f"  Total Log Bayes Factor:  {rep.total_delta_gain:+.1f} nats across {rep.n_test} test reflections")
+    print(f"  Total Log Bayes Factor:  {rep.total_delta_gain:+.1f} nats across {rep.n_test} audit reflections")
     print(f"  Bootstrap SE:            {rep.se_boot:.4f} (95% CI: [{rep.ci_boot[0]:+.4f}, {rep.ci_boot[1]:+.4f}])")
     print(f"  Naive SE:                {rep.se_naive:.4f} (Clustering Ratio: {rep.se_ratio:.2f}x)")
     print(f"  Win Fraction P(d_h > 0): {rep.win_fraction*100:.1f}% ({rep.wins_B} wins / {rep.wins_A} losses / {rep.ties} ties)")

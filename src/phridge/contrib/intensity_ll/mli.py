@@ -229,6 +229,45 @@ def _aghq_I(fun_cols: Callable[[Tensor], Tensor], I0: Tensor, H: Tensor, n: int)
     return _logsumexp_rows(_aghq_I_terms(fun_cols, I0, H, n)[1])
 
 
+# ---------------------------------------------------------------- posterior mode
+def posterior_mode_E(
+    Ec: Tensor,
+    sA: Tensor,
+    Zo: Tensor,
+    sZ: Tensor,
+    centric: Union[Tensor, bool],
+    *,
+    iters: int = 20,
+) -> tuple[Tensor, Tensor]:
+    """Maximum a posteriori (MAP) normalized amplitude E_mode = argmax_E ln p(E | Zo, Ec).
+
+    Returns ``(E_mode, H_mode)`` where E_mode >= 0 and H_mode is the negative second derivative
+    (curvature) at the mode. If the mode lies at the origin (e.g. gradient at origin <= 0
+    or non-negative curvature), E_mode is clipped to 0.0.
+    """
+    with torch.no_grad():
+        Ec, sA, Zo, sZ = torch.broadcast_tensors(Ec, sA, Zo, sZ)
+        centric_t = torch.as_tensor(centric, device=Ec.device).bool().expand_as(Ec)
+        Ec_, sA_, Zo_, sZ_ = Ec.detach(), sA.detach(), Zo.detach(), sZ.detach()
+        a_ = 1 - sA_**2
+        x0 = torch.maximum(torch.sqrt(Zo_.clamp_min(0.0)), torch.sqrt(sA_**2 * Ec_**2 + a_ / 2))
+
+        def fun_E(E: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+            la, ga, Ha = acen_E(E, Ec_, sA_, Zo_, sZ_)
+            lc, gc, Hc = cen_E(E, Ec_, sA_, Zo_, sZ_)
+            return (
+                torch.where(centric_t, lc, la),
+                torch.where(centric_t, gc, ga),
+                torch.where(centric_t, Hc, Ha),
+            )
+
+        E0, H_E, it_E = newton_mode(fun_E, x0, iters=iters)
+        g_origin = fun_E(torch.full_like(E0, 1e-4))[1]
+        boundary = (H_E >= 0) | (g_origin <= 0) | (E0 <= 1e-4)
+        E_mode = torch.where(boundary, torch.zeros_like(E0), E0)
+        return E_mode, H_E
+
+
 # ---------------------------------------------------------------- main evaluator
 def quadrature_terms_normal(
     Ec: Tensor,

@@ -80,7 +80,20 @@ class RedisStore:
         url: str,
         **kwargs,
     ) -> "RedisStore":
-        return cls(redis.Redis.from_url(url, decode_responses=False), **kwargs)
+        # Bound socket reads so a dead/hung redis-server cannot block forever
+        # (past mli_quad jobs hung on BLPOP / GET with no socket timeout).
+        connect_timeout = float(kwargs.pop("socket_connect_timeout", 5.0))
+        # Must exceed Protocol.wait BLPOP block (≤5s); allow a little slack.
+        sock_timeout = float(kwargs.pop("socket_timeout", 15.0))
+        client = redis.Redis.from_url(
+            url,
+            decode_responses=False,
+            socket_connect_timeout=connect_timeout,
+            socket_timeout=sock_timeout,
+            retry_on_timeout=True,
+            health_check_interval=30,
+        )
+        return cls(client, **kwargs)
 
     @classmethod
     def memory(cls, **kwargs) -> "RedisStore":

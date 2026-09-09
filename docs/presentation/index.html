@@ -504,6 +504,18 @@
       }
     }
   </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body data-theme="dark">
 
@@ -555,7 +567,7 @@
             </div>
             <div class="stat-box">
               <div class="stat-val warning">p &lt; 0.003</div>
-              <div class="stat-label">Held-Out Reflection Win Rate Significance (Re-Refinement)</div>
+              <div class="stat-label">Audit Reflection Win Rate Significance (Re-Refinement)</div>
             </div>
           </div>
         </div>
@@ -587,8 +599,80 @@
         </div>
       </section>
 
-      <!-- SLIDE 3: Phridge Engine Architecture -->
-      <section class="slide" data-slide="3" data-title="Phridge Architecture">
+      <!-- SLIDE 3: Theory: Marginalization & Noise Modeling -->
+      <section class="slide" data-slide="3" data-title="Theory: Likelihood & Noise Modeling">
+        <div class="slide-tag">Mathematical Foundations · Likelihood Formulation</div>
+        <h1 class="slide-title">Theory: Direct Likelihood Marginalization</h1>
+        <p class="slide-subtitle">Marginalizing error-free amplitude \(E\) under Rice / Woolfson priors and heavy-tailed Student-\(t\) noise.</p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>1. The Marginalization Integral</h3>
+            <p style="margin-bottom: 0.6rem;">For each reflection \(h\), Phridge integrates over the unobserved true amplitude \(E\):</p>
+            <div style="background: var(--bg-primary); padding: 0.8rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; border: 1px solid var(--border); margin-bottom: 0.8rem;">
+              \(L(E_C) = \int_0^\infty f(E \mid E_C, \sigma_A)\, f_{\text{noise}}(Z_o \mid E^2, \sigma_Z[, \nu])\, dE\)
+            </div>
+            <ul class="feature-list" style="font-size: 0.85rem;">
+              <li><strong>Acentric (Rice)</strong>: \(f_a(E) = \frac{2E}{a}\exp(-\frac{E^2 + \sigma_A^2 E_C^2}{a}) I_0(\frac{2\sigma_A E E_C}{a})\) with \(a = 1 - \sigma_A^2\)</li>
+              <li><strong>Centric (Woolfson)</strong>: \(f_c(E) = \sqrt{\frac{2}{\pi a}}\exp(-\frac{E^2 + \sigma_A^2 E_C^2}{2a})\cosh(\frac{\sigma_A E E_C}{a})\)</li>
+              <li><strong>No Truncation</strong>: Negative \(Z_o = I_{\text{obs}} / (\varepsilon\Sigma)\) are legitimate statistical observations that pull \(|F_{\text{calc}}|\) toward zero.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>2. Intensity Space &amp; Student-\(t\) Scale Mixture</h3>
+            <p style="margin-bottom: 0.6rem;"><strong>Working in Intensity (\(I = E^2\))</strong> merges the Rice exponent and Gaussian noise into a single Gaussian window:</p>
+            <div style="background: var(--bg-primary); padding: 0.8rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; border: 1px solid var(--border); margin-bottom: 0.8rem;">
+              \(\exp(-\frac{I}{a}) \mathcal{N}(Z_o \mid I, \sigma_Z^2) = \exp(-\frac{Z_o}{a} + \frac{\sigma_Z^2}{2a^2}) \mathcal{N}(I \mid Z_o - \frac{\sigma_Z^2}{a}, \sigma_Z^2)\)
+            </div>
+            <p style="font-size: 0.85rem; margin-bottom: 0.6rem;"><strong>Student-\(t\) via Continuous Scale Mixture</strong> (\(\nu = N_{\text{eff}} - 1\)):</p>
+            <div style="background: var(--bg-primary); padding: 0.8rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; border: 1px solid var(--border);">
+              \(t_\nu(Z_o \mid I, \sigma_Z^2) = \int_0^\infty \mathcal{N}(Z_o \mid I, \sigma_Z^2 / \lambda)\, \text{Gamma}(\lambda \mid \frac{\nu}{2}, \frac{\nu}{2})\, d\lambda\)
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.6rem;">Discordant reflections receive redescending weight \(w_h \approx (\nu+1)/(\nu+r_h^2)\), isolating bad data.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: Implementation: Adaptive Quadrature & Analytic Gradients -->
+      <section class="slide" data-slide="4" data-title="Adaptive Quadrature & Gradients">
+        <div class="slide-tag">Numerical Methods · Vectorized PyTorch Engine</div>
+        <h1 class="slide-title">Adaptive Quadrature &amp; Map Synthesis</h1>
+        <p class="slide-subtitle">15 µs per reflection via 1D Newton mode finder, hybrid Hermite/Legendre quadrature, and Fisher's identity.</p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>Damped Newton &amp; Quadrature Branching</h3>
+            <ul class="feature-list" style="margin-top: 0.4rem; font-size: 0.85rem;">
+              <li><strong>1D Damped Newton Solver</strong>: Finds mode \(E_0\) and curvature \(H_E\) of \(\log [f(E) f_{\text{noise}}(E^2)]\) in <strong>3.4 iterations average</strong> to gradient &lt; 10⁻¹².</li>
+              <li><strong>Strong Acentric (\(Z_o/\sigma_Z \ge 5\))</strong>: 7-node Gauss-Hermite in \(I\) about Laplace point. Absolute error in \(\log L\) &lt; <strong>5 × 10⁻⁷</strong>.</li>
+              <li><strong>Weak, Negative &amp; Centric</strong>: 24-node Gauss-Legendre on clipped window \([\max(0, E_0 - 8\sigma), \min(E_0 + 8\sigma, E_{\max})]\). Error &lt; <strong>2 × 10⁻⁶</strong>.</li>
+              <li><strong>Student-\(t\) Outer Rule</strong>: 12–16 node Gauss rule in \(u = \log\lambda\) (Golub-Welsch).</li>
+            </ul>
+            <div style="background: var(--bg-primary); padding: 0.6rem; border-radius: 6px; font-size: 0.8rem; border: 1px solid var(--border); margin-top: 0.8rem;">
+              <strong>Vectorized Speed</strong>: 2.5 s for 100,000 reflections on 2 CPU cores. Autograd through <code>logsumexp</code>.
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Score by Fisher's Identity &amp; Maps Without \(|F_o|\)</h3>
+            <p style="font-size: 0.85rem; margin-bottom: 0.6rem;">Gradient equals the posterior expectation of the complete-data score:</p>
+            <div style="background: var(--bg-primary); padding: 0.6rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; border: 1px solid var(--border); margin-bottom: 0.8rem;">
+              \(\frac{\partial \log L}{\partial E_C} = \frac{2\sigma_A}{a}\Bigl(\langle E\, m(E)\rangle - \sigma_A E_C\Bigr), \quad m(E) = \frac{I_1}{I_0}\)
+            </div>
+            <p style="font-size: 0.85rem; margin-bottom: 0.4rem;"><strong>Four Direct Intensity Maps</strong> (no \(|F_o|\) required):</p>
+            <ul class="feature-list" style="font-size: 0.82rem;">
+              <li><strong>Difference Map</strong>: \(\sqrt{\varepsilon\Sigma}(\langle E m\rangle - \sigma_A E_C) e^{i\varphi_c}\) (collapses smoothly to zero when \(\sigma_I\) is large)</li>
+              <li><strong>Model Map</strong>: \(\sqrt{\varepsilon\Sigma}(2\langle E m\rangle - \sigma_A E_C) e^{i\varphi_c}\)</li>
+              <li><strong>Gradient Map</strong>: \(\partial \log L / \partial F_c^* = -N_{\text{work}} \partial \text{NLL}/\partial F_c^*\)</li>
+              <li><strong>Newton Map</strong>: \(\text{Gradient} / (\max(\kappa, 0) + \mu)\) (damped diagonal step)</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5: Phridge Engine Architecture -->
+      <section class="slide" data-slide="5" data-title="Phridge Architecture">
         <div class="slide-tag">Systems Architecture · PyTorch &amp; Redis Streams</div>
         <h1 class="slide-title">Differentiable Crystallography at Scale</h1>
         <p class="slide-subtitle">Decoupled CCTBX drivers and PyTorch workers communicating via high-throughput memory buffers or Redis streams.</p>
@@ -615,8 +699,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 4: Case 1 - 6CZG Water Omission Setup -->
-      <section class="slide" data-slide="4" data-title="Case 1: 6CZG Water Omission">
+      <!-- SLIDE 6: Case 1 - 6CZG Water Omission Setup -->
+      <section class="slide" data-slide="6" data-title="Case 1: 6CZG Water Omission">
         <div class="slide-tag">Case Study 1 · Difference Density Sensitivity</div>
         <h1 class="slide-title">6CZG Water Omission Benchmark</h1>
         <p class="slide-subtitle">Evaluating difference electron density sensitivity and Fourier termination limits by omitting 72 ordered waters.</p>
@@ -652,8 +736,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 5: Case 1 - The Clean Separation Gap -->
-      <section class="slide" data-slide="5" data-title="Case 1: Clean Separation Gap">
+      <!-- SLIDE 7: Case 1 - The Clean Separation Gap -->
+      <section class="slide" data-slide="7" data-title="Case 1: Clean Separation Gap">
         <div class="slide-tag">Case Study 1 · Empirical Results</div>
         <h1 class="slide-title">The Separation Gap: <code>ml_i</code> vs <code>ml_f</code></h1>
         <p class="slide-subtitle">Direct intensity likelihood preserves a clean +0.61σ margin; French-Wilson amplitudes suffer an inverted gap.</p>
@@ -747,8 +831,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 6: Case 1 - Extreme Noise Resilience -->
-      <section class="slide" data-slide="6" data-title="Case 1: Noise Resilience & B-Factor Correlation">
+      <!-- SLIDE 8: Case 1 - Extreme Noise Resilience -->
+      <section class="slide" data-slide="8" data-title="Case 1: Noise Resilience & B-Factor Correlation">
         <div class="slide-tag">Case Study 1 · Robustness &amp; Physical Validation</div>
         <h1 class="slide-title">Extreme Noise Resilience &amp; B-Factor Physics</h1>
         <p class="slide-subtitle">Difference peak heights maintain exceptional physical fidelity across extreme noise scales.</p>
@@ -828,8 +912,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 7: Case 1 - Real Experimental 6CZG Map -->
-      <section class="slide" data-slide="7" data-title="Case 1: Authentic 6CZG Validation">
+      <!-- SLIDE 9: Case 1 - Real Experimental 6CZG Map -->
+      <section class="slide" data-slide="9" data-title="Case 1: Authentic 6CZG Validation">
         <div class="slide-tag">Case Study 1 · Real Experimental Data</div>
         <h1 class="slide-title">Experimental 6CZG Difference Map Validation</h1>
         <p class="slide-subtitle">Applying Phridge difference maps to real experimental diffraction data (<code>6czg.mtz</code>).</p>
@@ -895,8 +979,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 8: Case 2 - 1EE2 CHD Ligand Omission Setup -->
-      <section class="slide" data-slide="8" data-title="Case 2: 1EE2 CHD Omission">
+      <!-- SLIDE 10: Case 2 - 1EE2 CHD Ligand Omission Setup -->
+      <section class="slide" data-slide="10" data-title="Case 2: 1EE2 CHD Omission">
         <div class="slide-tag">Case Study 2 · Multi-Atom Ligand Sensitivity</div>
         <h1 class="slide-title">1EE2 Cholic Acid (CHD) Omission Benchmark</h1>
         <p class="slide-subtitle">Mapping difference density detection limits on a 58-atom bile acid ligand across 2 crystallographic sites at 1.54 Å.</p>
@@ -928,8 +1012,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 9: Case 2 - 2D Phase Diagram -->
-      <section class="slide" data-slide="9" data-title="Case 2: 2D Discovery Phase Diagram">
+      <!-- SLIDE 11: Case 2 - 2D Phase Diagram -->
+      <section class="slide" data-slide="11" data-title="Case 2: 2D Discovery Phase Diagram">
         <div class="slide-tag">Case Study 2 · Phase Diagram</div>
         <h1 class="slide-title">The Ligand Discovery Phase Diagram</h1>
         <p class="slide-subtitle">Mapping the 2D parameter space reveals three distinct physical discovery regimes.</p>
@@ -957,8 +1041,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 10: Case 2 - Intensity Advantage at Low SNR -->
-      <section class="slide" data-slide="10" data-title="Case 2: Low-SNR Advantage">
+      <!-- SLIDE 12: Case 2 - Intensity Advantage at Low SNR -->
+      <section class="slide" data-slide="12" data-title="Case 2: Low-SNR Advantage">
         <div class="slide-tag">Case Study 2 · Low-SNR / Low-Resolution Advantage</div>
         <h1 class="slide-title"><code>ml_i</code> Outperforms <code>ml_f</code> as Resolution Degrades</h1>
         <p class="slide-subtitle">At low SNR, French-Wilson amplitude conversion loses up to a quarter of the ligand atoms.</p>
@@ -1038,8 +1122,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 11: Case 2 - 4-Panel Heatmap Visuals -->
-      <section class="slide" data-slide="11" data-title="Case 2: 4-Panel Heatmap Landscape">
+      <!-- SLIDE 13: Case 2 - 4-Panel Heatmap Visuals -->
+      <section class="slide" data-slide="13" data-title="Case 2: 4-Panel Heatmap Landscape">
         <div class="slide-tag">Case Study 2 · Publication-Quality Heatmaps</div>
         <h1 class="slide-title">Visualizing the 2D Difference Map Landscape</h1>
         <p class="slide-subtitle">Four-panel heatmap matrix across 56 conditions (Occupancy \(q\) vs Noise Multiplier \(m\)).</p>
@@ -1074,8 +1158,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 12: Case 3 - Re-Refinement Protocol -->
-      <section class="slide" data-slide="12" data-title="Case 3: Re-Refinement Protocol">
+      <!-- SLIDE 14: Case 3 - Re-Refinement Protocol -->
+      <section class="slide" data-slide="14" data-title="Case 3: Re-Refinement Protocol">
         <div class="slide-tag">Case Study 3 · Re-Refinement of Deposited Models</div>
         <h1 class="slide-title">The Cross-Validated Re-Refinement Protocol</h1>
         <p class="slide-subtitle">Testing whether Phridge improves real-world deposited structures without coordinate overfitting.</p>
@@ -1086,7 +1170,7 @@
             <ul class="feature-list" style="margin-top: 0.5rem;">
               <li><strong>Working Set (\(|W|\), ~80–90%)</strong>: Refines atomic positions \((x, y, z)\) and B-factors.</li>
               <li><strong>Tuning Set (\(|\text{Tune}|\), ~5–10%)</strong>: Quarantined set used strictly to fit nuisance parameters: overall scale \(k_F\), \(\sigma_A\) error model, and degrees of freedom \(\nu\).</li>
-              <li><strong>Held-Out Test Set (\(|T|\), ~5–10%)</strong>: Strictly quarantined test reflections evaluated <em>only once</em> at the final model to compute held-out Negative Log-Likelihood (NLL).</li>
+              <li><strong>Audit Set (\(|A|\), ~5–10%)</strong>: Strictly quarantined reflections evaluated <em>only once</em> at the final model to compute audit Negative Log-Likelihood (NLL).</li>
             </ul>
           </div>
 
@@ -1103,10 +1187,10 @@
         </div>
       </section>
 
-      <!-- SLIDE 13: Case 3 - 6CZG Re-Refinement Results -->
-      <section class="slide" data-slide="13" data-title="Case 3: 6CZG Re-Refinement">
+      <!-- SLIDE 15: Case 3 - 6CZG Re-Refinement Results -->
+      <section class="slide" data-slide="15" data-title="Case 3: 6CZG Re-Refinement">
         <div class="slide-tag">Case Study 3 · 6CZG Empirical Re-Refinement</div>
-        <h1 class="slide-title">6CZG Re-Refinement: Held-Out Likelihood Gains</h1>
+        <h1 class="slide-title">6CZG Re-Refinement: Audit Set Likelihood Gains</h1>
         <p class="slide-subtitle">Unperturbed deposited 6CZG model re-refined under <code>ml_i</code> vs <code>ml_f</code>.</p>
         
         <div class="grid-2">
@@ -1114,7 +1198,7 @@
             <div class="grid-2">
               <div class="stat-box">
                 <div class="stat-val accent">900</div>
-                <div class="stat-label">Held-Out Test Reflections</div>
+                <div class="stat-label">Audit Reflections</div>
               </div>
               <div class="stat-box">
                 <div class="stat-val success">55.0%</div>
@@ -1160,12 +1244,12 @@
                   <td>Controlled</td>
                 </tr>
                 <tr>
-                  <td>Tune → Test Gap</td>
+                  <td>Tune → Audit Gap</td>
                   <td class="mono">-0.0069</td>
                   <td><span class="badge badge-success">Healthy</span></td>
                 </tr>
                 <tr>
-                  <td>Work → Test Gap</td>
+                  <td>Work → Audit Gap</td>
                   <td class="mono">-0.0017</td>
                   <td><span class="badge badge-success">No Overfit</span></td>
                 </tr>
@@ -1176,18 +1260,18 @@
         </div>
       </section>
 
-      <!-- SLIDE 14: Case 3 - 1EE2 Re-Refinement Results -->
-      <section class="slide" data-slide="14" data-title="Case 3: 1EE2 Re-Refinement">
+      <!-- SLIDE 16: Case 3 - 1EE2 Re-Refinement Results -->
+      <section class="slide" data-slide="16" data-title="Case 3: 1EE2 Re-Refinement">
         <div class="slide-tag">Case Study 3 · 1EE2 Empirical Re-Refinement</div>
         <h1 class="slide-title">1EE2 Re-Refinement: Large-N Validation</h1>
-        <p class="slide-subtitle">101,881 working reflections, 1,994 held-out test reflections at 1.54 Å resolution.</p>
+        <p class="slide-subtitle">101,881 working reflections, 1,994 audit reflections at 1.54 Å resolution.</p>
         
         <div class="grid-2">
           <div>
             <div class="grid-2" style="margin-bottom: 1rem;">
               <div class="stat-box">
                 <div class="stat-val accent">1,994</div>
-                <div class="stat-label">Held-Out Test Reflections</div>
+                <div class="stat-label">Audit Reflections</div>
               </div>
               <div class="stat-box">
                 <div class="stat-val success">53.4%</div>
@@ -1219,7 +1303,7 @@
                   <th>Model</th>
                   <th>\(R_{\text{free}}\) (%)</th>
                   <th>\(CC_{\text{free}}\)</th>
-                  <th>Test NLL (nats/refl)</th>
+                  <th>Audit NLL (nats/refl)</th>
                 </tr>
               </thead>
               <tbody>
@@ -1243,13 +1327,89 @@
                 </tr>
               </tbody>
             </table>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">Note: While legacy R-factors barely move (-0.06%), the statistically proper held-out NLL reveals substantial, significant predictive superiority (+2.85 nats Log Bayes Factor).</p>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">Note: While legacy R-factors barely move (-0.06%), the statistically proper audit NLL reveals substantial, significant predictive superiority (+2.85 nats Log Bayes Factor).</p>
           </div>
         </div>
       </section>
 
-      <!-- SLIDE 15: Algorithmic Synergy -->
-      <section class="slide" data-slide="15" data-title="Algorithmic Synergy">
+      <!-- SLIDE 17: Preliminary Results: Model Drift & Loop Omission -->
+      <section class="slide" data-slide="17" data-title="Model Drift & Loop Omission">
+        <div class="slide-tag">Preliminary Benchmarks · Drift Stability &amp; High-Resolution Omit</div>
+        <h1 class="slide-title">Preliminary Results: Drift Stability &amp; Loop Omission</h1>
+        <p class="slide-subtitle">Resisting parameter drift under extreme noise (6CZG) and recovering active site loops at 0.94 Å (1IEE).</p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>6CZG Ground-Truth Drift Under Student-\(t\) Noise</h3>
+            <p style="font-size: 0.82rem; margin-bottom: 0.5rem;">Refining unperturbed model against noisy data (1x to 100x noise multiplier):</p>
+            <table class="data-table" style="font-size: 0.78rem;">
+              <thead>
+                <tr>
+                  <th>Noise</th>
+                  <th>Target</th>
+                  <th>B RMSD (Å²)</th>
+                  <th>r(B, B_true)</th>
+                  <th>CC(I_calc, I_true)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono font-bold">1x</td>
+                  <td class="mono">ml_i</td>
+                  <td class="mono">2.91</td>
+                  <td class="mono">0.9888</td>
+                  <td class="mono">0.9990</td>
+                </tr>
+                <tr>
+                  <td class="mono font-bold">10x</td>
+                  <td class="mono">ml_i / ml_f</td>
+                  <td class="mono">3.37 / 3.33</td>
+                  <td class="mono" style="color: var(--success);"><strong>0.9777</strong> / 0.9717</td>
+                  <td class="mono">0.9987 / 0.9986</td>
+                </tr>
+                <tr style="background: rgba(56, 189, 248, 0.05);">
+                  <td class="mono font-bold">50x</td>
+                  <td class="mono">ml_i vs ml_f</td>
+                  <td class="mono" style="color: var(--success);"><strong>3.22</strong> vs 3.58</td>
+                  <td class="mono" style="color: var(--success);"><strong>0.9003</strong> vs 0.8507</td>
+                  <td class="mono" style="color: var(--success);"><strong>0.9982</strong> vs 0.9975</td>
+                </tr>
+                <tr style="background: rgba(56, 189, 248, 0.08);">
+                  <td class="mono font-bold">100x</td>
+                  <td class="mono">ml_i vs ml_f</td>
+                  <td class="mono" style="color: var(--success);"><strong>3.88</strong> vs 4.35</td>
+                  <td class="mono" style="color: var(--success);"><strong>0.8269</strong> vs 0.7733</td>
+                  <td class="mono" style="color: var(--success);"><strong>0.9973</strong> vs 0.9963</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.6rem;">At extreme noise, <code>ml_i</code> retains B-factor rank ordering (\(r=0.827\) vs \(0.773\)) and avoids unphysical parameter runaway.</p>
+          </div>
+
+          <div class="card">
+            <h3>Lysozyme 1IEE (0.94 Å) Catalytic Loop Omission</h3>
+            <p style="font-size: 0.82rem; margin-bottom: 0.5rem;">Omitting 8-residue loop (Arg45–Asp52, catalytic Asp52) in 72k reflections:</p>
+            <div class="grid-2" style="margin-bottom: 0.8rem;">
+              <div class="stat-box">
+                <div class="stat-val success">+17.58 σ</div>
+                <div class="stat-label">ml_i Gradient Peak (on Asp52)</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-val accent">+15.19 σ</div>
+                <div class="stat-label">Standard mFo - DFc Peak</div>
+              </div>
+            </div>
+            <p style="font-size: 0.82rem; margin-bottom: 0.6rem;">The intensity target gradient difference map is <strong>+2.39σ higher and sharper</strong>, cleanly defining the unmodeled loop trajectory.</p>
+            <div style="background: var(--bg-primary); padding: 0.7rem; border-radius: 6px; font-size: 0.8rem; border: 1px solid var(--border);">
+              <strong>Robust \(\sigma_A\) Regularization:</strong><br>
+              Overlapping bins + 1D Total Variation (\(\lambda_{\text{TV}} = 0.04\)) + monotonic PAVA regression eliminates high-frequency free-set oscillations across all coordinate perturbation levels (\(\Delta r = 0.0\)–\(1.2\) Å).
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 18: Algorithmic Synergy -->
+      <section class="slide" data-slide="18" data-title="Algorithmic Synergy">
         <div class="slide-tag">Optimization &amp; Geometry · Complete Refinement Stack</div>
         <h1 class="slide-title">Algorithmic Synergy: Curvature &amp; ADP Priors</h1>
         <p class="slide-subtitle">Combining direct intensity likelihood with exact geometry preconditioning and empirical Bayes ADP priors.</p>
@@ -1304,8 +1464,8 @@
         </div>
       </section>
 
-      <!-- SLIDE 16: Summary & Actionable Recommendations -->
-      <section class="slide" data-slide="16" data-title="Summary & Recommendations">
+      <!-- SLIDE 19: Summary & Actionable Recommendations -->
+      <section class="slide" data-slide="19" data-title="Summary & Recommendations">
         <div class="slide-tag">Conclusions &amp; Next Steps</div>
         <h1 class="slide-title">Summary &amp; Strategic Recommendations</h1>
         <p class="slide-subtitle">Concrete takeaways for crystallographers, software developers, and automated pipelines.</p>
@@ -1321,7 +1481,7 @@
           </div>
           <div class="card" style="border-top: 4px solid var(--warning);">
             <h3>3. Adopt Proper Scoring</h3>
-            <p>Held-out Negative Log-Likelihood (NLL) with 3-way partitioning detects genuine predictive coordinate improvements that legacy R-factors obscure.</p>
+            <p>Audit set Negative Log-Likelihood (NLL) with 3-way partitioning detects genuine predictive coordinate improvements that legacy R-factors obscure.</p>
           </div>
         </div>
 
@@ -1343,14 +1503,14 @@
   <div class="notes-drawer" id="notesDrawer">
     <div class="notes-header">
       <span>Speaker Notes &amp; Talking Points</span>
-      <span id="notesSlideIndicator">Slide 1 of 16</span>
+      <span id="notesSlideIndicator">Slide 1 of 19</span>
     </div>
     <div id="notesContent">Loading speaker notes...</div>
   </div>
 
   <!-- Slide Footer / Progress -->
   <footer class="slide-footer">
-    <span id="slideIndicator">Slide 1 / 16</span>
+    <span id="slideIndicator">Slide 1 / 19</span>
     <div class="progress-bar-container" id="progressBarContainer" title="Click to navigate">
       <div class="progress-bar-fill" id="progressBar"></div>
     </div>
@@ -1392,22 +1552,25 @@
 
       // Populate Speaker Notes database
       const speakerNotes = {
-        1: "Welcome. Today we present the empirical benchmark suite for Phridge, a modern, differentiable macromolecular refinement engine bridging CCTBX and PyTorch. The central breakthrough is direct intensity likelihood (ml_i) coupled with Student-t robust noise and sparse second-derivative geometry preconditioning.",
+        1: "Welcome. Today we present the theoretical foundations, implementation architecture, and comprehensive empirical validation suite for Phridge, a modern, differentiable macromolecular refinement engine bridging CCTBX and PyTorch. The central breakthrough is direct intensity likelihood (ml_i) coupled with Student-t robust noise, adaptive quadrature, and sparse second-derivative geometry preconditioning.",
         2: "For forty years, crystallographers have relied on French-Wilson to convert observed intensities into amplitudes. But French-Wilson squashes variance, truncates negative observations, and creates an artificial noise floor. Phridge solves this by evaluating likelihood directly on measured intensities.",
-        3: "Phridge does not approximate gradients through finite differences. It derives exact gradients via autograd in PyTorch. For geometry, standard L-BFGS stalls because chain stiffness is off-diagonal. Phridge's block-tridiagonal and sparse Gauss-Newton solvers resolve tight geometry in 1 to 12 steps.",
-        4: "Water omission is the ultimate test of difference map signal-to-noise. We removed all 72 ordered waters from 6CZG (leaving 1,616 protein atoms) and computed difference maps under both ml_i and ml_f across 9 synthetic noise levels plus authentic experimental data.",
-        5: "Notice the contrast at standard 1.0x noise: under ml_i, the weakest water is 3.60σ, while the highest noise peak is 2.99σ, leaving a clean +0.61σ margin with 0 false positives. Under ml_f, noise peaks rise to 3.49σ, creating an inverted -0.51σ gap where noise outranks true solvent.",
-        6: "At 50x noise, ml_i still recovers 59 of 72 waters (81.9%), while ml_f drops half the solvent shell. Furthermore, difference peak heights anti-correlate strongly with atomic B-factors (r ≈ -0.83), proving peak height directly encodes thermal disorder and occupancy.",
-        7: "In real experimental 6CZG data, the top 7 peaks are all verified waters. The first non-water peak at 4.79σ is located adjacent to Arg 113 NH2, revealing genuine unmodeled alternative sidechain rotamer density overlooked in the deposited PDB.",
-        8: "To test complex organic molecules, we turned to 1EE2, containing two ordered 29-atom cholic acid ligands (58 atoms) at 1.54 Å. We systematically varied both occupancy (q) and noise level (m), creating a comprehensive 56-cell 2D grid evaluated under both likelihood targets.",
-        9: "The resulting 2D matrix functions as a phase diagram. For q ≥ 0.60, the ligand is discovered unambiguously even at 3.2 Å. Between 30% and 50% occupancy, the core steroid rings remain clear. Below 20% occupancy, density collapses into the 3σ noise floor.",
-        10: "In low-SNR regimes (m ≥ 5x), ml_i consistently detects +15% to +25% more ligand atoms than French-Wilson. At 4.0 Å resolution, ml_i detects 75.9% of ligand atoms, compared to only 55.2% for French-Wilson. Preserving negative intensities provides critical Fourier phase contrast.",
-        11: "Here is the 4-panel publication heatmap. Notice how the green high-detection contour extends much further to the right under ml_i, and median peak heights remain 3σ to 5σ higher across intermediate occupancies.",
-        12: "To test real-world impact, we re-refined deposited PDB structures without artificial perturbation using a rigorous 3-way reflection partition: Working (coords), Tuning (nuisance parameters), and Held-Out Test (NLL scoring) with two-way likelihood decomposition.",
-        13: "On 6CZG, ml_i achieves a 55.0% win rate across 900 held-out reflections (p = 2.99e-3). Our two-way decomposition proves 100% of this gain is structural: atomic coordinates refined under ml_i predict held-out reflections better under both error models.",
-        14: "On 1EE2 (>100,000 reflections), ml_i achieves an NLL reduction of 0.0014 nats per reflection across nearly 2,000 held-out reflections (p = 2.49e-3, Log Bayes Factor +2.85 nats), with gains concentrated in high-resolution outer shells.",
-        15: "Refinement requires seamless coordination between x-ray targets and stereochemistry. Phridge's block-tridiagonal and sparse Gauss-Newton solvers eliminate off-diagonal chain stiffness, while empirical Bayes ADP restraints prevent thermal runaway.",
-        16: "To summarize: direct intensity likelihood provides measurable gains for difference density clarity, weak ligand discovery, and model accuracy. Phridge offers production-ready tools for automated model building and crystallographic pipelines."
+        3: "Here is the exact likelihood theory. Rather than forming amplitudes, we marginalize the error-free amplitude E under Rice (acentric) or Woolfson (centric) priors. Crucially, working in intensity (I = E^2) removes the coordinate singularity and merges the Rice exponential directly into the Gaussian noise, simplifying the problem to a single shifted Gaussian window times a smooth Bessel factor. Outliers are handled via a Student-t continuous scale mixture.",
+        4: "Evaluating numerical likelihood integrals over 100,000 reflections must be rapid and exact. Phridge finds the mode in 3.4 Newton iterations, then branches adaptively: 7-node Gauss-Hermite in I for strong acentrics (error < 5e-7), and 24-node Gauss-Legendre on a clipped window for weak, negative, or centric reflections. Score vectors and difference maps follow analytically from Fisher's identity without ever calculating |Fo|.",
+        5: "Phridge does not approximate gradients through finite differences. It derives exact gradients via autograd in PyTorch. For geometry, standard L-BFGS stalls because chain stiffness is off-diagonal. Phridge's block-tridiagonal and sparse Gauss-Newton solvers resolve tight geometry in 1 to 12 steps.",
+        6: "Water omission is the ultimate test of difference map signal-to-noise. We removed all 72 ordered waters from 6CZG (leaving 1,616 protein atoms) and computed difference maps under both ml_i and ml_f across 9 synthetic noise levels plus authentic experimental data.",
+        7: "Notice the contrast at standard 1.0x noise: under ml_i, the weakest water is 3.60σ, while the highest noise peak is 2.99σ, leaving a clean +0.61σ margin with 0 false positives. Under ml_f, noise peaks rise to 3.49σ, creating an inverted -0.51σ gap where noise outranks true solvent.",
+        8: "At 50x noise, ml_i still recovers 59 of 72 waters (81.9%), while ml_f drops half the solvent shell. Furthermore, difference peak heights anti-correlate strongly with atomic B-factors (r ≈ -0.83), proving peak height directly encodes thermal disorder and occupancy.",
+        9: "In real experimental 6CZG data, the top 7 peaks are all verified waters. The first non-water peak at 4.79σ is located adjacent to Arg 113 NH2, revealing genuine unmodeled alternative sidechain rotamer density overlooked in the deposited PDB.",
+        10: "To test complex organic molecules, we turned to 1EE2, containing two ordered 29-atom cholic acid ligands (58 atoms) at 1.54 Å. We systematically varied both occupancy (q) and noise level (m), creating a comprehensive 56-cell 2D grid evaluated under both likelihood targets.",
+        11: "The resulting 2D matrix functions as a phase diagram. For q ≥ 0.60, the ligand is discovered unambiguously even at 3.2 Å. Between 30% and 50% occupancy, the core steroid rings remain clear. Below 20% occupancy, density collapses into the 3σ noise floor.",
+        12: "In low-SNR regimes (m ≥ 5x), ml_i consistently detects +15% to +25% more ligand atoms than French-Wilson. At 4.0 Å resolution, ml_i detects 75.9% of ligand atoms, compared to only 55.2% for French-Wilson. Preserving negative intensities provides critical Fourier phase contrast.",
+        13: "Here is the 4-panel publication heatmap. Notice how the green high-detection contour extends much further to the right under ml_i, and median peak heights remain 3σ to 5σ higher across intermediate occupancies.",
+        14: "To test real-world impact, we re-refined deposited PDB structures without artificial perturbation using a rigorous 3-way reflection partition: Working (coords), Tuning (nuisance parameters), and Audit Set (NLL scoring) with two-way likelihood decomposition.",
+        15: "On 6CZG, ml_i achieves a 55.0% win rate across 900 audit reflections (p = 2.99e-3). Our two-way decomposition proves 100% of this gain is structural: atomic coordinates refined under ml_i predict audit reflections better under both error models.",
+        16: "On 1EE2 (>100,000 reflections), ml_i achieves an NLL reduction of 0.0014 nats per reflection across nearly 2,000 audit reflections (p = 2.49e-3, Log Bayes Factor +2.85 nats), with gains concentrated in high-resolution outer shells.",
+        17: "Under extreme noise (50x-100x), French-Wilson causes B-factors to scramble away from physical reality (r = 0.77). Direct intensity likelihood protects B-factor rank ordering (r = 0.83). On 0.94 Å lysozyme, omitting the catalytic loop produces a +17.58σ gradient peak on Asp52, +2.39σ higher and sharper than standard difference density.",
+        18: "Refinement requires seamless coordination between x-ray targets and stereochemistry. Phridge's block-tridiagonal and sparse Gauss-Newton solvers eliminate off-diagonal chain stiffness, while empirical Bayes ADP restraints prevent thermal runaway.",
+        19: "To summarize: direct intensity likelihood provides measurable gains for difference density clarity, weak ligand discovery, parameter stability, and model accuracy. Phridge offers production-ready tools for automated model building and crystallographic pipelines."
       };
 
       // Populate Slide Picker & Grid Modal
@@ -1466,6 +1629,11 @@
         // Button states
         prevBtn.disabled = currentSlide === 1;
         nextBtn.textContent = currentSlide === totalSlides ? "Finish ◼" : "Next ▶";
+
+        // Typeset math if MathJax is available
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          window.MathJax.typesetPromise([slides[currentSlide - 1]]).catch(() => {});
+        }
       }
 
       function goToSlide(n) {

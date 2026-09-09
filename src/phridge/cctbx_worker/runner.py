@@ -9,6 +9,8 @@ import socket
 import traceback
 from typing import Any, Optional
 
+import redis
+
 from phridge.client.convert import from_canonical, to_canonical
 from phridge.codec import decode_ref, encode_value
 from phridge.models import JobEnvelope, JobError, JobStatus, WorkerRuntime, utcnow
@@ -120,13 +122,16 @@ def consume_forever(
     store.ensure_consumer_group(runtime)
     consumer = consumer or socket.gethostname()
     while True:
-        messages = store.client.xreadgroup(
-            group,
-            consumer,
-            {stream: ">"},
-            count=1,
-            block=block_ms,
-        )
+        try:
+            messages = store.client.xreadgroup(
+                group,
+                consumer,
+                {stream: ">"},
+                count=1,
+                block=block_ms,
+            )
+        except (redis.exceptions.TimeoutError, TimeoutError):
+            continue
         if not messages:
             continue
         for _stream, entries in messages:

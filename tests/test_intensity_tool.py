@@ -916,7 +916,7 @@ def test_combined_shake_and_recover_sites_and_b():
     sites_shaken = np.asarray(model.xray_structure.sites_cart(), dtype=np.float64)
     b_shaken = np.array([float(sc.u_iso * 8.0 * np.pi**2) for sc in model.xray_structure.scatterers()])
 
-    actual_rmsd = float(np.sqrt(np.mean((sites_shaken - sites_orig)**2)))
+    actual_rmsd = float(np.sqrt(np.mean(np.sum((sites_shaken - sites_orig)**2, axis=1))))
     assert np.isclose(actual_rmsd, 0.10, atol=0.01)
 
     b_mean = float(np.mean(b_orig))

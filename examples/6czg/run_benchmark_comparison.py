@@ -1,4 +1,4 @@
-"""Run held-out cross-validated likelihood benchmark comparisons on 6CZG models.
+"""Run cross-validated audit set likelihood benchmark comparisons on 6CZG models.
 
 Compares:
   1. Shaken (0.50 Å) vs Recovered (0.50 Å refined)
@@ -20,7 +20,7 @@ from phridge.contrib.intensity_ll.benchmark import ReflectionSplit, compare
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cross-validated held-out likelihood benchmark on 6CZG")
+    parser = argparse.ArgumentParser(description="Cross-validated audit set likelihood benchmark on 6CZG")
     parser.add_argument("--mtz", default="examples/6czg/6czg.mtz", help="Experimental intensities MTZ")
     parser.add_argument("--pdb-ref", default="examples/6czg/6czg.pdb", help="Deposited reference PDB")
     parser.add_argument("--n-boot", type=int, default=1000, help="Number of bootstrap replicates")
@@ -32,7 +32,7 @@ def main():
     bridge = Bridge(memory=True)
 
     print("=" * 80)
-    print(" HELD-OUT CROSS-VALIDATED LIKELIHOOD BENCHMARK (6CZG)")
+    print(" AUDIT SET CROSS-VALIDATED LIKELIHOOD BENCHMARK (6CZG)")
     print("=" * 80)
 
     # Base reference model and split

@@ -53,7 +53,7 @@ def _check_intensity_observation_space(i_obs: Any) -> None:
 # ---------------------------------------------------------------------------
 @dataclass
 class ReflectionSplit:
-    """Disjoint partition of reflections into work, tune, and test sets.
+    """Disjoint partition of reflections into work, tune, and audit sets.
 
     Parameters
     ----------
@@ -62,7 +62,7 @@ class ReflectionSplit:
     tune : np.ndarray (bool)
         Reflections used strictly to estimate nuisance parameters (theta).
     test : np.ndarray (bool)
-        Held-out reflections scored to compare models.
+        Reflections in the audit set (held-out) scored to compare models.
     mode : str
         ``"cross_fit"`` (default) or ``"three_way"``.
     """
@@ -448,7 +448,7 @@ class ComparisonReport:
             "",
             "## 1. Executive Summary",
             "",
-            f"- **Scored Test Reflections (|T|)**: {self.n_test} (held-out)",
+            f"- **Scored Audit Reflections (|A|)**: {self.n_test} (audit set)",
             f"- **Nuisance Tune Reflections (|Tune|)**: {self.n_tune}",
             f"- **Working Reflections (|Work|)**: {self.n_work}",
             f"- **Model A NLL**: `{self.nll_A:.4f}` nats/refl",
@@ -477,11 +477,11 @@ class ComparisonReport:
             "| :--- | :---: | :---: | :--- |",
             f"| **Free Nuisance Parameters ($p_\\theta$)** | `{self.theta_A.get('p_theta', '-')}` | `{self.theta_B.get('p_theta', '-')}` | Total fitted nuisance parameters |",
             f"| **Expected In-Sample Optimism ($p_\\theta / |\\text{{tune}}|$)** | `{self.optimism_expected_A:.4f}` | `{self.optimism_expected_B:.4f}` | Theoretical shrinkage / optimism |",
-            f"| **Tune $\\to$ Test Gap (Test − Tune NLL)** | `{self.gap_tune_test_A:+.4f}` | `{self.gap_tune_test_B:+.4f}` | Should be $\\approx p_\\theta / |\\text{{tune}}|$ if not overfit |",
+            f"| **Tune $\\to$ Audit Gap (Audit − Tune NLL)** | `{self.gap_tune_test_A:+.4f}` | `{self.gap_tune_test_B:+.4f}` | Should be $\\approx p_\\theta / |\\text{{tune}}|$ if not overfit |",
             f"| **Work NLL** | `{self.nll_work_A:.4f}` | `{self.nll_work_B:.4f}` | NLL on refinement work set |",
-            f"| **Work $\\to$ Test Gap (Test − Work NLL)** | `{self.gap_work_test_A:+.4f}` | `{self.gap_work_test_B:+.4f}` | Generalization gap across refinement |",
+            f"| **Work $\\to$ Audit Gap (Audit − Work NLL)** | `{self.gap_work_test_A:+.4f}` | `{self.gap_work_test_B:+.4f}` | Generalization gap across refinement |",
             "",
-            "> **Note**: An improving work NLL together with a worsening test NLL is the hallmark of overfitting, regardless of R-factor or CC values.",
+            "> **Note**: An improving work NLL together with a worsening audit NLL is the hallmark of overfitting, regardless of R-factor or CC values.",
             "",
             "## 4. Resolution Shell Breakdown",
             "",
@@ -609,7 +609,7 @@ def compare(
     models : dict
         Dict of model F_calc arrays, e.g. ``{"A": f_calc_A, "B": f_calc_B}``.
     split : ReflectionSplit
-        Disjoint partition into work, tune, and test sets.
+        Disjoint partition into work, tune, and audit sets.
     n_boot : int
         Number of block-bootstrap replicates over resolution shells (>= 1000).
     fit_scale : bool

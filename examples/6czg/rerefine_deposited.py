@@ -12,7 +12,7 @@ Key Features:
   - Empirical Bayes hyperparameter determination (tau_12, tau_sphere, lambda).
   - Preconditioned log-B Newton steps with exact Gauss-Newton curvature.
   - L-BFGS joint refinement of coordinates, scales, bulk solvent, and noise parameters on Apple Silicon MPS.
-  - Rigorous held-out cross-validated likelihood evaluation on the test reflections.
+  - Rigorous cross-validated likelihood evaluation on the audit set reflections.
 """
 
 from __future__ import annotations

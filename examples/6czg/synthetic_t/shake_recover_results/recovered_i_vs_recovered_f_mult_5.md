@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-- **Scored Test Reflections (|T|)**: 900 (held-out)
+- **Scored Audit Reflections (|A|)**: 900 (audit set)
 - **Nuisance Tune Reflections (|Tune|)**: 450
 - **Working Reflections (|Work|)**: 8148
 - **Model A NLL**: `0.1743` nats/refl

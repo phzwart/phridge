@@ -574,6 +574,10 @@ class StructureFactorEngine:
         amp = np.abs(f)
         phase = f / np.maximum(amp, 1e-300)
         e_m2iphi = np.conj(phase) ** 2
+        if hasattr(curv_radial, "detach"):
+            curv_radial = curv_radial.detach().cpu().numpy()
+        if hasattr(curv_tangential, "detach"):
+            curv_tangential = curv_tangential.detach().cpu().numpy()
         cr = np.asarray(curv_radial, dtype=np.float64)
         ct = np.asarray(curv_tangential, dtype=np.float64)
         # H_ab = sum_h [ c_r Re(d_a u*) Re(d_b u*) + c_t Im(d_a u*) Im(d_b u*) ]

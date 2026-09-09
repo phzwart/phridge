@@ -602,6 +602,8 @@ def _optional_array(value: Any, dtype) -> Optional[np.ndarray]:
         return None
     if isinstance(value, np.ndarray):
         return value.astype(dtype)
+    if hasattr(value, "data"):
+        return np.asarray(list(value.data()), dtype=dtype)
     return np.asarray(list(value), dtype=dtype)
 
 

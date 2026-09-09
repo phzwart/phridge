@@ -60,6 +60,12 @@ def from_torch(value: Any) -> Any:
         return value
     if _is_torch(value):
         return _torch_to_canonical(value)
+    if isinstance(value, dict):
+        return {k: from_torch(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [from_torch(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(from_torch(v) for v in value)
     return value
 
 

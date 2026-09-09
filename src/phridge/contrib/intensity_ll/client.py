@@ -65,6 +65,18 @@ class RemoteIntensityMapResult:
         return self._flex_double("f_post")
 
     @property
+    def f_mode(self):
+        """Posterior mode amplitude F_mode = scale * E_mode (MAP estimate)."""
+        if "f_mode" in self.raw and self.raw["f_mode"] is not None:
+            return self._flex_double("f_mode")
+        return None
+
+    @property
+    def r_values(self) -> dict[str, Any]:
+        """Inferred R-values and CCs computed from posterior mode vs F_calc."""
+        return dict(self.raw.get("r_values", {}))
+
+    @property
     def d_loglik_d_nu(self):
         return self._flex_double("d_loglik_d_nu")
 
@@ -106,3 +118,29 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
         kw["maps"] = self.maps
         raw = self.bridge.call(OP_NAME, f_calc=miller_from_cctbx(f_calc), **kw)
         return RemoteIntensityMapResult(raw)
+
+
+def __getattr__(name: str) -> Any:
+    if name in (
+        "IntensityFModel",
+        "IntensityFmodel",
+        "IntensityLikelihoodEngine",
+        "IntensityElectronDensityMap",
+        "IntensityGradients",
+    ):
+        from phridge.client.intensity.engine import (
+            IntensityElectronDensityMap,
+            IntensityFModel,
+            IntensityFmodel,
+            IntensityGradients,
+            IntensityLikelihoodEngine,
+        )
+
+        return {
+            "IntensityFModel": IntensityFModel,
+            "IntensityFmodel": IntensityFmodel,
+            "IntensityLikelihoodEngine": IntensityLikelihoodEngine,
+            "IntensityElectronDensityMap": IntensityElectronDensityMap,
+            "IntensityGradients": IntensityGradients,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
