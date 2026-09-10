@@ -743,11 +743,11 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         work_flags = ~free_flags
 
         i_calc = fc_amp**2
-        r_int_num = np.sum(np.abs(io_np - i_calc))
-        r_int_den = np.sum(io_np)
-        r_int = float(r_int_num / max(r_int_den, 1e-12))
+        r_intensity_num = np.sum(np.abs(io_np - i_calc))
+        r_intensity_den = np.sum(io_np)
+        r_intensity = float(r_intensity_num / max(r_intensity_den, 1e-12))
 
-        r_int_free = float(
+        r_intensity_free = float(
             np.sum(np.abs(io_np[free_flags] - i_calc[free_flags]))
             / max(np.sum(io_np[free_flags]), 1e-12)
         ) if np.sum(free_flags) > 0 else float("nan")
@@ -831,8 +831,8 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
             "target_test": self.target_value_test,
             "r_work": r_work,
             "r_free": r_free,
-            "r_int": r_int,
-            "r_int_free": r_int_free,
+            "r_intensity": r_intensity,
+            "r_intensity_free": r_intensity_free,
             "cc_work_i": cc_work_i,
             "cc_free_i": cc_free_i,
             "cc_total_i": cc_total_i,
@@ -896,7 +896,7 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         if not np.isnan(s['target_test']):
             print(f" Target NLL (free):  {s['target_test']:.4f}")
         print(f" R_work / R_free:    {s['r_work']*100:.2f}% / {s['r_free']*100:.2f}%")
-        print(f" R_intensity (work/free): {s['r_int']*100:.2f}% / {s['r_int_free']*100:.2f}%")
+        print(f" R_intensity (work/free): {s['r_intensity']*100:.2f}% / {s['r_intensity_free']*100:.2f}%")
         print(f" CC_intensity (work/free): {s['cc_work_i']:.4f} / {s['cc_free_i']:.4f}")
         if not np.isnan(s.get("b_mean", float("nan"))):
             print(f" Mean B_iso:         {s['b_mean']:.2f} Å² (min: {s['b_min']:.2f}, max: {s['b_max']:.2f}, std: {s['b_std']:.2f})")

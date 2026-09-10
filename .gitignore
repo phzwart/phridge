@@ -21,3 +21,10 @@ examples/6czg/temp.pdb
 examples/6czg/perturbed_models/
 examples/6czg/shake_recover_results/
 logs/
+# phenix.refine outputs land in the working directory it was invoked from
+*_refine_[0-9][0-9][0-9].cif
+*_refine_[0-9][0-9][0-9].eff
+*_refine_[0-9][0-9][0-9].geo
+*_refine_[0-9][0-9][0-9].log
+*_refine_[0-9][0-9][0-9].def
+*.tar

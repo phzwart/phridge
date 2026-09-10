@@ -114,6 +114,34 @@ def require_intensity_array(arr: Any, *, context: str = "mli_quad") -> Any:
     )
 
 
+# Sentinel so a failed French–Wilson conversion caches as None instead of retrying
+_FW_UNSET = object()
+
+
+def _french_wilson_scale_unpatched() -> Any:
+    """The real ``cctbx`` French–Wilson, even while the mli_quad disable patch is on.
+
+    The patch keeps FW-converted amplitudes out of the refinement *target*. The
+    legacy R is a reporting bridge and is the one sanctioned consumer, so it reaches
+    past the patch to the stashed original. Imported lazily: ``phenix_hook`` imports
+    from this module.
+    """
+    try:
+        from phridge.client.intensity import phenix_hook
+
+        orig = phenix_hook._ORIGINALS.get("cctbx.french_wilson.french_wilson_scale")
+        if orig is not None:
+            return orig
+    except Exception:
+        pass
+    try:
+        from cctbx import french_wilson
+
+        return french_wilson.french_wilson_scale
+    except ImportError:
+        return None
+
+
 def recover_i_obs_from_fmodel(fmodel: Any, *, context: str = "mli_quad") -> Any:
     """Recover genuine I_obs from an fmodel / IntensityFModel without F² reconstruction."""
     i_obs = getattr(fmodel, "_i_obs", None)
@@ -208,6 +236,12 @@ from phridge.sfcalc.client import RemoteGradients, RemoteTargetResult
 def _env_flag_enabled(name: str, default: str = "0") -> bool:
     """True when env var is a common truthy token (1/true/yes/on)."""
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
+
+
+# Smallest test set worth fitting σ_A on: the worker defaults to ``n_tune // 250``
+# resolution bins with a floor of 6, so below this the bins are too sparse to be
+# better than the (biased) work-set fit.
+_MIN_NUISANCE_TUNE = 1000
 
 
 def _precondition_enabled() -> bool:
@@ -369,7 +403,7 @@ class IntensityElectronDensityMap:
       - mFo-DFc map equivalent (Bayesian posterior difference map)
       - Gradient difference map (d log L / d F_c^*)
       - Newton step map (gradient / curvature)
-      - Inferred R-factors from the posterior mode
+      - Shrunken-amplitude agreement statistics from the posterior mode
     """
 
     def __init__(
@@ -439,10 +473,19 @@ class IntensityElectronDensityMap:
         fc = eng.f_model_scaled_with_k1() if hasattr(eng, "f_model_scaled_with_k1") else eng.f_model()
         kw = eng._common_eval_kwargs()
         kw["target"] = eng.target_spec
+        from phridge.client.intensity.stats_report import stats_bin_size
+
         kw["maps"] = {
             "newton_damping": self.newton_damping,
             "include_free": self.include_free,
+            "bin_size": stats_bin_size(),
         }
+        try:
+            i_obs = eng.i_obs() if callable(getattr(eng, "i_obs", None)) else eng._i_obs
+            d_sp = np.asarray(i_obs.d_spacings().data(), dtype=np.float64)
+            kw["d_spacings"] = d_sp
+        except Exception:
+            pass
         raw = eng.bridge.call(MAPS_OP_NAME, f_calc=fc, **kw)
         return RemoteIntensityMapResult(raw)
 
@@ -980,6 +1023,13 @@ class IntensityFModelInfo:
             self.r_intensity_free = float("nan")
             self.r_intensity_all = float("nan")
 
+        self.s_post_work = fmodel.s_post_work() if hasattr(fmodel, "s_post_work") else float("nan")
+        self.s_post_free = fmodel.s_post_free() if hasattr(fmodel, "s_post_free") else float("nan")
+        self.s_post_all = fmodel.s_post_all() if hasattr(fmodel, "s_post_all") else float("nan")
+        self.s_prior_work = fmodel.s_prior_work() if hasattr(fmodel, "s_prior_work") else float("nan")
+        self.s_prior_free = fmodel.s_prior_free() if hasattr(fmodel, "s_prior_free") else float("nan")
+        self.s_prior_all = fmodel.s_prior_all() if hasattr(fmodel, "s_prior_all") else float("nan")
+
         self.cc_work = fmodel.cc_work() if hasattr(fmodel, "cc_work") else float("nan")
         self.cc_free = fmodel.cc_free() if hasattr(fmodel, "cc_free") else float("nan")
         self.cc_intensity_work = fmodel.cc_intensity_work() if hasattr(fmodel, "cc_intensity_work") else float("nan")
@@ -1017,15 +1067,22 @@ class IntensityFModelInfo:
             print(pr + "PHRIDGE DIRECT INTENSITY LIKELIHOOD (MLI_QUAD).", file=out)
             nu_val = getattr(self.fmodel, "nu", "None")
             print(pr + f" STUDENT-T NU PARAMETER                : {str(nu_val):<8}", file=out)
-            print(pr + f" POSTERIOR MEAN R-WORK / R-FREE        : {self.r_post_work:.4f} / {self.r_post_free:.4f}", file=out)
-            print(pr + f" POSTERIOR MODE R-WORK / R-FREE        : {self.r_mode_work:.4f} / {self.r_mode_free:.4f}", file=out)
             print(pr + f" DIRECT INTENSITY R-WORK / R-FREE      : {self.r_intensity_work:.4f} / {self.r_intensity_free:.4f}", file=out)
+            print(pr + f" S_POST  (WORK / FREE)                 : {self.s_post_work:.4f} / {self.s_post_free:.4f}", file=out)
+            print(pr + f" S_PRIOR (WORK / FREE)                 : {self.s_prior_work:.4f} / {self.s_prior_free:.4f}", file=out)
+            print(pr + " S_POST / S_PRIOR ARE NOT R FACTORS: EXPECTED RESIDUAL UNDER THE", file=out)
+            print(pr + " POSTERIOR / UNDER THE PRIOR. DO NOT COMPARE WITH DEPOSITED R.", file=out)
+            print(pr + " SHRUNKEN-AMPLITUDE AGREEMENT (BIASED LOW — DIAGNOSTIC, NOT AN R FACTOR):", file=out)
+            print(pr + f"  POSTERIOR MEAN <F> (WORK / FREE)     : {self.r_post_work:.4f} / {self.r_post_free:.4f}", file=out)
+            print(pr + f"  POSTERIOR MODE     (WORK / FREE)     : {self.r_mode_work:.4f} / {self.r_mode_free:.4f}", file=out)
             print(pr, file=out)
         else:
             pr = "REMARK   3  "
             print(pr + "REFINEMENT TARGET : MLI_QUAD", file=out)
             print(pr, file=out)
             print(pr + "FIT TO DATA USED IN REFINEMENT.", file=out)
+            # The mandated PDB fields carry the legacy French–Wilson amplitude R —
+            # the one statistic here that is genuinely an R factor.
             print(pr + f" R VALUE     (WORKING + TEST SET) : {self.r_all:.4f}", file=out)
             print(pr + f" R VALUE            (WORKING SET) : {self.r_work:.4f}", file=out)
             print(pr + f" FREE R VALUE                     : {self.r_free:.4f}", file=out)
@@ -1033,7 +1090,10 @@ class IntensityFModelInfo:
             print(pr + "PHRIDGE DIRECT INTENSITY LIKELIHOOD (MLI_QUAD).", file=out)
             nu_val = getattr(self.fmodel, "nu", "None")
             print(pr + f" STUDENT-T NU PARAMETER                : {str(nu_val):<8}", file=out)
-            print(pr + f" POSTERIOR MEAN R-WORK / R-FREE        : {self.r_post_work:.4f} / {self.r_post_free:.4f}", file=out)
+            print(pr + f" S_POST  (WORK / FREE)                 : {self.s_post_work:.4f} / {self.s_post_free:.4f}", file=out)
+            print(pr + f" S_PRIOR (WORK / FREE)                 : {self.s_prior_work:.4f} / {self.s_prior_free:.4f}", file=out)
+            print(pr + " S_POST / S_PRIOR ARE NOT R FACTORS: EXPECTED RESIDUAL UNDER THE", file=out)
+            print(pr + " POSTERIOR / UNDER THE PRIOR. DO NOT COMPARE WITH DEPOSITED R.", file=out)
             print(pr, file=out)
 
     def show_rfactors_targets_scales_overall(self, header: Optional[str] = None, out: Optional[Any] = None) -> None:
@@ -1043,12 +1103,51 @@ class IntensityFModelInfo:
         print("+" + "-" * 76 + "+", file=out)
         print(f"| Intensity Likelihood Refinement (mli_quad){header_text:<31}|", file=out)
         print("|" + " " * 76 + "|", file=out)
-        line_post = f"| Posterior Mean <F>: r_work= {self.r_post_work:6.4f}   r_free= {self.r_post_free:6.4f}   r_all= {self.r_post_all:6.4f}"
-        print(f"{line_post:<77}|", file=out)
-        line_mode = f"| Posterior Mode:     r_work= {self.r_mode_work:6.4f}   r_free= {self.r_mode_free:6.4f}   r_all= {self.r_mode_all:6.4f}"
-        print(f"{line_mode:<77}|", file=out)
-        line_ri = f"| Direct Intensity:   r_work= {self.r_intensity_work:6.4f}   r_free= {self.r_intensity_free:6.4f}   r_all= {self.r_intensity_all:6.4f}"
+        line_ri = f"| Direct Intensity R: r_work= {self.r_intensity_work:6.4f}   r_free= {self.r_intensity_free:6.4f}   r_all= {self.r_intensity_all:6.4f}"
         print(f"{line_ri:<77}|", file=out)
+        line_spost = (
+            f"| S_post:             work= {self.s_post_work:6.4f}   free= {self.s_post_free:6.4f}   "
+            f"S_prior_w/f= {self.s_prior_work:6.4f}/{self.s_prior_free:6.4f}"
+        )
+        print(f"{line_spost:<77}|", file=out)
+        rv = {}
+        if hasattr(self.fmodel, "inferred_r_values"):
+            try:
+                rv = self.fmodel.inferred_r_values() or {}
+            except Exception:
+                rv = {}
+        k_w = rv.get("k_s_work", float("nan"))
+        n_out = int(rv.get("n_ec_outliers", 0) or 0)
+        if np.isfinite(float(k_w)):
+            # s_vis (the plug-in numerator) is deliberately not shown here: it is a
+            # debugging quantity and reads like an agreement statistic if printed.
+            line_k = f"| k_S diagnostics:    k_S= {float(k_w):6.4f}   E_C outliers= {n_out}"
+            print(f"{line_k:<77}|", file=out)
+        rho2_w = float(rv.get("rho2_work", float("nan")))
+        rho2_f = float(rv.get("rho2_free", float("nan")))
+        if np.isfinite(rho2_w):
+            lat_f = f"{1.0 - rho2_f:6.4f}" if np.isfinite(rho2_f) else "   n/a"
+            line_lat = (
+                f"| Latent share 1-ρ²:  work= {1.0 - rho2_w:6.4f}   free= {lat_f}"
+                "   (descriptive)"
+            )
+            print(f"{line_lat:<77}|", file=out)
+        xi_w = float(rv.get("xi_work", float("nan")))
+        if np.isfinite(xi_w):
+            xi_f = float(rv.get("xi_free", float("nan")))
+            om = float(rv.get("omega", float("nan")))
+            xi_f_s = f"{xi_f:6.4f}" if np.isfinite(xi_f) else "   n/a"
+            om_s = f"{om:6.4f}" if np.isfinite(om) else "   n/a"
+            line_xi = f"| Score test ξ:       work= {xi_w:6.4f}   free= {xi_f_s}   ω= {om_s}"
+            print(f"{line_xi:<77}|", file=out)
+        rv_err = rv.get("s_report_error")
+        if rv_err:
+            err_line = f"| S_post error: {str(rv_err)[:60]}"
+            print(f"{err_line:<77}|", file=out)
+        elif not np.isfinite(self.s_post_work) and "r_intensity_work" in rv and "s_post_work" not in rv:
+            hint = "| S_post: worker missing S-statistic code — restart phridge-worker or --memory"
+            print(f"{hint:<77}|", file=out)
+        self._pending_s_report_debug = rv.get("s_report_debug")
         if np.isfinite(self.cc_work) and np.isfinite(self.cc_free):
             line_cc = f"| Correlation (CC):   cc_work= {self.cc_work:6.4f}   cc_free= {self.cc_free:6.4f}   cc_I_work= {self.cc_intensity_work:6.4f}"
             print(f"{line_cc:<77}|", file=out)
@@ -1061,14 +1160,117 @@ class IntensityFModelInfo:
         line_sc = f"| Scale Factor k:     scale_k1= {self.overall_scale_k1:6.4f}{sol_str}   Student-t nu: {str(nu_val):<6}"
         print(f"{line_sc:<77}|", file=out)
         print("+" + "-" * 76 + "+", file=out)
+        dbg = getattr(self, "_pending_s_report_debug", None)
+        if dbg:
+            print(f"  [S_post debug] {dbg}", file=out)
 
     def show_targets(self, text: str = "Refinement target", out: Optional[Any] = None) -> None:
         if out is None:
             out = sys.stdout
         print(f"{text}: {self.target_name}", file=out)
 
+    def show_rfactors_targets_in_bins(self, out: Optional[Any] = None) -> None:
+        """Phenix-like resolution table with S_post / S_prior."""
+        if out is None:
+            out = sys.stdout
+        rv = {}
+        if hasattr(self.fmodel, "inferred_r_values"):
+            rv = self.fmodel.inferred_r_values()
+        d_max = rv.get("bin_d_max") or []
+        if not d_max:
+            print("  (no S_post resolution bins — maps not yet computed or missing d_spacings)", file=out)
+            return
+        d_min = rv.get("bin_d_min") or []
+        r_iw = rv.get("s_post_work_bins") or []
+        r_if = rv.get("s_post_free_bins") or []
+        r_fw = rv.get("s_prior_work_bins") or []
+        r_ff = rv.get("s_prior_free_bins") or []
+        rho2_w = rv.get("rho2_work_bins") or []
+        omega_b = rv.get("omega_bins") or []
+        min_free = int(rv.get("min_free_per_shell", 30))
+        # The score test is opt-in (PHRIDGE_SCORE_TEST); drop the column entirely
+        # rather than printing a permanently blank one.
+        show_omega = any(np.isfinite(float(v)) for v in omega_b)
+        n_w = rv.get("n_work_bins") or []
+        n_f = rv.get("n_free_bins") or []
+        scale = self.overall_scale_k1
+        # Merge data%/σ_A from last stats report if present
+        stats_bins = []
+        last = getattr(self.fmodel, "_last_stats_report", None)
+        if last is not None and getattr(last, "bins", None):
+            stats_bins = list(last.bins)
+        header = (
+            f"{'bin':>4} {'d_max':>7} {'d_min':>7} {'Nw':>5} {'Nf':>5} "
+            + (f"{'ω':>6} " if show_omega else "")
+            + f"{'S_post_w':>8} {'S_post_f':>8} {'S_pri_w':>8} {'S_pri_f':>8} "
+            f"{'1-ρ²':>6} {'data%':>6} {'σ_A':>6} {'k1':>6}"
+        )
+        print("+" + "-" * len(header) + "+", file=out)
+        title = "| S_post / S_prior vs resolution (shells reuse parent-set k_S)"
+        print(f"{title:<{len(header) + 1}}|", file=out)
+        print("+" + "-" * len(header) + "+", file=out)
+        print(header, file=out)
+        print("-" * len(header), file=out)
+        for i, dm in enumerate(d_max):
+            nw = int(n_w[i]) if i < len(n_w) else 0
+            nf = int(n_f[i]) if i < len(n_f) else 0
+            riw = float(r_iw[i]) if i < len(r_iw) else float("nan")
+            rif = float(r_if[i]) if i < len(r_if) else float("nan")
+            rfw = float(r_fw[i]) if i < len(r_fw) else float("nan")
+            rff = float(r_ff[i]) if i < len(r_ff) else float("nan")
+            r2w = float(rho2_w[i]) if i < len(rho2_w) else float("nan")
+            lat_s = f"{1.0 - r2w:6.3f}" if np.isfinite(r2w) else f"{'n/a':>6}"
+            dn = float(d_min[i]) if i < len(d_min) else float("nan")
+            data_s, sa_s = "   n/a", "   n/a"
+            if i < len(stats_bins):
+                b = stats_bins[i]
+                if np.isfinite(b.mean_data_frac):
+                    data_s = f"{100.0 * b.mean_data_frac:5.1f}%"
+                if np.isfinite(b.mean_sigma_a):
+                    sa_s = f"{b.mean_sigma_a:6.3f}"
+            def _fmt(x: float) -> str:
+                return f"{x:8.4f}" if np.isfinite(x) else f"{'n/a':>8}"
+
+            om_s = ""
+            if show_omega:
+                om = float(omega_b[i]) if i < len(omega_b) else float("nan")
+                om_s = (f"{om:6.3f} " if np.isfinite(om) else f"{'n/a':>6} ")
+            print(
+                f"{i + 1:4d} {dm:7.3f} {dn:7.3f} {nw:5d} {nf:5d} {om_s}"
+                f"{_fmt(riw)} {_fmt(rif)} {_fmt(rfw)} {_fmt(rff)} "
+                f"{lat_s} {data_s} {sa_s} {scale:6.4f}",
+                file=out,
+            )
+        print("-" * len(header), file=out)
+        print(
+            "  S_post / S_prior = expected residual under the posterior / under the "
+            "prior (σ_A floor). Same functional, different measure. NOT the "
+            "crystallographic R factor; do not compare with deposited R values.",
+            file=out,
+        )
+        print(
+            "  Free-set values are the honest ones; work-set values are optimistically "
+            "biased by fitting. S_post_f - S_post_w is twice the optimism, so their "
+            "midpoint estimates the true error budget.",
+            file=out,
+        )
+        print(
+            f"  1-ρ² = latent share of the L2 residual (descriptive, not calibrated). "
+            f"Free-set shells with Nf < {min_free} are blanked rather than "
+            "reported as noise.",
+            file=out,
+        )
+        if show_omega:
+            print(
+                "  ω = ξ_free/ξ_work on the map coefficients. Its null value is not 1 "
+                "but (1+p/Nw)/(1-p/Nw) for p effective fitted parameters, so read ω>1 "
+                "as fitting, not automatically as model error.",
+                file=out,
+            )
+
     def show_all(self, header: str = "", out: Optional[Any] = None) -> None:
         self.show_rfactors_targets_scales_overall(header=header, out=out)
+        self.show_rfactors_targets_in_bins(out=out)
 
 
 # ==============================================================================
@@ -1528,12 +1730,13 @@ class IntensityScaleMixin:
 # ==============================================================================
 
 class IntensityRValuesMixin:
-    """Manages Bayesian posterior mode, posterior mean, and direct intensity R-factors.
+    """Manages posterior-mode / posterior-mean agreement statistics and the S family.
 
     Encapsulates:
       - Posterior mean amplitude <F> and posterior mode F_mode accessors
-      - Inferred R-factors: r_work, r_free, r_all (from posterior mean)
-      - Posterior mode R-factors: r_mode_work, r_mode_free, r_mode_all
+      - S family: s_post_work/free/all, s_prior_work/free/all
+      - Shrunken-amplitude diagnostics (biased low, not R factors):
+        r_post_work/free/all, r_mode_work/free/all
       - Direct intensity R-factors: r_intensity_work, r_intensity_free, r_intensity_all
       - Correlation coefficients: cc_work, cc_free, cc_intensity_work, cc_intensity_free
       - Formatted r_factors() output
@@ -1559,20 +1762,80 @@ class IntensityRValuesMixin:
             self.electron_density_map()
         return dict(self._r_values or {})
 
+    def f_obs_french_wilson(self) -> Any:
+        """French–Wilson amplitudes from ``I_obs`` — the legacy reporting bridge.
+
+        This is the one place in ``mli_quad`` where French–Wilson is deliberately
+        allowed. The FW-disable patch exists to keep converted amplitudes out of the
+        *refinement target*; the legacy R is reporting only, and it has to be a real
+        French–Wilson R or it is not the bridge anyone expects. Cached; ``None`` if
+        the conversion is unavailable.
+        """
+        # Depends only on I_obs, so it survives model updates and is not cleared
+        # alongside the f_calc / f_model caches.
+        cached = getattr(self, "_f_obs_fw", _FW_UNSET)
+        if cached is not _FW_UNSET:
+            return cached
+        self._f_obs_fw = None
+        try:
+            from libtbx.utils import null_out
+
+            fw_scale = _french_wilson_scale_unpatched()
+            if fw_scale is not None and self._i_obs is not None:
+                self._f_obs_fw = fw_scale(miller_array=self._i_obs, log=null_out())
+        except Exception:
+            self._f_obs_fw = None
+        return self._f_obs_fw
+
+    def _r_french_wilson(self, which: str = "work") -> float:
+        """Legacy amplitude R on FW-converted ``F_obs`` vs the scaled model."""
+        f_obs = self.f_obs_french_wilson()
+        if f_obs is None:
+            return float("nan")
+        try:
+            f_model = self.f_model()
+            fo, fm = f_obs.common_sets(f_model)
+            fo_d = flex.abs(fo.data())
+            fm_d = flex.abs(fm.data())
+            if which != "all":
+                flags = self._r_free_flags
+                if flags is not None:
+                    fo_f, flags_c = fo.common_sets(flags)
+                    sel = flags_c.data() if which == "free" else ~flags_c.data()
+                    # common_sets may reorder; recompute the model on the same set
+                    fo, fm = fo_f.common_sets(f_model)
+                    fo_d = flex.abs(fo.data()).select(sel)
+                    fm_d = flex.abs(fm.data()).select(sel)
+                elif which == "free":
+                    return float("nan")
+            if fo_d.size() == 0:
+                return float("nan")
+            num_k = flex.sum(fo_d * fm_d)
+            den_k = flex.sum(fm_d * fm_d)
+            k = float(num_k / den_k) if den_k > 0 else 1.0
+            den = flex.sum(fo_d)
+            if den <= 0:
+                return float("nan")
+            return float(flex.sum(flex.abs(fo_d - k * fm_d)) / den)
+        except Exception:
+            return float("nan")
+
     def r_work(self) -> float:
-        """Working set R-factor (defaults to inferred posterior mean <F> R_work)."""
-        rv = self.inferred_r_values()
-        return float(rv.get("r_post_work", rv.get("r_work", float("nan"))))
+        """Legacy French–Wilson amplitude R on the working set.
+
+        Deliberately *not* the posterior mean: that statistic shrinks toward
+        sigma_A E_C as the data weaken, so it improves when the data get worse and
+        must never be deposited as an R factor. See ``r_post_work`` for it.
+        """
+        return self._r_french_wilson("work")
 
     def r_free(self) -> float:
-        """Free/test set R-factor (defaults to inferred posterior mean <F> R_free)."""
-        rv = self.inferred_r_values()
-        return float(rv.get("r_post_free", rv.get("r_free", float("nan"))))
+        """Legacy French–Wilson amplitude R on the free/test set."""
+        return self._r_french_wilson("free")
 
     def r_all(self) -> float:
-        """Overall R-factor (defaults to inferred posterior mean <F> R_all)."""
-        rv = self.inferred_r_values()
-        return float(rv.get("r_post_all", rv.get("r_all", float("nan"))))
+        """Legacy French–Wilson amplitude R on all reflections."""
+        return self._r_french_wilson("all")
 
     def r_post_work(self) -> float:
         """R_work computed from Bayesian posterior mean amplitude <F>."""
@@ -1643,6 +1906,40 @@ class IntensityRValuesMixin:
         """Direct intensity R-factor on all reflections (I_obs vs I_calc)."""
         rv = self.inferred_r_values()
         return float(rv.get("r_intensity_all", float("nan")))
+
+    @staticmethod
+    def _finite_or_nan(value: Any) -> float:
+        if value is None:
+            return float("nan")
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return float("nan")
+        return v if np.isfinite(v) else float("nan")
+
+    def s_post_work(self) -> float:
+        """S_post (expected residual under the posterior) on work reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_post_work"))
+
+    def s_post_free(self) -> float:
+        """S_post (expected residual under the posterior) on free reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_post_free"))
+
+    def s_post_all(self) -> float:
+        """S_post (expected residual under the posterior) on all reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_post_all"))
+
+    def s_prior_work(self) -> float:
+        """S_prior (same functional under the prior) on work reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_prior_work"))
+
+    def s_prior_free(self) -> float:
+        """S_prior (same functional under the prior) on free reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_prior_free"))
+
+    def s_prior_all(self) -> float:
+        """S_prior (same functional under the prior) on all reflections."""
+        return self._finite_or_nan(self.inferred_r_values().get("s_prior_all"))
 
     def cc_intensity_work(self) -> float:
         """Direct intensity correlation coefficient on work reflections."""
@@ -1809,6 +2106,8 @@ class IntensityFModel(
             spec["nu"] = float(nu)
         self.target_spec = spec
         self.nu = float(nu) if nu is not None else spec.get("nu")
+        self.nu_per_refl: Optional[Any] = None
+        self._nu_params: Dict[str, Any] = {}
         self.scale_factor = float(scale_factor)
         self.n_bins = int(n_bins)
 
@@ -1911,7 +2210,7 @@ class IntensityFModel(
 
     # ---------------------------------------------------------------- Target & Gradients
     def _common_eval_kwargs(self) -> dict[str, Any]:
-        return {
+        kw: dict[str, Any] = {
             "f_obs": self._i_obs,
             "alpha": self.sigma_a,
             "beta": self.sigma_wilson,
@@ -1919,6 +2218,10 @@ class IntensityFModel(
             "centric": self._i_obs.centric_flags().data(),
             "r_free": self._r_free_flags.data() if self._r_free_flags is not None else None,
         }
+        nu_pr = getattr(self, "nu_per_refl", None)
+        if nu_pr is not None:
+            kw["nu"] = nu_pr
+        return kw
 
     def target_and_gradients(
         self,
@@ -2140,7 +2443,7 @@ class IntensityFModel(
         log: Any = None,
         fit_nu: bool = False,
         fit_scale: bool = True,
-        nu_bounds: Tuple[float, float] = (3.0, 30.0),
+        nu_bounds: Tuple[float, float] = (2.5, 200.0),
         **kwargs: Any,
     ) -> Any:
         """Co-refine bulk solvent mask (k_sol, B_sol, k_aniso), sigma_A(s), Sigma_W(s), and scale factor k."""
@@ -2207,14 +2510,30 @@ class IntensityFModel(
         # 3. Model structure factors with bulk solvent (now on observation scale)
         f_model = self.f_model()
 
-        # 4. Refine sigma_A(s), Sigma_W(s), and nu on worker
-        tune_mask = ~self._r_free_flags.data() if self._r_free_flags is not None else flex.bool(self._i_obs.size(), True)
+        # 4. Refine sigma_A(s), Sigma_W(s), and nu on worker.
+        # σ_A is estimated on the test set, as cctbx does for α/β: on the work set the
+        # model has already been fitted to these very reflections, so σ_A absorbs the
+        # overfitting and biases toward 1. Σ_W rides along on the same set at no cost —
+        # it is a two-parameter Wilson curve, not a per-bin estimate.
+        free_flags = self._r_free_flags.data() if self._r_free_flags is not None else None
+        n_free = int(free_flags.count(True)) if free_flags is not None else 0
+        if free_flags is not None and n_free >= _MIN_NUISANCE_TUNE:
+            tune_mask = free_flags
+            tune_label = f"free/{n_free}"
+        else:
+            tune_mask = flex.bool(self._i_obs.size(), True)
+            tune_label = f"all/{self._i_obs.size()}"
         sa_mode = os.environ.get("PHRIDGE_SIGMA_A_MODE", "bins").strip().lower() or "bins"
         n_sa_bins_env = os.environ.get("PHRIDGE_SIGMA_A_BINS")
         n_sa_bins = int(n_sa_bins_env) if (n_sa_bins_env and str(n_sa_bins_env).strip().isdigit()) else None
+        tv_norm_env = os.environ.get("PHRIDGE_SIGMA_A_TV_NORM", "").strip()
+        tv_norm = float(tv_norm_env) if tv_norm_env else 0.0
+        fit_sigma_wilson = _env_flag_enabled("PHRIDGE_FIT_SIGMA_WILSON", "1")
+        nu_mode = os.environ.get("PHRIDGE_NU_MODE", "bins").strip().lower() or "bins"
         raw = None
         with mli_heartbeat(
-            f"ml_i_nuisance_fit(sigma_a_mode={sa_mode})",
+            f"ml_i_nuisance_fit(sigma_a_mode={sa_mode}, nu_mode={nu_mode if fit_nu else 'off'}, "
+            f"wilson={'ml' if fit_sigma_wilson else 'moment'}, tune={tune_label})",
             log=log,
             announce=True,
         ):
@@ -2226,32 +2545,64 @@ class IntensityFModel(
                 epsilon=self._i_obs.epsilons().data().as_double(),
                 centric=self._i_obs.centric_flags().data(),
                 fit_nu=bool(fit_nu),
+                nu_mode=nu_mode,
                 fit_scale=bool(fit_scale and not bulk_solvent_and_scaling),
                 nu_bounds=list(nu_bounds),
                 nu=self.nu,
                 sigma_a_mode=sa_mode,
                 n_sigma_a_bins=n_sa_bins,
+                tv_norm=tv_norm,
+                fit_sigma_wilson=fit_sigma_wilson,
             )
         self.sigma_a = flex.double(np.asarray(raw["sigma_a"], dtype=np.float64))
         self.sigma_wilson = flex.double(np.asarray(raw["sigma_wilson"], dtype=np.float64))
         self._sigma_a_params = dict(raw.get("sigma_a_params") or {})
         self._sigma_wilson_params = dict(raw.get("sigma_wilson_params") or {})
+        self._nu_params = dict(raw.get("nu_params") or {})
         if raw.get("scale_k") is not None and (not bulk_solvent_and_scaling):
             self.scale_factor = float(raw["scale_k"])
         if raw.get("nu") is not None:
             self.nu = float(raw["nu"])
             self.target_spec["nu"] = self.nu
+            nu_arr = raw.get("nu_per_refl")
+            if nu_arr is not None:
+                nu_np = np.asarray(nu_arr, dtype=np.float64)
+                if nu_np.shape == (self._i_obs.size(),) and np.all(np.isfinite(nu_np)):
+                    self.nu_per_refl = flex.double(np.ascontiguousarray(nu_np))
+                else:
+                    self.nu_per_refl = flex.double(self._i_obs.size(), float(self.nu))
+            else:
+                self.nu_per_refl = flex.double(self._i_obs.size(), float(self.nu))
         self._f_model = None
         self._last_maps = None
         self._r_values = None
         self._print_stats_report(log=log, label="after update_all_scales")
         if show:
             self.show(log=log)
+        # Optional windowed omit coefficients (read-only; never fails refinement)
+        try:
+            from phridge.client.intensity.omit import omit_options_from_env, omit_windows_enabled, run_omit_windows_from_fmodel
+
+            if omit_windows_enabled():
+                opts = omit_options_from_env()
+                when = opts.when
+                run_now = when == "every_macrocycle"
+                if when == "end_of_refinement":
+                    # Overwrite on each scale update; final file reflects the last refined model.
+                    run_now = True
+                if run_now:
+                    run_omit_windows_from_fmodel(self, options=opts, log=log)
+        except Exception as exc:
+            try:
+                print(f"[mli_omit_windows] skipped: {exc}", file=sys.stderr)
+            except Exception:
+                pass
         return self
 
     def _print_stats_report(self, log: Any = None, label: str = "") -> Optional[Any]:
-        """Print resolution-binned I/σ + σ_A(s) report (PHRIDGE_STATS_REPORT, default on)."""
+        """Print resolution-binned I/σ + σ_A(s) + S_post/S_prior report (PHRIDGE_STATS_REPORT, default on)."""
         from phridge.client.intensity.stats_report import (
+            merge_sstat_bins_into_report,
             print_intensity_stats_report,
             report_from_fmodel,
             stats_report_enabled,
@@ -2265,6 +2616,50 @@ class IntensityFModel(
             if self._i_obs.sigmas() is None:
                 return None
             report = report_from_fmodel(self, label=label)
+            # Always refresh maps for S_post so bins match current scales / σ_A
+            try:
+                self._r_values = None
+                self._last_maps = None
+                self.electron_density_map()
+                rv = self.inferred_r_values()
+                merge_sstat_bins_into_report(report, rv)
+                report.s_post_work = float(rv.get("s_post_work", float("nan")))
+                report.s_post_free = float(rv.get("s_post_free", float("nan")))
+                report.s_prior_work = float(rv.get("s_prior_work", float("nan")))
+                report.s_prior_free = float(rv.get("s_prior_free", float("nan")))
+                report.k_s_work = float(rv.get("k_s_work", float("nan")))
+                report.k_s_prior_work = float(rv.get("k_s_prior_work", float("nan")))
+                report.rho2_work = float(rv.get("rho2_work", float("nan")))
+                report.rho2_free = float(rv.get("rho2_free", float("nan")))
+                report.s_report_version = rv.get("s_report_version")
+                if rv.get("s_report_error"):
+                    print(
+                        f"[mli_quad] S_post unavailable: {rv['s_report_error']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                elif rv.get("s_report_version") != 7:
+                    print(
+                        "[mli_quad] S_post: stale phridge-worker (missing s_report_version=7) — "
+                        "re-run with ./scripts/run_phenix_intensity.sh --redis",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                elif rv.get("s_report_debug"):
+                    print(
+                        f"[mli_quad] S_post debug: {rv['s_report_debug']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                elif not any(np.isfinite(b.s_post) for b in report.bins):
+                    print(
+                        "[mli_quad] S_post bins missing after maps "
+                        "(restart phridge-worker if you just pulled S-statistic code)",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+            except Exception as exc:
+                print(f"[mli_quad] S_post merge skipped: {exc}", file=sys.stderr, flush=True)
             self._last_stats_report = report
             extras = []
             if log is not None and hasattr(log, "write"):
@@ -2417,17 +2812,68 @@ class IntensityFModel(
         print(f"  {header}Intensity Likelihood Model Engine (ml_i){tail}", file=target_out)
         print(f"  Reflections: {self._i_obs.size()} (d_min: {self.d_min:.2f} Å)", file=target_out)
         print(f"  Scale k: {float(self.scale_factor):.4f}{sol_str} | Student-t nu: {self.nu}", file=target_out)
+        nu_p = getattr(self, "_nu_params", None) or {}
+        if nu_p.get("mode") == "bins" and nu_p.get("bin_nu"):
+            bn = nu_p["bin_nu"]
+            print(
+                f"  ν(s) bins: n={nu_p.get('n_bins')}  range=[{min(bn):.2f}, {max(bn):.2f}]  "
+                f"tv={nu_p.get('tv_norm', 0)}",
+                file=target_out,
+            )
+        p_nu, p_nll = nu_p.get("profile_nu"), nu_p.get("profile_nll")
+        if p_nu and p_nll and len(p_nu) == len(p_nll):
+            g_nll = nu_p.get("profile_nll_gaussian")
+            best = min(range(len(p_nll)), key=lambda i: p_nll[i])
+            ref = g_nll if g_nll is not None else p_nll[best]
+            # ΔNLL vs the Gaussian limit: all ≥0 and falling means ν is unidentified.
+            body = "  ".join(f"{n:g}:{v - ref:+.4f}" for n, v in zip(p_nu, p_nll))
+            print(f"  ν profile ΔNLL vs Gaussian (per refl): {body}", file=target_out)
+            print(
+                f"    best ν={p_nu[best]:g} (ΔNLL={p_nll[best] - ref:+.4f}); "
+                f"Gaussian NLL={ref:.4f}",
+                file=target_out,
+            )
         rv = self.inferred_r_values()
-        rw = rv.get("r_post_work", rv.get("r_work", float("nan")))
-        rf = rv.get("r_post_free", rv.get("r_free", float("nan")))
-        ra = rv.get("r_post_all", rv.get("r_all", float("nan")))
         cw = rv.get("cc_post_work", rv.get("cc_work", float("nan")))
         cf = rv.get("cc_post_free", rv.get("cc_free", float("nan")))
-        print(f"  Inferred R-values (<F>):  r_work={rw:.4f} r_free={rf:.4f} r_all={ra:.4f} cc_work={cw:.4f} cc_free={cf:.4f}", file=target_out)
-        if "r_mode_work" in rv and "r_mode_free" in rv:
-            print(f"  Posterior Mode R-values: r_work={rv['r_mode_work']:.4f} r_free={rv['r_mode_free']:.4f}", file=target_out)
+        print(f"  CC:  cc_work={cw:.4f} cc_free={cf:.4f}", file=target_out)
         if "r_intensity_work" in rv and "r_intensity_free" in rv:
             print(f"  Direct Intensity R (I):  r_work={rv['r_intensity_work']:.4f} r_free={rv['r_intensity_free']:.4f} all={rv.get('r_intensity_all', float('nan')):.4f}", file=target_out)
+        s_w = rv.get("s_post_work", float("nan"))
+        s_f = rv.get("s_post_free", float("nan"))
+        sp_w = rv.get("s_prior_work", float("nan"))
+        sp_f = rv.get("s_prior_free", float("nan"))
+        k_w = rv.get("k_s_work", float("nan"))
+        if any(np.isfinite(float(x)) for x in (s_w, s_f, sp_w, sp_f, k_w)):
+            print(
+                f"  S_post: work={float(s_w):.4f} free={float(s_f):.4f}  "
+                f"S_prior={float(sp_w):.4f}/{float(sp_f):.4f}  k_S={float(k_w):.4f}",
+                file=target_out,
+            )
+        elif rv.get("s_report_error"):
+            print(f"  S_post: unavailable ({rv['s_report_error']})", file=target_out)
+        elif rv.get("s_report_version") != 7 and "r_intensity_work" in rv:
+            print(
+                "  S_post: stale worker — restart with --redis",
+                file=target_out,
+            )
+        # Point estimates of the amplitude agreement. These shrink toward sigma_A E_C
+        # as the data weaken, so they improve when the data get worse — kept for
+        # diagnosis, never presented as an R factor.
+        rw = rv.get("r_post_work", float("nan"))
+        rf = rv.get("r_post_free", float("nan"))
+        ra = rv.get("r_post_all", float("nan"))
+        if any(np.isfinite(float(x)) for x in (rw, rf, ra)):
+            print(
+                "  shrunken-amplitude agreement (biased low — diagnostic, not an R factor):",
+                file=target_out,
+            )
+            print(f"    posterior mean <F>: work={rw:.4f} free={rf:.4f} all={ra:.4f}", file=target_out)
+            if "r_mode_work" in rv and "r_mode_free" in rv:
+                print(
+                    f"    posterior mode:     work={rv['r_mode_work']:.4f} free={rv['r_mode_free']:.4f}",
+                    file=target_out,
+                )
         print("=" * 65, file=target_out)
 
 

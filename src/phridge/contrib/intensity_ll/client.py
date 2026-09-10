@@ -73,8 +73,18 @@ class RemoteIntensityMapResult:
 
     @property
     def r_values(self) -> dict[str, Any]:
-        """Inferred R-values and CCs computed from posterior mode vs F_calc."""
+        """Raw statistics bag from the worker (S family, direct-intensity R, CCs)."""
         return dict(self.raw.get("r_values", {}))
+
+    def s_post(self, which: str = "work") -> float:
+        """``S_post``: expected residual under the posterior (``work``/``free``/``all``)."""
+        key = {"work": "s_post_work", "free": "s_post_free", "all": "s_post_all"}.get(which, "s_post_work")
+        return float(self.r_values.get(key, float("nan")))
+
+    def s_prior(self, which: str = "work") -> float:
+        """``S_prior``: same functional under the prior — the sigma_A no-data floor."""
+        key = {"work": "s_prior_work", "free": "s_prior_free", "all": "s_prior_all"}.get(which, "s_prior_work")
+        return float(self.r_values.get(key, float("nan")))
 
     @property
     def d_loglik_d_nu(self):
@@ -115,7 +125,20 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
 
         kw = self.kwargs()
         kw.pop("compute_curvature", None)
-        kw["maps"] = self.maps
+        maps = dict(self.maps)
+        if "bin_size" not in maps:
+            try:
+                from phridge.client.intensity.stats_report import stats_bin_size
+
+                maps["bin_size"] = stats_bin_size()
+            except Exception:
+                maps["bin_size"] = 500
+        kw["maps"] = maps
+        if "d_spacings" not in kw:
+            try:
+                kw["d_spacings"] = np.asarray(self.f_obs.d_spacings().data(), dtype=np.float64)
+            except Exception:
+                pass
         raw = self.bridge.call(OP_NAME, f_calc=miller_from_cctbx(f_calc), **kw)
         return RemoteIntensityMapResult(raw)
 

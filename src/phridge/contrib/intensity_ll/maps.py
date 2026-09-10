@@ -69,6 +69,11 @@ class IntensityMapOptions(BaseModel):
         default=False,
         description="Track the Newton window when forming the curvature (roughly 2x cost).",
     )
+    bin_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Equal-count resolution shells for S_post/S_prior bins; None skips shell arrays.",
+    )
 
 
 # ---------------------------------------------------------------- posterior on the nodes
@@ -134,6 +139,7 @@ def posterior_moments(
             u_nodes = torch.zeros(Ec.shape[0], 1, dtype=Ec.dtype, device=Ec.device)
         else:
             nu_t = torch.as_tensor(nu, dtype=Ec.dtype, device=Ec.device).expand_as(Ec)
+            nu_t = torch.nan_to_num(nu_t, nan=200.0, posinf=200.0, neginf=2.5).clamp(2.05, 500.0)
             J = max(int(n_legendre), int(n_hermite))
             nodes = torch.ones(Ec.shape[0], n_u, J, dtype=Ec.dtype, device=Ec.device)
             terms = torch.full((Ec.shape[0], n_u, J), -math.inf, dtype=Ec.dtype, device=Ec.device)

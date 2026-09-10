@@ -265,8 +265,8 @@ def main(args: list[str] | None = None) -> int:
                 "delta_nll_f_free": float(nll_f_free - ref_nll_f_free),
                 "r_work": float(summ["r_work"]),
                 "r_free": float(summ["r_free"]),
-                "r_int_work": float(summ["r_int"]),
-                "r_int_free": float(summ["r_int_free"]),
+                "r_intensity_work": float(summ["r_intensity"]),
+                "r_intensity_free": float(summ["r_intensity_free"]),
                 "cc_work_i": float(summ["cc_work_i"]),
                 "cc_free_i": float(summ["cc_free_i"]),
                 "geom_energy": float(e_geom),
@@ -318,7 +318,7 @@ def main(args: list[str] | None = None) -> int:
             continue
         stats: Dict[str, Any] = {"rmsd": rmsd, "n": len(group)}
         metrics = [
-            "r_work", "r_free", "r_int_free", "cc_free_i",
+            "r_work", "r_free", "r_intensity_free", "cc_free_i",
             "delta_nll_i_free", "delta_nll_f_free",
             "cos_sim_i", "cos_sim_f", "geom_energy",
             "grad_norm_i", "grad_norm_f",
@@ -395,7 +395,7 @@ def print_console_summary(summary_by_rmsd: Dict[float, Dict[str, Any]], summ_ref
         ("R_work (%)", f"{summ_ref['r_work']*100:.2f}%", [f"{d['r_work_mean']*100:.2f} ± {d['r_work_std']*100:.2f}%" for d in summary_by_rmsd.values()]),
         ("R_free (%)", f"{summ_ref['r_free']*100:.2f}%", [f"{d['r_free_mean']*100:.2f} ± {d['r_free_std']*100:.2f}%" for d in summary_by_rmsd.values()]),
         ("CC_free (I)", f"{summ_ref['cc_free_i']:.4f}", [f"{d['cc_free_i_mean']:.4f} ± {d['cc_free_i_std']:.4f}" for d in summary_by_rmsd.values()]),
-        ("R_int (free) (%)", f"{summ_ref['r_int_free']*100:.2f}%", [f"{d['r_int_free_mean']*100:.2f} ± {d['r_int_free_std']*100:.2f}%" for d in summary_by_rmsd.values()]),
+        ("R_intensity (free) (%)", f"{summ_ref['r_intensity_free']*100:.2f}%", [f"{d['r_intensity_free_mean']*100:.2f} ± {d['r_intensity_free_std']*100:.2f}%" for d in summary_by_rmsd.values()]),
         ("Δ NLL_free (Intensity)", "0.0000", [f"{d['delta_nll_i_free_mean']:+.4f} ± {d['delta_nll_i_free_std']:.4f}" for d in summary_by_rmsd.values()]),
         ("Δ NLL_free (Amplitude)", "0.0000", [f"{d['delta_nll_f_free_mean']:+.4f} ± {d['delta_nll_f_free_std']:.4f}" for d in summary_by_rmsd.values()]),
         ("Cos Sim: Intensity Grad", "N/A", [f"{d['cos_sim_i_mean']:.4f} ± {d['cos_sim_i_std']:.4f}" for d in summary_by_rmsd.values()]),

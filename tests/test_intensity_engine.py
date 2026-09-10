@@ -340,9 +340,13 @@ def test_inferred_r_values_from_posterior_mode():
     buf = io.StringIO()
     info.show_rfactors_targets_scales_overall(out=buf)
     out_str = buf.getvalue()
-    assert "Posterior Mean <F>" in out_str
-    assert "Posterior Mode" in out_str
     assert "Direct Intensity" in out_str
+    # The S family replaced the integrated R names, and the shrunken posterior
+    # mean / mode statistics are no longer part of the default banner.
+    assert "S_post" in out_str
+    assert "S_prior" in out_str
+    assert "Posterior Mean <F>" not in out_str
+    assert "Posterior Mode" not in out_str
 
 
 def test_model_and_scale_updates():

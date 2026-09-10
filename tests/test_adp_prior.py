@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 from typing import Any
 
 import numpy as np
@@ -658,6 +659,9 @@ def test_adp_held_out_cross_validation_check():
     the ADP block's held-out NLL (test set) and the B correlation to the unshaken truth
     must both be better with the prior.
     """
+    # random_structure draws from stdlib random as well as the flex RNG, so without
+    # this the generated structure depends on what earlier tests consumed.
+    random.seed(42)
     flex.set_random_seed(42)
     np.random.seed(42)
 

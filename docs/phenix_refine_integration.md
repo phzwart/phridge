@@ -42,7 +42,7 @@ To prevent environment incompatibilities between CCTBX (frequently running in Py
 │       ├── IntensityFModel (subclass of mmtbx.f_model.manager)           │
 │       ├── IntensityTargetFunctor & IntensityTargetResult                │
 │       ├── IntensityElectronDensityMap                                   │
-│       └── IntensityFModelInfo (inferred R_mode & R_intensity)           │
+│       └── IntensityFModelInfo (S_post/S_prior & R_intensity)           │
 │                                                                         │
 │   phridge.client.convert / Bridge                                       │
 │       └── LinkML Serialization: PackedMiller, PackedXrayStructure       │
@@ -62,6 +62,7 @@ To prevent environment incompatibilities between CCTBX (frequently running in Py
 │       ├── Differentiable Structure Factor Calculation (direct/fft)      │
 │       ├── Adaptive Hybrid Quadrature (Gauss-Hermite & Gauss-Legendre)   │
 │       ├── Student-t Heavy-Tailed Precision Mixture                      │
+│       ├── Two-stage nuisance: intensity ML Wilson Σ, then σ_A (+ β)     │
 │       ├── Fisher's Identity Exact Derivatives w.r.t. F_calc             │
 │       ├── Block-Diagonal Gauss-Newton Curvatures & Preconditioning     │
 │       └── Posterior Mode Amplitudes (E_mode -> F_mode)                  │
@@ -161,25 +162,29 @@ At the conclusion of macro cycles or when generating map coefficients, `phenix.r
   - $mF_o - DF_c$ equivalent: $(F_{\text{mode}} - |F_c|) \exp(i \phi_c)$
   - Gradient and Newton difference density maps for rapid ligand and solvent placement.
 
-### Touchpoint 6: Statistical Reporting & R-Factors
+### Touchpoint 6: Statistical Reporting (the S family)
 Legacy $R$-factors do not represent proper scoring metrics under direct intensity modeling. `IntensityFModelInfo` overrides `mmtbx.f_model.manager.info`:
-1. **Posterior Mode Amplitude R-factors**:
-   $$R_{\text{mode}} = \frac{\sum_h \big| F_{\text{mode}, h} - |F_{c, h}| \big|}{\sum_h F_{\text{mode}, h}}$$
-   Reported as `r_work`, `r_free`, and `r_all`.
-2. **Direct Intensity R-factors**:
-   $$R_{\text{intensity}} = \frac{\sum_h \big| I_{\text{obs}, h} - |F_{c, h}|^2 \big|}{\sum_h I_{\text{obs}, h}}$$
-   Reported as `r_intensity_work`, `r_intensity_free`, and `r_intensity_all`.
-3. Formats an integrated summary banner directly into the `phenix.refine` output log:
+1. **S_post / S_prior** (`s_post_*`, `s_prior_*`): the expected residual $|E - k_S E_C|$ under the posterior, and the same functional under the prior. Same functional, different measure — **not** an R factor, and never labeled `r_work`/`r_free`. See [`maps.md` §9](../src/phridge/contrib/intensity_ll/maps.md).
+2. **Direct Intensity R** (`r_intensity_*`): $\sum|I_{\mathrm{obs}}-|F_c|^2|/\sum|I_{\mathrm{obs}}|$ — a genuine point-estimate R on intensities, with no shrinkage, so it keeps the R label.
+3. **Legacy French–Wilson amplitude R** (`r_work`/`r_free`/`r_all`): fills the mandated `R VALUE` / `FREE R VALUE` fields in REMARK 3. This is the deliberate legacy bridge and the only amplitude R in the output.
+4. **Shrunken-amplitude diagnostics** (`r_post_*`, `r_mode_*`): biased low by posterior shrinkage, so they are demoted to a verbose block and never presented as R factors.
+5. **`show_all`** prints the overall banner plus a resolution table
+   (`show_rfactors_targets_in_bins`) with `S_post` / `S_prior`, `data%`, $\sigma_A$, and `scale_k1`.
+   The post-scale stats report (`PHRIDGE_STATS_REPORT`) adds `S_post` / `S_prior` columns to the I/σ bins.
+6. Formats an integrated summary banner directly into the `phenix.refine` output log:
 ```
 +----------------------------------------------------------------------------+
 | Intensity Likelihood Refinement (mli_quad)                                 |
 |                                                                            |
-| Posterior Mode:   r_work= 0.2259   r_free= 0.2686   r_all= 0.2285          |
-| Direct Intensity:  r_work= 0.2814   r_free= 0.3120   r_all= 0.2831         |
-| Target NLL:       target_work= 12450.2104   target_free= 1238.9402         |
-| Scale Factor k:   scale_k1= 1.0421   Student-t nu: 7.0                     |
+| Direct Intensity R: r_work= 0.2814   r_free= 0.3120   r_all= 0.2831         |
+| S_post:             work= 0.2700   free= 0.2900   S_prior_w/f= 0.2700/0.2700|
+| S diagnostics:      k_S= 0.9628   E_C outliers= 0                           |
+| Target NLL:         target_work= 12450.2104   target_free= 1238.9402        |
+| Scale Factor k:     scale_k1= 1.0421   Student-t nu: 7.0                    |
 +----------------------------------------------------------------------------+
 ```
+`S_post(free)` plays the role conventionally played by R_free, with the shrinkage
+pathology removed.
 
 ---
 
@@ -218,7 +223,7 @@ sequenceDiagram
     WK-->>BR: Map coefficients (2mFo-DFc, mFo-DFc, f_mode)
     BR-->>PR: CCTBX Miller array of map coefficients
     PR->>FM: info()
-    FM-->>PR: IntensityFModelInfo (R_mode, R_intensity, NLL)
+    FM-->>PR: IntensityFModelInfo (S_post, R_intensity, NLL)
     PR-->>User: Refined PDB, MTZ map coefficients, log report
 ```
 
@@ -305,6 +310,7 @@ map_coeffs_fofc = edm.map_coefficients(map_type="mFo-DFc")
 | `PHRIDGE_REDIS_URL` | (required for Redis bridge) | Worker Redis URL |
 | `PHRIDGE_NU` | (engine default) | Student-t ν |
 | `PHRIDGE_FIT_NU` | off | Fit ν during `update_all_scales` |
+| `PHRIDGE_NU_MODE` | **`bins`** | ν fit: same resolution **bins** as σ_A (default) or scalar `global` |
 | `PHRIDGE_PRECONDITION` | off | Gauss–Newton diagonal preconditioning of **XYZ, occupancy, and ADP** grads (Phenix uses packed worker grads instead of CCTBX SF→atom) |
 | `PHRIDGE_MEMORY` | **on** | In-process `Bridge(memory=True)` (avoids Redis socket-read hangs). Set `0` / `--redis` for Redis worker |
 | `PHRIDGE_HEARTBEAT` | **on** | Alive prints while waiting (target evals, scale updates, Redis waits) |
@@ -313,6 +319,15 @@ map_coeffs_fofc = edm.map_coefficients(map_type="mFo-DFc")
 | `PHRIDGE_STATS_BIN_SIZE` | `500` | Reflections per stats bin |
 | `PHRIDGE_SIGMA_A_MODE` | **`bins`** | σ_A(s) fit: per-resolution **bins** (monotone, default) or stiff Read curve (`read`) |
 | `PHRIDGE_SIGMA_A_BINS` | auto | Number of σ_A shells when mode=`bins` |
+| `PHRIDGE_SIGMA_A_TV_NORM` | `0` | Total-variation penalty λ_TV on adjacent σ_A **and** ν bin values (bins mode; e.g. `0.04`) |
+| `PHRIDGE_FIT_SIGMA_WILSON` | **on** | Intensity-only ML Wilson fit of \(\Sigma_0>0\), \(B_W\) (no model / no \(\sigma_A\)); then freeze \(\Sigma\) and fit \(\sigma_A\). Set `0` to keep the moment-plot \(\Sigma\) only |
+| `PHRIDGE_OMIT_WINDOWS` | off | After each `update_all_scales`, write stitched omit map MTZ (`{prefix}_omit_windows.mtz`) |
+| `PHRIDGE_OMIT_BOX_SIZE` | `10` | Omit box edge length in Å |
+| `PHRIDGE_OMIT_MODE` | **`boxes`** | `boxes` or `residue_blocks` |
+| `PHRIDGE_OMIT_PREFIX` | `mli_omit` | Output prefix → ``{prefix}_omit_windows.mtz`` |
+| `PHRIDGE_OMIT_CHUNK_SIZE` | auto | Windows per map-coefficient chunk |
+| `PHRIDGE_OMIT_RESOLUTION_FACTOR` | `0.25` | FFT grid for real-space stitching |
+| `PHRIDGE_OMIT_SAVE_NPZ` | off | Also write diagnostic per-window ``*_omit_windows.npz`` |
 | `PHRIDGE_VERBOSE_TARGET` | **off** | Per-eval `mli_quad` banners (client + worker); set `1` to enable |
 | `PHRIDGE_WEIGHT_METRIC` | **`nll`** | Rank XYZ/ADP weight trials by free-set NLL (`nll`) or classic R-free (`rfree`) |
 
@@ -323,7 +338,57 @@ Weight selection rewiring (when `PHRIDGE_WEIGHT_METRIC=nll` and target is `mli_q
 - **XYZ** — Phenix still records R-factors (needed for its post-select assert). The scorer additionally stores free/work NLL per trial and picks the lowest **free-set NLL** among geometry-acceptable trials.
 - **ADP** — Trial ranking columns are filled with NLL (so the usual R-gap filters become no-ops at NLL scale); the winner is the lowest free-set NLL. True R is still printed in the trial table.
 
-CLI aliases: `--verbose-target`, `--weight-metric=nll|rfree` on `phenix_refine_mli.py` / `run_phenix_intensity.sh`.
+CLI aliases: `--verbose-target`, `--weight-metric=nll|rfree`, `--sigma-a-bins=N`, `--tv-norm=λ`, `--fit-nu`, `--nu-mode=bins|global`, `--fit-sigma-wilson` / `--no-fit-sigma-wilson`, `--omit-windows` / `--omit-box-size` / `--omit-prefix` on `phenix_refine_mli.py` / `run_phenix_intensity.sh`.
+
+Windowed omit coefficients (`ml_i_omit_windows`): see [`maps.md` §8](../src/phridge/contrib/intensity_ll/maps.md). Solvent/scales stay those of the full model; residual β is increased by omitted scattering and encoded as an effective $\sigma_A$ for the Rice maps API. Per-window coeffs are stitched in real space; default artifact is ``{prefix}_omit_windows.mtz`` (``FWT`` / ``DELFWT`` of the composite map); optional npz via ``PHRIDGE_OMIT_SAVE_NPZ=1``.
+
+---
+
+## 6b. Two-stage nuisance fit (`ml_i_nuisance_fit`)
+
+On each `update_all_scales`, Phridge fits Wilson scale and $\sigma_A$ on the **tune** set (work reflections) in two stages. This is the default path that keeps $\sigma_A$ well-behaved in practice.
+
+### Why not joint $(\Sigma_0, \sigma_A)$?
+
+Maximizing the intensity NLL over both overall Wilson scale $\Sigma_0$ and $\sigma_A$ is degenerate: the optimizer can drive $\sigma_A \to 1$ while $\Sigma_0 \to \infty$ (Rice width $a = 1-\sigma_A^2$ collapses). Freeing those two together is what produced $\sigma_A$ stuck at $0.999$.
+
+The classical remedy is the Read / cctbx split into **correlation** and **residual scale**:
+
+| Component | Symbol | Role |
+|---|---|---|
+| Correlation | $\alpha = \sigma_A$ | Model–data agreement |
+| Residual Wilson | $\beta = \Sigma\,(1-\sigma_A^2)$ | Unexplained intensity variance |
+
+Phridge reports $\beta_h$ after the fit. A future joint residual/correlation parameterization should free $(\sigma_A,\beta)$, not $(\sigma_A,\Sigma_0)$.
+
+### Stage 1 — Intensity-only ML Wilson (no model)
+
+$$
+\Sigma(s) = \Sigma_0\,\exp(-0.5\,B_W s^2),\qquad \Sigma_0 = e^{\ell} > 0
+$$
+
+1. Moment Wilson plot initializes $(\Sigma_0, B_W)$.
+2. L-BFGS refines them under a **pure Wilson prior** ($\sigma_A \to 0$) times Gaussian noise on $I_{\mathrm{obs}}\pm\sigma_I$ — **no $F_{\mathrm{calc}}$**.
+3. The quadrature returns $\log p(Z)$ with $Z = I/(\varepsilon\Sigma)$. Stage 1 uses the intensity density
+   $$
+   \log p(I) = \log p(Z) - \log(\varepsilon\Sigma).
+   $$
+   Omitting the Jacobian sends $\Sigma_0\to\infty$.
+
+Disable with `--no-fit-sigma-wilson` / `PHRIDGE_FIT_SIGMA_WILSON=0` to keep the moment-plot $\Sigma$ only.
+
+### Stage 2 — Freeze $\Sigma$, fit $\sigma_A$ (+ optional $\nu$)
+
+With $\Sigma(s)$ held fixed:
+
+- Default: monotone decreasing $\sigma_A$ in resolution bins (`PHRIDGE_SIGMA_A_MODE=bins`).
+- Optional: Read-style curve (`=read`), TV on adjacent bins (`--tv-norm` / `PHRIDGE_SIGMA_A_TV_NORM`), shell count (`--sigma-a-bins`).
+- Optional Student-$t$ $\nu$ (`--fit-nu`):
+  - **`PHRIDGE_NU_MODE=bins`** (default): same resolution shells as $\sigma_A$, co-refined in L-BFGS; `--tv-norm` also penalizes adjacent $\nu$ jumps (scaled by $1/10$ so $\nu$ and $\sigma_A$ TV terms share $\lambda$).
+  - **`=global`**: single scalar $\nu$ via bounded 1-D search (previous behaviour).
+  - Per-reflection $\nu(s)$ is returned and used in subsequent target / map evaluations.
+
+Standalone `phridge-intensity` retains overlapping bins / PAVA / TV for its own shell-wise $\sigma_A$ / $\nu$ path; the Phenix worker uses the two-stage procedure above.
 
 ---
 
@@ -333,10 +398,11 @@ The interface is validated through dedicated test suites covering all integratio
 
 | Test File | Verified Touchpoints |
 |---|---|
+| `tests/test_sigma_a_nuisance_bins.py` | Intensity-only ML Wilson ($\Sigma_0>0$, Jacobian), frozen-$\Sigma$ $\sigma_A$ bins / Read / TV, bin-wise $\nu$ + TV, $\beta=\Sigma(1-\sigma_A^2)$, no $\sigma_A\to 1$ collapse. |
 | `tests/test_intensity_engine.py` | `IntensityFModel` inheritance from `mmtbx.f_model.manager`, structure factor caching, `target_and_gradients` with and without preconditioning, component-wise gradient accessors, posterior mode $E_{\text{mode}}$, and L-BFGS convergence. |
 | `tests/test_phenix_refine_hook.py` | Registration of `mli_quad` in `mmtbx.refinement.targets.target_names`, PHIL choice validation, `fmodel_manager2` returning `IntensityFModel`, `target_functor` returning `IntensityTargetFunctor`, map synthesis via `compute_map_coefficients`, and clean import verification (confirming zero PyTorch imports on client side). |
 
 To run the full test suite:
 ```bash
-pytest tests/test_phenix_refine_hook.py tests/test_intensity_engine.py -v
+pytest tests/test_phenix_refine_hook.py tests/test_intensity_engine.py tests/test_sigma_a_nuisance_bins.py -v
 ```

@@ -944,7 +944,7 @@ def compare(
         fc_B_amp = np.abs(fc_B_data)[t_idx]
         io_test = io_data[t_idx]
 
-        # R_int free: sum |I_obs - k*Fc^2| / sum I_obs
+        # direct intensity R (free): sum |I_obs - k*Fc^2| / sum I_obs
         k_A = float(np.sum(io_test * fc_A_amp**2) / max(np.sum(fc_A_amp**4), 1e-12))
         k_B = float(np.sum(io_test * fc_B_amp**2) / max(np.sum(fc_B_amp**4), 1e-12))
         r_A = float(np.sum(np.abs(io_test - k_A * fc_A_amp**2)) / max(np.sum(io_test), 1e-12)) * 100.0

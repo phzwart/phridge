@@ -5,6 +5,8 @@ Per bin (default 500 reflections, low→high resolution):
   - mean σ_A(s) and Wilson Σ_W(s) from the current nuisance fit
   - mean data-fraction vs Wilson prior:  σ_Z^{-2} / (1 + σ_Z^{-2})
     with σ_Z = σ_I / (ε Σ_W)  (model-free; ≈0 = prior-dominated)
+  - S_post / S_prior when ``ml_i_maps`` bins are available (expected residual
+    under the posterior / under the prior — never write a bare ``S``)
 
 Enable/disable with ``PHRIDGE_STATS_REPORT`` (default on). Bin size:
 ``PHRIDGE_STATS_BIN_SIZE`` (default 500).
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Optional, Sequence, TextIO
 
@@ -54,6 +57,14 @@ class ResolutionBinStats:
     mean_sigma_a: float = float("nan")
     mean_sigma_wilson: float = float("nan")
     mean_data_frac: float = float("nan")  # σ_Z^{-2}/(1+σ_Z^{-2})
+    s_post: float = float("nan")  # S_post (work; parent-set k_S)
+    s_prior: float = float("nan")  # S_prior — σ_A-implied no-data floor
+    s_post_free: float = float("nan")
+    s_prior_free: float = float("nan")
+    rho2: float = float("nan")  # visible share v_vis/(v_vis+v_lat), work set
+    rho2_free: float = float("nan")
+    n_work: int = 0
+    n_free: int = 0
 
 
 @dataclass
@@ -70,6 +81,69 @@ class IntensityStatsReport:
     sigma_wilson_params: dict[str, float] = field(default_factory=dict)
     nu: Optional[float] = None
     label: str = ""
+    # Overall S family (filled by merge from ml_i_maps)
+    s_post_work: float = float("nan")
+    s_post_free: float = float("nan")
+    s_prior_work: float = float("nan")
+    s_prior_free: float = float("nan")
+    k_s_work: float = float("nan")
+    k_s_prior_work: float = float("nan")
+    rho2_work: float = float("nan")
+    rho2_free: float = float("nan")
+    s_report_version: Optional[int] = None
+
+    # -- Deprecated R-family aliases -------------------------------------------
+    # Read-only bridges for callers written against the old names. They exist on
+    # this object only: the printed report and the worker payload use S names
+    # exclusively. Remove in the next minor version.
+    @property
+    def r_int_work(self) -> float:
+        _warn_renamed("r_int_work", "s_post_work")
+        return self.s_post_work
+
+    @property
+    def r_int_free(self) -> float:
+        _warn_renamed("r_int_free", "s_post_free")
+        return self.s_post_free
+
+    @property
+    def r_inf_work(self) -> float:
+        _warn_renamed("r_inf_work", "s_prior_work")
+        return self.s_prior_work
+
+    @property
+    def r_inf_free(self) -> float:
+        _warn_renamed("r_inf_free", "s_prior_free")
+        return self.s_prior_free
+
+    @property
+    def k_int_work(self) -> float:
+        _warn_renamed("k_int_work", "k_s_work")
+        return self.k_s_work
+
+    @property
+    def k_inf_work(self) -> float:
+        _warn_renamed("k_inf_work", "k_s_prior_work")
+        return self.k_s_prior_work
+
+    @property
+    def r_int_version(self) -> Optional[int]:
+        _warn_renamed("r_int_version", "s_report_version")
+        return self.s_report_version
+
+
+def _warn_renamed(old: str, new: str) -> None:
+    warnings.warn(
+        f"{old!r} is deprecated: the integrated R statistics were renamed to the "
+        f"S family (S_post / S_prior) because they are not the crystallographic "
+        f"R factor. Use {new!r} instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _fmt_r(x: float) -> str:
+    return f"{x:.4f}" if np.isfinite(x) else "n/a"
 
 
 def _as_numpy(x: Any, dtype: Any = np.float64) -> np.ndarray:
@@ -239,32 +313,55 @@ def format_intensity_stats_report(report: IntensityStatsReport) -> str:
         bits.append(f"ν={float(report.nu):.2f}")
     if bits:
         lines.append("  " + "  ".join(bits))
+    if (
+        np.isfinite(report.s_post_work)
+        or np.isfinite(report.k_s_work)
+        or report.s_report_version is not None
+    ):
+        lines.append(
+            f"  S_post: work={_fmt_r(report.s_post_work)} free={_fmt_r(report.s_post_free)}  "
+            f"S_prior={_fmt_r(report.s_prior_work)}/{_fmt_r(report.s_prior_free)}  "
+            f"k_S={_fmt_r(report.k_s_work)}"
+            + (
+                f"  latent={_fmt_r(1.0 - report.rho2_work)}"
+                if np.isfinite(report.rho2_work)
+                else ""
+            )
+            + (f"  ver={report.s_report_version}" if report.s_report_version is not None else "")
+        )
     lines.append(border)
 
     header = (
         f"{'bin':>4} {'n':>5} {'d_max':>7} {'d_min':>7} "
         f"{'<I/σ>':>7} {'neg%':>6} "
         f"{'<1%':>5} {'<2%':>5} {'<3%':>5} {'<4%':>5} {'<5%':>5} "
-        f"{'σ_A':>6} {'data%':>6}"
+        f"{'σ_A':>6} {'data%':>6} {'S_post':>7} {'S_prior':>7} {'1-ρ²':>6}"
     )
     lines.append(header)
     lines.append("-" * len(header))
     for r in report.bins:
         sa_s = f"{r.mean_sigma_a:6.3f}" if np.isfinite(r.mean_sigma_a) else f"{'n/a':>6}"
         df_s = f"{100.0 * r.mean_data_frac:5.1f}%" if np.isfinite(r.mean_data_frac) else f"{'n/a':>6}"
+        ri_s = f"{r.s_post:7.4f}" if np.isfinite(r.s_post) else f"{'n/a':>7}"
+        rf_s = f"{r.s_prior:7.4f}" if np.isfinite(r.s_prior) else f"{'n/a':>7}"
+        lat_s = f"{1.0 - r.rho2:6.3f}" if np.isfinite(r.rho2) else f"{'n/a':>6}"
         lines.append(
             f"{r.bin:4d} {r.n:5d} {r.d_max:7.3f} {r.d_min:7.3f} "
             f"{r.mean_isig:7.2f} {100.0 * r.frac_neg:5.1f}% "
             f"{100.0 * r.frac_lt_1:4.1f}% {100.0 * r.frac_lt_2:4.1f}% "
             f"{100.0 * r.frac_lt_3:4.1f}% {100.0 * r.frac_lt_4:4.1f}% "
             f"{100.0 * r.frac_lt_5:4.1f}% "
-            f"{sa_s} {df_s}"
+            f"{sa_s} {df_s} {ri_s} {rf_s} {lat_s}"
         )
     lines.append("-" * len(header))
     lines.append(
         "  neg% / <k% = fraction I<0 / I/σ<k.  "
         "data% ≈ measurement precision vs Wilson prior: σ_Z^{-2}/(1+σ_Z^{-2}), "
-        "σ_Z=σ_I/(ε Σ_W)."
+        "σ_Z=σ_I/(ε Σ_W).  S_post / S_prior = expected residual under the posterior / "
+        "under the prior (σ_A floor). Same functional, different measure. NOT the "
+        "crystallographic R factor; do not compare with deposited R values.  "
+        "1-ρ² = latent share of the L2 residual, "
+        "Σ Var_post(E) / Σ <(E-k E_C)²> (descriptive, not a calibrated test)."
     )
     lines.append(border)
     return "\n".join(lines)
@@ -288,6 +385,49 @@ def print_intensity_stats_report(
                 stream.flush()
         except Exception:
             pass
+
+
+def _finite_r(v: Any, *, hi: float = 5.0) -> float:
+    """Accept only finite R in ``[0, hi]``; else NaN (guards stale-worker blowups)."""
+    try:
+        if v is None:
+            return float("nan")
+        x = float(v)
+    except (TypeError, ValueError):
+        return float("nan")
+    return x if np.isfinite(x) and 0.0 <= x <= hi else float("nan")
+
+
+def merge_sstat_bins_into_report(report: IntensityStatsReport, r_values: dict[str, Any]) -> IntensityStatsReport:
+    """Copy per-shell S_post / S_prior from ``ml_i_maps`` ``r_values`` into the report."""
+    if not report.bins:
+        return report
+    r_iw = r_values.get("s_post_work_bins") or []
+    r_if = r_values.get("s_prior_work_bins") or []
+    r_iwf = r_values.get("s_post_free_bins") or []
+    r_iff = r_values.get("s_prior_free_bins") or []
+    rho2_w = r_values.get("rho2_work_bins") or []
+    rho2_f = r_values.get("rho2_free_bins") or []
+    n_w = r_values.get("n_work_bins") or []
+    n_f = r_values.get("n_free_bins") or []
+    for i, row in enumerate(report.bins):
+        if i < len(r_iw):
+            row.s_post = _finite_r(r_iw[i])
+        if i < len(r_if):
+            row.s_prior = _finite_r(r_if[i])
+        if i < len(r_iwf):
+            row.s_post_free = _finite_r(r_iwf[i])
+        if i < len(r_iff):
+            row.s_prior_free = _finite_r(r_iff[i])
+        if i < len(rho2_w):
+            row.rho2 = _finite_r(rho2_w[i], hi=1.0)
+        if i < len(rho2_f):
+            row.rho2_free = _finite_r(rho2_f[i], hi=1.0)
+        if i < len(n_w):
+            row.n_work = int(n_w[i])
+        if i < len(n_f):
+            row.n_free = int(n_f[i])
+    return report
 
 
 def report_from_fmodel(

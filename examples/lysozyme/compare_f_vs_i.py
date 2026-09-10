@@ -6,7 +6,7 @@ Compares:
   1. Scale & bulk solvent parameters (k_total, k_sol, B_sol)
   2. Estimated sigma_A across resolution bins
   3. Coordinate refinement progression (NLL reduction & coordinate RMSD)
-  4. R-factors (R_work, R_free, R_int)
+  4. R-factors (R_work, R_free, R_intensity)
   5. Gradient-derived 2mFo-DFc and mFo-DFc electron density maps (real-space CC)
 """
 
@@ -137,8 +137,8 @@ def main():
     s_i = model_i.summary()
     s_f = model_f.summary()
 
-    print(f"Model I: R_work = {s_i['r_work']*100:.2f}%, R_free = {s_i['r_free']*100:.2f}%, R_int = {s_i['r_int']*100:.2f}%")
-    print(f"Model F: R_work = {s_f['r_work']*100:.2f}%, R_free = {s_f['r_free']*100:.2f}%, R_int = {s_f['r_int']*100:.2f}%")
+    print(f"Model I: R_work = {s_i['r_work']*100:.2f}%, R_free = {s_i['r_free']*100:.2f}%, R_intensity = {s_i['r_intensity']*100:.2f}%")
+    print(f"Model F: R_work = {s_f['r_work']*100:.2f}%, R_free = {s_f['r_free']*100:.2f}%, R_intensity = {s_f['r_intensity']*100:.2f}%")
 
     # -------------------------------------------------------------------------
     # 7. Map Synthesis & Real-Space Comparison

@@ -330,7 +330,7 @@ def test_pipeline_end_to_end_from_files(tmp_path: Path):
     summary = res["summary"]
     assert summary["n_refl"] == i_obs.size()
     assert np.isfinite(summary["r_work"])
-    assert np.isfinite(summary["r_int"])
+    assert np.isfinite(summary["r_intensity"])
 
 
 def test_cli_entrypoint(tmp_path: Path):

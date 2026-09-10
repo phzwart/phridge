@@ -8,6 +8,7 @@ The impl imports torch lazily so a Phenix client can import this module.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 import numpy as np
@@ -29,7 +30,9 @@ _INPUTS = {
     "beta": "array",
     "epsilon": "array",
     "centric": "array",
+    "nu": "array",
     "maps": "json",
+    "d_spacings": "array",
 }
 _OUTPUTS = {
     "difference": "MillerArray",
@@ -56,21 +59,35 @@ _NUISANCE_INPUTS = {
     "nu_bounds": "json",
     "nu": "json",
     "fit_nu": "json",
+    "nu_mode": "json",
     "fit_scale": "json",
     "sigma_a_mode": "json",
     "n_sigma_a_bins": "json",
+    "tv_norm": "json",
+    "fit_sigma_wilson": "json",
 }
 _NUISANCE_OUTPUTS = {
     "sigma_a": "array",
     "sigma_wilson": "array",
+    "beta": "array",
     "nu": "json",
+    "nu_per_refl": "array",
     "nu_se": "json",
+    "nu_params": "json",
     "scale_k": "json",
     "p_theta": "json",
     "tune_nll": "json",
     "sigma_a_params": "json",
     "sigma_wilson_params": "json",
 }
+
+
+def _score_test_enabled() -> bool:
+    """``PHRIDGE_SCORE_TEST`` gate; off by default because the reference variance
+    costs a dozen extra posterior solves per reflection."""
+    import os
+
+    return os.environ.get("PHRIDGE_SCORE_TEST", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def ml_i_maps(
@@ -83,12 +100,16 @@ def ml_i_maps(
     beta: Optional[Any] = None,
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
+    nu: Optional[Any] = None,
     maps: Optional[dict] = None,
+    d_spacings: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Worker implementation (torch side)."""
     import torch
 
     from phridge.contrib.intensity_ll.maps import IntensityMapOptions, intensity_map_coefficients
+    from phridge.contrib.intensity_ll.mli import normalize
+    from phridge.contrib.intensity_ll.rint import integrated_s_report
     from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
     from phridge.sfcalc.ops import _DEVICE, _miller_like, _np, _observations
     from phridge.sfcalc.targets import build_target
@@ -101,7 +122,7 @@ def ml_i_maps(
     tgt = build_target(spec)
     assert isinstance(tgt, IntensityLogLikelihood)
     opts = IntensityMapOptions.model_validate(maps or {})
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric)
+    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
     dev = _DEVICE["device"]
     is_mps = dev.startswith("mps")
     cdtype = torch.complex64 if is_mps else torch.complex128
@@ -197,6 +218,187 @@ def ml_i_maps(
             r_val_dict["r_intensity_work"] = r_val_dict["r_intensity_all"]
             r_val_dict["cc_intensity_work"] = r_val_dict.get("cc_intensity_all", float("nan"))
 
+    # S_post / S_prior (reporting only; denser GL quadrature than maps)
+    try:
+        fo = obs.data
+        eps = obs.epsilon if obs.epsilon is not None else torch.ones_like(fo)
+        centric_t = obs.centric if obs.centric is not None else torch.zeros_like(fo, dtype=torch.bool)
+        sA = tgt._sigma_a(obs)
+        sW = tgt._sigma_wilson(obs)
+        sig = tgt._sigma(obs)
+        fc_abs = fc.abs()
+        ok = (sA > 0) & (sA < 1.0 - 1e-6) & (sW > 0) & (sig > 0) & (eps > 0) & (fc_abs > 0)
+        sA_s = torch.where(ok, sA, torch.full_like(sA, 0.5))
+        sW_s = torch.where(ok, sW, torch.ones_like(sW))
+        sig_s = torch.where(ok, sig, torch.ones_like(sig))
+        eps_s = torch.where(ok, eps, torch.ones_like(eps))
+        fc_s = torch.where(ok, fc_abs, torch.ones_like(fc_abs))
+        fo_s = torch.where(ok, fo, torch.zeros_like(fo))
+        Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+        # Keep Rice width a=1-σ_A² away from 0 for stable reporting quadrature
+        sA_n = sA_n.clamp(1e-4, 1.0 - 1e-4)
+        # float64 on CPU for reporting accuracy (MPS maps may be float32).
+        # Move to CPU *before* widening: a fused ``.to(dtype=float64, device="cpu")``
+        # on an MPS tensor raises for small inputs but silently returns
+        # uninitialized memory above ~1k elements (MPS has no float64).
+        Ec64 = Ec.detach().cpu().double()
+        sA64 = sA_n.detach().cpu().double()
+        Zo64 = Zo.detach().cpu().double()
+        sZ64 = sZ.detach().cpu().double()
+        # Preserve negative Z_o (same as maps). Only scrub non-finite.
+        Zo64 = torch.nan_to_num(Zo64, nan=0.0, posinf=1e6, neginf=-1e6)
+        sZ64 = torch.nan_to_num(sZ64, nan=1.0, posinf=1e6, neginf=1.0).clamp_min(1e-12)
+        Ec64 = torch.nan_to_num(Ec64, nan=0.0, posinf=1e3, neginf=0.0).clamp_min(0.0)
+        cen64 = centric_t.detach().to(device="cpu")
+        work = ok.detach().to(device="cpu")
+        free_mask_arg: Optional[Any] = None
+        rf_np = _np(r_free)
+        if rf_np is not None and np.any(np.asarray(rf_np).astype(bool)):
+            free = torch.as_tensor(np.asarray(rf_np).astype(bool), device="cpu") & work
+            work = work & ~free
+            free_mask_arg = free
+
+        bin_size = opts.bin_size
+        if bin_size is None:
+            import os
+
+            raw_bs = os.environ.get("PHRIDGE_STATS_BIN_SIZE", "").strip()
+            bin_size = int(raw_bs) if raw_bs.isdigit() else 500
+        d_np = _np(d_spacings)
+        if d_np is None:
+            # Derive d from f_obs miller indices (no extra client input required)
+            try:
+                uc = f_obs.meta.crystal.unit_cell
+                s_sq = _compute_s_sq(uc, _np(f_obs.hkl))
+                d_np = 1.0 / np.sqrt(np.maximum(s_sq, 1e-300))
+            except Exception:
+                d_np = None
+                bin_size = None
+        d_t = (
+            torch.as_tensor(np.asarray(d_np, dtype=np.float64), dtype=torch.float64)
+            if d_np is not None
+            else None
+        )
+
+        nu_arg: Any = None
+        if obs.nu is not None:
+            nu_t = obs.nu.detach().cpu().double()
+            nu_t = torch.nan_to_num(nu_t, nan=200.0, posinf=200.0, neginf=2.5).clamp(2.05, 500.0)
+            nu_arg = nu_t
+        elif tgt.nu is not None and np.isfinite(float(tgt.nu)):
+            nu_arg = float(tgt.nu)
+
+        # Match map-coefficient quadrature exactly (same posterior as r_post / f_post)
+        rint = integrated_s_report(
+            Ec64,
+            sA64,
+            Zo64,
+            sZ64,
+            cen64,
+            work_mask=work,
+            free_mask=free_mask_arg,
+            nu=nu_arg,
+            d_spacings=d_t,
+            bin_size=bin_size,
+            n_u=int(getattr(tgt, "n_u", 12) or 12),
+            snr_strong=float(getattr(tgt, "snr_strong", 5.0) or 5.0),
+            n_hermite=int(getattr(tgt, "n_hermite", 7) or 7),
+            n_legendre=int(getattr(tgt, "n_legendre", 24) or 24),
+            k_window=float(getattr(tgt, "k_window", 8.0) or 8.0),
+            chunk_size=4096,
+            score_test=_score_test_enabled(),
+        )
+        r_val_dict.update(rint.as_s_values())
+        r_val_dict["s_report_version"] = 7
+
+        # E_C = |F_c|/sqrt(εΣ) must be O(1) by construction. When it is not, the
+        # Wilson Σ (obs.beta) is broken and every normalized-unit statistic is
+        # meaningless — report that instead of a plausible-looking R.
+        ec_med = float(r_val_dict.get("ec_median", float("nan")))
+        if not (np.isfinite(ec_med) and 0.01 <= ec_med <= 100.0):
+            for _k in (
+                "s_post_work", "s_post_free", "s_post_all",
+                "s_prior_work", "s_prior_free", "s_prior_all",
+            ):
+                r_val_dict[_k] = float("nan")
+            for _k in ("s_post_work_bins", "s_post_free_bins", "s_prior_work_bins", "s_prior_free_bins"):
+                if _k in r_val_dict:
+                    r_val_dict[_k] = [float("nan")] * len(r_val_dict[_k])
+            r_val_dict["s_report_error"] = (
+                f"normalization broken: median E_C={ec_med:.4g} (expected ~1). "
+                "sigma_wilson (obs.beta) is not a valid Wilson Sigma."
+            )
+        s_post_w = float(r_val_dict.get("s_post_work", float("nan")))
+        k_s_w = float(r_val_dict.get("k_s_work", float("nan")))
+        s_vis_w = float(r_val_dict.get("s_vis_work", float("nan")))
+        need_dbg = (
+            (not np.isfinite(s_post_w))
+            or (not np.isfinite(k_s_w))
+            or (np.isfinite(s_post_w) and s_post_w > 0.5)
+            or int(r_val_dict.get("n_ec_outliers", 0)) > 0
+            or (
+                np.isfinite(s_post_w)
+                and np.isfinite(s_vis_w)
+                and s_vis_w > 1e-6
+                and s_post_w > 3.0 * s_vis_w
+            )
+        )
+        if need_dbg:
+            n_ok = int(work.sum().item()) if hasattr(work, "sum") else -1
+
+            def _mmm(t: Any) -> Any:
+                """min / median / max of a raw input, unmasked and unclamped."""
+                if t is None:
+                    return None
+                tt = t.detach().cpu().double().reshape(-1)
+                tt = tt[torch.isfinite(tt)]
+                if tt.numel() == 0:
+                    return "all non-finite"
+                return [float(tt.min()), float(tt.median()), float(tt.max())]
+
+            ec_ok = Ec64[work] if n_ok > 0 else Ec64[:0]
+            r_val_dict["s_report_debug"] = {
+                "n_ok_work": n_ok,
+                "n_total": int(Ec64.numel()),
+                "k_s_work": k_s_w,
+                "k_s_prior_work": float(r_val_dict.get("k_s_prior_work", float("nan"))),
+                "s_post_work": s_post_w,
+                "s_vis_work": s_vis_w,
+                "n_ec_outliers": int(r_val_dict.get("n_ec_outliers", 0)),
+                "Ec_used_min_med_max": _mmm(ec_ok),
+                # Raw nuisance inputs exactly as the client sent them (alpha=σ_A, beta=Σ_W)
+                "RAW_sigma_a(alpha)": _mmm(sA),
+                "RAW_sigma_wilson(beta)": _mmm(sW),
+                "RAW_fcalc": _mmm(fc_abs),
+                "RAW_iobs": _mmm(fo),
+                "RAW_sigma_i": _mmm(sig),
+                "RAW_epsilon": _mmm(eps),
+                "n_sigma_a_outside_0_1": int(((sA <= 0) | (sA >= 1.0)).sum().item()),
+                "n_sigma_wilson_nonpos": int((sW <= 0).sum().item()),
+                "dtype_device": f"{sA.dtype}/{sA.device}",
+                "nu_kind": (
+                    "per_refl"
+                    if isinstance(nu_arg, torch.Tensor) and nu_arg.numel() > 1
+                    else ("scalar" if nu_arg is not None else "none")
+                ),
+            }
+    except Exception as exc:
+        import traceback
+        import sys
+
+        r_val_dict.setdefault("s_post_work", float("nan"))
+        r_val_dict.setdefault("s_post_free", float("nan"))
+        r_val_dict.setdefault("s_post_all", float("nan"))
+        r_val_dict.setdefault("s_prior_work", float("nan"))
+        r_val_dict.setdefault("s_prior_free", float("nan"))
+        r_val_dict.setdefault("s_prior_all", float("nan"))
+        r_val_dict["s_report_error"] = f"{type(exc).__name__}: {exc}"
+        r_val_dict["s_post_traceback"] = traceback.format_exc(limit=6)
+        try:
+            print(f"[ml_i_maps] S_post failed: {r_val_dict['s_report_error']}", file=sys.stderr, flush=True)
+        except Exception:
+            pass
+
     return {
         "difference": _miller_like(f_obs, out.difference, "ML_I_DIFF"),
         "model": _miller_like(f_obs, out.model, "ML_I_MODEL"),
@@ -254,19 +456,33 @@ def ml_i_nuisance_fit(
     nu_bounds: Optional[Any] = None,
     nu: Optional[Any] = None,
     fit_nu: Optional[Any] = True,
+    nu_mode: Optional[Any] = "bins",
     fit_scale: Optional[Any] = False,
     sigma_a_mode: Optional[Any] = "bins",
     n_sigma_a_bins: Optional[Any] = None,
+    tv_norm: Optional[Any] = 0.0,
+    fit_sigma_wilson: Optional[Any] = True,
 ) -> dict[str, Any]:
     """Worker implementation for held-out nuisance parameter fitting (theta).
 
-    Fits:
-      - Sigma_N(s): Wilson-fit exponential curve Sigma_0 exp(-0.5 B_W s^2)
-      - sigma_A(s): per-resolution-bin values (default, monotone in s²) or optional
-        Read-style sqrt(k) exp(-0.25 B_delta s^2)
-      - nu: Student-t degrees of freedom in nu_bounds (global, with observed Fisher SE)
-      - scale_k: optional scale factor on F_c
-    All fitted strictly on the tune set (tune_mask == True).
+    Two-stage fit on the tune set (no joint Σ₀–σ_A free scale):
+
+      1. **Wilson Σ(s) from intensities alone** (no atomic model):
+         ``Σ(s) = Σ₀ exp(-0.5 B_W s²)`` with ``Σ₀ > 0``.
+         Initialized by a moment Wilson plot, then (by default) refined by
+         maximizing the intensity likelihood under a pure Wilson prior
+         (``σ_A → 0``) times Gaussian measurement noise — so noisy / negative
+         ``I_obs`` are handled properly. No ``F_calc`` enters this stage.
+
+      2. **σ_A (and optional ν, F_c scale) with Σ frozen**:
+         monotone resolution bins (default) or Read-style curve; optional TV
+         on adjacent σ_A bins. Student-t ``ν`` defaults to the **same**
+         resolution shells with the same TV penalty (``nu_mode=bins``);
+         ``nu_mode=global`` keeps a single scalar ``ν``.
+
+    After stage 2 the cctbx-style residual scale
+    ``β = Σ (1 - σ_A²)`` is reported alongside ``σ_A`` (the classic split of
+    correlation vs unexplained intensity variance).
     """
     import torch
     from scipy.optimize import minimize_scalar
@@ -300,8 +516,31 @@ def ml_i_nuisance_fit(
         mode = "bins"
     if mode in ("bin", "shell", "shells"):
         mode = "bins"
+    n_mode = str(nu_mode or "bins").strip().lower()
+    if n_mode in ("bin", "shell", "shells"):
+        n_mode = "bins"
+    if n_mode not in ("bins", "global"):
+        n_mode = "bins"
+    # Read-style σ_A has no shells → scalar ν only
+    if mode != "bins":
+        n_mode = "global"
+    tv_lam_val = 0.0 if tv_norm is None else max(0.0, float(tv_norm))
+    do_fit_sw = bool(fit_sigma_wilson)
 
-    # 1. Fit Wilson curve Sigma_N(s) = Sigma_0 * exp(-0.5 * B_wilson * s^2) on tune reflections
+    def _nu_init_scalar(nu_in: Any) -> Optional[float]:
+        if nu_in is None:
+            return None
+        arr = np.asarray(nu_in, dtype=np.float64).ravel()
+        if arr.size == 0:
+            return None
+        val = float(np.nanmean(arr))
+        if not np.isfinite(val) or val >= 199.0:
+            return None
+        return val
+
+    # ------------------------------------------------------------------
+    # Stage 0: moment Wilson plot → (Σ₀, B_W) initialization
+    # ------------------------------------------------------------------
     valid_tune = tune & (sig > 0) & (eps_np > 0)
     if not np.any(valid_tune):
         valid_tune = tune
@@ -309,7 +548,6 @@ def ml_i_nuisance_fit(
     y_tune = io[valid_tune] / np.maximum(eps_np[valid_tune], 1e-12)
     x_tune = s_sq_np[valid_tune]
 
-    # Divide into resolution shells to robustly fit slope and intercept
     n_valid = int(valid_tune.sum())
     n_shells = min(10, max(2, n_valid // 15))
     if n_shells >= 2 and (x_tune.max() - x_tune.min()) > 1e-6:
@@ -334,38 +572,91 @@ def ml_i_nuisance_fit(
         sigma_0 = float(np.median(y_tune[y_tune > 0])) if np.any(y_tune > 0) else 100.0
         b_wilson = 0.0
 
-    sigma_w_full = sigma_0 * np.exp(-0.5 * b_wilson * s_sq_np)
+    sigma_0 = max(float(sigma_0), 1e-8)
+    b_wilson = max(float(b_wilson), 0.0)
+    sigma_0_init = float(sigma_0)
+    b_wilson_init = float(b_wilson)
 
-    # 2. PyTorch setup for sigma_A, nu, and optional scale
+    # ------------------------------------------------------------------
+    # Stage 1: intensity-only ML Wilson (no F_calc, σ_A → 0)
+    # ------------------------------------------------------------------
     dev = _DEVICE["device"]
     is_mps = dev.startswith("mps")
     dtype = torch.float32 if is_mps else torch.float64
 
-    tune_t = torch.as_tensor(tune, device=dev)
-    fc_t = torch.as_tensor(fc_raw[tune], dtype=dtype, device=dev)
     io_t = torch.as_tensor(io[tune], dtype=dtype, device=dev)
     si_t = torch.as_tensor(sig[tune], dtype=dtype, device=dev)
     eps_t = torch.as_tensor(eps_np[tune], dtype=dtype, device=dev)
     cen_t = torch.as_tensor(cen_np[tune], device=dev)
-    sw_t = torch.as_tensor(sigma_w_full[tune], dtype=dtype, device=dev)
     s_sq_t = torch.as_tensor(s_sq_np[tune], dtype=dtype, device=dev)
     s_sq_tune_np = s_sq_np[tune]
+    # Dummy |F_c|; with σ_A ≈ 0 the Rice prior is Wilson and independent of E_C.
+    fc_wilson = torch.ones_like(io_t)
+    sa_wilson = torch.full_like(io_t, 1e-4)
 
+    def _inv_softplus(x: float) -> float:
+        x = max(float(x), 1e-8)
+        if x > 20.0:
+            return x
+        return float(math.log(math.expm1(x)))
+
+    wilson_nll_final: Optional[float] = None
+    if do_fit_sw:
+        log_s0 = torch.tensor(math.log(sigma_0_init), dtype=dtype, device=dev, requires_grad=True)
+        u_bw = torch.tensor(_inv_softplus(b_wilson_init), dtype=dtype, device=dev, requires_grad=True)
+
+        def _wilson_nll() -> Any:
+            s0_t = torch.exp(log_s0).clamp(min=1e-12)  # Σ₀ > 0
+            bw_t = torch.nn.functional.softplus(u_bw)
+            sw_now = (s0_t * torch.exp(-0.5 * bw_t * s_sq_t)).clamp(min=1e-12)
+            Ec, sA_n, Zo, sZ = normalize(fc_wilson, io_t, si_t, eps_t, sw_now, sa_wilson)
+            # mli returns log-density of Z = I/(εΣ); convert to log-density of I:
+            #   p(I) dI = p(Z) dZ  ⇒  log p(I) = log p(Z) - log(εΣ)
+            ll_z = log_likelihood_normal(Ec, sA_n, Zo, sZ, cen_t)
+            ll_i = ll_z - torch.log((eps_t * sw_now).clamp(min=1e-12))
+            return -ll_i.sum()
+
+        opt_w = torch.optim.LBFGS([log_s0, u_bw], max_iter=60, line_search_fn="strong_wolfe")
+
+        def _wilson_closure():
+            opt_w.zero_grad()
+            loss = _wilson_nll()
+            loss.backward()
+            return loss
+
+        try:
+            opt_w.step(_wilson_closure)
+        except Exception:
+            pass
+
+        with torch.no_grad():
+            sigma_0 = float(torch.exp(log_s0).clamp(min=1e-12).item())
+            b_wilson = float(torch.nn.functional.softplus(u_bw).item())
+            wilson_nll_final = float(_wilson_nll().item() / max(float(tune.sum()), 1.0))
+
+    sigma_w_full = sigma_0 * np.exp(-0.5 * b_wilson * s_sq_np)
+    sw_t = torch.as_tensor(sigma_w_full[tune], dtype=dtype, device=dev)
+
+    # ------------------------------------------------------------------
+    # Stage 2: σ_A (+ optional ν, F_c scale) with Σ frozen
+    # ------------------------------------------------------------------
+    fc_t = torch.as_tensor(fc_raw[tune], dtype=dtype, device=dev)
     bounds = [2.5, 200.0] if nu_bounds is None else [float(nu_bounds[0]), float(nu_bounds[1])]
-    do_fit_nu = bool(fit_nu) and (nu is None or float(nu) < 199.0)
+    nu_init = _nu_init_scalar(nu)
+    do_fit_nu = bool(fit_nu) and (nu_init is None or nu_init < 199.0)
     do_fit_scale = bool(fit_scale)
-
     us = torch.tensor(0.0, dtype=dtype, device=dev, requires_grad=True) if do_fit_scale else None
 
-    # --- sigma_A parameterization ---
     sa_bin_centers: Optional[np.ndarray] = None
     sa_bin_values: Optional[np.ndarray] = None
+    n_sa = 1
+    edges: Optional[np.ndarray] = None
+    shell_idx_t: Optional[Any] = None
     if mode == "bins":
         n_tune = int(tune.sum())
         if n_sigma_a_bins is not None:
             n_sa = max(3, int(n_sigma_a_bins))
         else:
-            # Enough shells to resolve outer-shell decay; not so many that NLL overfits.
             n_sa = int(min(20, max(6, n_tune // 250)))
         s_lo = float(s_sq_tune_np.min())
         s_hi = float(s_sq_tune_np.max())
@@ -374,10 +665,8 @@ def ml_i_nuisance_fit(
             n_sa = 1
         else:
             edges = np.linspace(s_lo, s_hi, n_sa + 1)
-        # digitize: bin 0 = lowest s² (lowest resolution)
         shell_idx_tune = np.clip(np.digitize(s_sq_tune_np, edges[1:-1], right=False), 0, n_sa - 1)
         shell_idx_t = torch.as_tensor(shell_idx_tune, dtype=torch.long, device=dev)
-        # Monotone decreasing in s²: sa[0] >= sa[1] >= ... via softplus drops
         u0 = torch.tensor(2.0, dtype=dtype, device=dev, requires_grad=True)
         if n_sa > 1:
             raw_deltas = torch.full((n_sa - 1,), 0.3, dtype=dtype, device=dev, requires_grad=True)
@@ -398,42 +687,76 @@ def ml_i_nuisance_fit(
             return 0.01 + 0.989 * torch.sigmoid(logits)
 
         def _sa_tune_from_params():
-            sa_bins = _sa_bins_from_params()
-            return sa_bins[shell_idx_t]
+            return _sa_bins_from_params()[shell_idx_t]
 
-        centers = 0.5 * (edges[:-1] + edges[1:])
-        sa_bin_centers = centers
+        sa_bin_centers = 0.5 * (edges[:-1] + edges[1:])
     else:
-        # Read-style: σ_A = √k exp(-0.25 BΔ s²)
         uk = torch.tensor(1.5, dtype=dtype, device=dev, requires_grad=True)
-        # Start with a nontrivial BΔ so the fit is not pinned at a constant.
         ub = torch.tensor(2.0, dtype=dtype, device=dev, requires_grad=True)
         sa_params = [uk, ub] + ([us] if do_fit_scale else [])
+        raw_deltas = None
+        u0 = None
+
+        def _sa_bins_from_params():
+            raise RuntimeError("bin σ_A accessor unavailable in read mode")
 
         def _sa_tune_from_params():
             k_t = 0.999 * torch.sigmoid(uk) + 1e-4
             b_t = torch.nn.functional.softplus(ub)
             return torch.clamp(torch.sqrt(k_t) * torch.exp(-0.25 * b_t * s_sq_t), 1e-4, 0.9999)
 
-    params = sa_params
+    do_fit_nu_bins = bool(do_fit_nu and n_mode == "bins" and mode == "bins" and shell_idx_t is not None)
+    do_fit_nu_global = bool(do_fit_nu and not do_fit_nu_bins)
+    current_nu: Optional[float] = nu_init if nu_init is not None else (7.0 if do_fit_nu else None)
+    u_nu = None
+    nu_lo, nu_hi = float(bounds[0]), float(bounds[1])
+    if do_fit_nu_bins:
+        nu0 = float(current_nu if current_nu is not None else 7.0)
+        nu0 = min(max(nu0, nu_lo + 0.05), nu_hi - 0.05)
+        frac = (nu0 - nu_lo) / max(nu_hi - nu_lo, 1e-6)
+        # Start inside the sigmoid's responsive band. At frac→0/1 the slope
+        # d(ν)/d(u) collapses, so an initial ν sitting on a bound cannot be
+        # optimized away from it and is silently reported as the fitted value.
+        frac = min(max(frac, 0.05), 0.95)
+        logit0 = math.log(frac / (1.0 - frac))
+        u_nu = torch.full((n_sa,), logit0, dtype=dtype, device=dev, requires_grad=True)
 
-    def compute_nll(nu_val: Optional[float]):
+        def _nu_bins_from_params():
+            return nu_lo + (nu_hi - nu_lo) * torch.sigmoid(u_nu)
+
+        def _nu_tune_from_params():
+            return _nu_bins_from_params()[shell_idx_t]
+
+        sa_params = list(sa_params) + [u_nu]
+
+    params = list(sa_params)
+
+    def compute_nll(nu_val: Optional[float] = None):
         sa_t = _sa_tune_from_params()
         fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
         Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
-        if nu_val is not None and nu_val < 199.0:
+        if do_fit_nu_bins:
+            ll = log_likelihood_t(Ec, sA_n, Zo, sZ, cen_t, nu=_nu_tune_from_params(), n_u=10)
+        elif nu_val is not None and float(nu_val) < 199.0:
             ll = log_likelihood_t(Ec, sA_n, Zo, sZ, cen_t, nu=float(nu_val), n_u=10)
         else:
             ll = log_likelihood_normal(Ec, sA_n, Zo, sZ, cen_t)
         return -ll.sum()
-
-    current_nu: Optional[float] = float(nu) if (nu is not None and float(nu) < 199.0) else (7.0 if do_fit_nu else None)
 
     opt = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
 
     def closure():
         opt.zero_grad()
         loss = compute_nll(current_nu)
+        if tv_lam_val > 0.0 and mode == "bins" and n_sa > 1:
+            sa_bins = _sa_bins_from_params()
+            diffs = sa_bins[1:] - sa_bins[:-1]
+            loss = loss + tv_lam_val * torch.sqrt(diffs**2 + 1e-6).sum()
+            if do_fit_nu_bins:
+                nu_bins = _nu_bins_from_params()
+                nd = nu_bins[1:] - nu_bins[:-1]
+                # Scale TV so ν jumps (~few units) are comparable to σ_A (~0.01–0.1)
+                loss = loss + tv_lam_val * torch.sqrt((nd / 10.0) ** 2 + 1e-6).sum()
         loss.backward()
         return loss
 
@@ -444,12 +767,48 @@ def ml_i_nuisance_fit(
 
     best_nu: Optional[float] = current_nu
     nu_se: Optional[float] = None
+    nu_bin_values: Optional[np.ndarray] = None
+    nu_full = np.full(n, np.nan, dtype=np.float64)
+    nu_params: dict[str, Any] = {"mode": "none"}
 
-    if do_fit_nu:
+    if do_fit_nu_bins:
+        with torch.no_grad():
+            nu_bin_values = _nu_bins_from_params().detach().cpu().numpy().astype(np.float64)
+            best_nu = float(np.mean(nu_bin_values))
+            if n_sa == 1:
+                nu_full[:] = float(nu_bin_values[0])
+            else:
+                assert edges is not None
+                # Piecewise-constant ν (not interpolated): log_likelihood_t groups by
+                # unique ν values, so continuous interp would explode runtime.
+                shell_all = np.clip(np.digitize(s_sq_np, edges[1:-1], right=False), 0, n_sa - 1)
+                nu_full = nu_bin_values[shell_all]
+            nu_full = np.clip(nu_full, nu_lo, nu_hi)
+            nu_full = np.where(np.isfinite(nu_full), nu_full, float(best_nu))
+            nu_params = {
+                "mode": "bins",
+                "n_bins": int(n_sa),
+                "tv_norm": tv_lam_val,
+                "bounds": [nu_lo, nu_hi],
+                "bin_centers_s2": sa_bin_centers.tolist() if sa_bin_centers is not None else [],
+                "bin_nu": nu_bin_values.tolist(),
+            }
+        # Optional SE on mean ν (fixed σ_A)
+        try:
+            with torch.no_grad():
+                sa_t = _sa_tune_from_params()
+                fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
+                Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
+                post = posterior_moments(Ec, sA_n, Zo, sZ, cen_t, nu=best_nu, n_u=10)
+                if post.d_loglik_d_nu is not None:
+                    fisher_info = float((post.d_loglik_d_nu ** 2).sum().item())
+                    nu_se = float(1.0 / np.sqrt(max(fisher_info, 1e-6)))
+        except Exception:
+            nu_se = None
+    elif do_fit_nu_global:
         def nu_obj(nu_candidate: float) -> float:
             with torch.no_grad():
-                val = compute_nll(float(nu_candidate)).item()
-                return float(val)
+                return float(compute_nll(float(nu_candidate)).item())
 
         res_nu = minimize_scalar(nu_obj, bounds=(bounds[0], bounds[1]), method="bounded")
         best_nu = float(res_nu.x)
@@ -482,12 +841,45 @@ def ml_i_nuisance_fit(
                 nu_se = float(1.0 / np.sqrt(eff_info))
             else:
                 nu_se = None
-    elif nu is not None and float(nu) < 199.0:
-        best_nu = float(nu)
+        nu_full[:] = float(best_nu)
+        nu_params = {"mode": "global", "nu": float(best_nu), "bounds": [nu_lo, nu_hi]}
+    elif nu_init is not None:
+        best_nu = float(nu_init)
         nu_se = None
+        nu_full[:] = best_nu
+        nu_params = {"mode": "fixed", "nu": best_nu}
     else:
         best_nu = None
         nu_se = None
+        nu_params = {"mode": "none"}
+
+    # ν identifiability profile: per-reflection NLL(ν) with σ_A frozen, plus the
+    # ν→∞ (Gaussian) limit. A profile that descends monotonically to the Gaussian
+    # value means ν is not identified by the data, so the reported ν is set by the
+    # bounds rather than by the likelihood.
+    if do_fit_nu:
+        try:
+            with torch.no_grad():
+                sa_prof = _sa_tune_from_params()
+                fc_prof = fc_t * torch.exp(us) if do_fit_scale else fc_t
+                Ec_p, sA_p, Zo_p, sZ_p = normalize(fc_prof, io_t, si_t, eps_t, sw_t, sa_prof)
+                n_p = max(int(Ec_p.numel()), 1)
+                grid = np.unique(np.geomspace(max(nu_lo, 2.05), nu_hi, 10))
+                nu_params["profile_nu"] = [round(float(g), 3) for g in grid]
+                nu_params["profile_nll"] = [
+                    float(
+                        -log_likelihood_t(
+                            Ec_p, sA_p, Zo_p, sZ_p, cen_t, nu=float(g), n_u=10
+                        ).sum().item()
+                    )
+                    / n_p
+                    for g in grid
+                ]
+                nu_params["profile_nll_gaussian"] = (
+                    float(-log_likelihood_normal(Ec_p, sA_p, Zo_p, sZ_p, cen_t).sum().item()) / n_p
+                )
+        except Exception:
+            pass
 
     scale_final = float(torch.exp(us).item()) if do_fit_scale else 1.0
 
@@ -495,13 +887,12 @@ def ml_i_nuisance_fit(
         if mode == "bins":
             sa_bins_t = _sa_bins_from_params()
             sa_bin_values = sa_bins_t.detach().cpu().numpy().astype(np.float64)
-            # Assign every reflection by s² shell (same edges as tune fit).
             if n_sa == 1:
                 sigma_a_full = np.full(n, float(sa_bin_values[0]), dtype=np.float64)
             else:
+                assert edges is not None
                 shell_all = np.clip(np.digitize(s_sq_np, edges[1:-1], right=False), 0, n_sa - 1)
                 sigma_a_full = sa_bin_values[shell_all]
-            # Piecewise-linear interpolation in s² for smoother reporting / grads.
             if n_sa >= 2 and sa_bin_centers is not None:
                 sigma_a_full = np.interp(
                     s_sq_np,
@@ -511,9 +902,8 @@ def ml_i_nuisance_fit(
                     right=float(sa_bin_values[-1]),
                 )
             sigma_a_full = np.clip(sigma_a_full, 1e-4, 0.9999)
-            k_final = float(sa_bin_values[0] ** 2) if sa_bin_values is not None else float("nan")
-            # Effective BΔ from end-points (for header only).
-            if sa_bin_centers is not None and sa_bin_values is not None and n_sa >= 2:
+            k_final = float(sa_bin_values[0] ** 2)
+            if sa_bin_centers is not None and n_sa >= 2:
                 ds = float(sa_bin_centers[-1] - sa_bin_centers[0])
                 if ds > 1e-12 and sa_bin_values[0] > 1e-6:
                     ratio = max(float(sa_bin_values[-1] / sa_bin_values[0]), 1e-6)
@@ -527,8 +917,9 @@ def ml_i_nuisance_fit(
                 "n_bins": int(n_sa),
                 "k": k_final,
                 "b_delta": b_final,
+                "tv_norm": tv_lam_val,
                 "bin_centers_s2": sa_bin_centers.tolist() if sa_bin_centers is not None else [],
-                "bin_sigma_a": sa_bin_values.tolist() if sa_bin_values is not None else [],
+                "bin_sigma_a": sa_bin_values.tolist(),
             }
         else:
             k_final = float(0.999 * torch.sigmoid(uk).item() + 1e-4)
@@ -540,20 +931,36 @@ def ml_i_nuisance_fit(
 
         final_tune_nll = float(compute_nll(best_nu).item() / max(float(tune.sum()), 1.0))
 
-    p_theta = (int(n_sa) if mode == "bins" else 2) + (1 if best_nu is not None else 0) + (1 if do_fit_scale else 0)
-    # Wilson contributes 2 more params in the accounting used by benchmarks
-    p_theta += 2
+    # cctbx-style residual: β = Σ (1 - σ_A²)  (unexplained intensity variance)
+    beta_full = sigma_w_full * (1.0 - np.clip(sigma_a_full, 0.0, 0.9999) ** 2)
+
+    n_nu_params = 0
+    if best_nu is not None:
+        n_nu_params = int(n_sa) if nu_params.get("mode") == "bins" else 1
+    p_theta = (int(n_sa) if mode == "bins" else 2) + n_nu_params + (1 if do_fit_scale else 0)
+    p_theta += 2  # Wilson Σ₀, B_W
 
     return {
         "sigma_a": sigma_a_full,
         "sigma_wilson": sigma_w_full,
+        "beta": beta_full,
         "nu": best_nu,
+        "nu_per_refl": nu_full if best_nu is not None else np.full(n, np.nan, dtype=np.float64),
         "nu_se": nu_se,
+        "nu_params": nu_params,
         "scale_k": scale_final,
         "p_theta": int(p_theta),
         "tune_nll": final_tune_nll,
         "sigma_a_params": sigma_a_params,
-        "sigma_wilson_params": {"sigma_0": sigma_0, "b_wilson": b_wilson},
+        "sigma_wilson_params": {
+            "sigma_0": float(sigma_0),
+            "b_wilson": float(b_wilson),
+            "sigma_0_init": sigma_0_init,
+            "b_wilson_init": b_wilson_init,
+            "fitted": bool(do_fit_sw),
+            "method": "intensity_ml" if do_fit_sw else "moment_plot",
+            "wilson_nll": wilson_nll_final,
+        },
     }
 
 
@@ -574,6 +981,7 @@ _TARGET_AND_GRADIENTS_INPUTS = {
     "beta": "array",
     "epsilon": "array",
     "centric": "array",
+    "nu": "array",
     "precondition": "json",
     "damping": "json",
     "scale_factor": "json",
@@ -621,6 +1029,7 @@ def ml_i_target_and_gradients(
     beta: Optional[Any] = None,
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
+    nu: Optional[Any] = None,
     precondition: Optional[Any] = False,
     damping: Optional[Any] = 0.05,
     scale_factor: Optional[Any] = 1.0,
@@ -654,7 +1063,7 @@ def ml_i_target_and_gradients(
     if spec.get("name") != "ml_i":
         spec["name"] = "ml_i"
     tgt = build_target(spec)
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric)
+    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
 
     p = eng.tensors(requires_grad=True)
     fc = eng.f_calc(*p)
@@ -764,7 +1173,7 @@ ml_i_target_and_gradients.compute_dtype = "float64"  # type: ignore[attr-defined
 
 
 def register_ops() -> None:
-    """Register ``ml_i_maps`` and ``ml_i_nuisance_fit`` in the shared op catalog (idempotent)."""
+    """Register ``ml_i_maps``, ``ml_i_nuisance_fit``, and target_and_gradients."""
     register_op(OP_NAME, ml_i_maps, inputs=dict(_INPUTS), outputs=dict(_OUTPUTS))
     register_op(NUISANCE_FIT_OP_NAME, ml_i_nuisance_fit, inputs=dict(_NUISANCE_INPUTS), outputs=dict(_NUISANCE_OUTPUTS))
     register_op(

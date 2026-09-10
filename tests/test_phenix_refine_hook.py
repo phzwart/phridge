@@ -286,8 +286,9 @@ def test_inferred_and_intensity_r_factors_and_info():
     info.show_rfactors_targets_scales_overall(out=buf)
     out_str = buf.getvalue()
     assert "mli_quad" in out_str
-    assert "Posterior Mode:" in out_str
-    assert "Direct Intensity:" in out_str
+    assert "Direct Intensity R:" in out_str
+    assert "S_post" in out_str
+    assert "Posterior Mode" not in out_str
 
 
 def test_clean_import_no_torch():

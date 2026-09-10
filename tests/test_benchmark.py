@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import math
+import random
+
 import numpy as np
 import pytest
 
@@ -41,6 +43,9 @@ from phridge.contrib.intensity_ll.benchmark import (
 
 def _make_synthetic_xtal(n_atoms: int = 32, d_min: float = 2.0, seed: int = 42):
     """Generate synthetic crystal structure and structure factors."""
+    # random_structure draws from both the flex RNG and stdlib random; seeding only
+    # flex leaves the generated structure (and any later shake) varying run to run.
+    random.seed(seed)
     flex.set_random_seed(seed)
     xs = random_structure.xray_structure(
         space_group_info=sgtbx.space_group_info("P212121"),
