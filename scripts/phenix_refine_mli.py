@@ -80,6 +80,10 @@ def run(args: list[str]) -> int:
         elif lower in ("--no-fit-nu", "fit_nu=false", "fit_nu=0"):
             os.environ["PHRIDGE_FIT_NU"] = "0"
             print("✓ Student-t nu refinement disabled (fit_nu=False)")
+        elif lower.startswith("--nu-mode=") or lower.startswith("nu_mode="):
+            val = arg.split("=", 1)[1].strip().lower()
+            os.environ["PHRIDGE_NU_MODE"] = val
+            print(f"✓ Student-t ν fit mode: {val} (bins|global)")
         elif lower in ("--precondition", "precondition=true", "precondition=1"):
             os.environ["PHRIDGE_PRECONDITION"] = "1"
             print("✓ Gauss-Newton diagonal preconditioning enabled for XYZ, occupancy, and ADP gradients")
@@ -104,6 +108,40 @@ def run(args: list[str]) -> int:
             val = arg.split("=", 1)[1].strip()
             os.environ["PHRIDGE_SIGMA_A_BINS"] = val
             print(f"✓ σ_A resolution shells: {val}")
+        elif lower.startswith("--tv-norm=") or lower.startswith("tv_norm="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_SIGMA_A_TV_NORM"] = val
+            print(f"✓ TV regularization on σ_A / ν bins: λ_TV={val}")
+        elif lower == "--tv-norm":
+            raise SystemExit("--tv-norm requires a value, e.g. --tv-norm=0.04")
+        elif lower in ("--fit-sigma-wilson", "fit_sigma_wilson=true", "fit_sigma_wilson=1"):
+            os.environ["PHRIDGE_FIT_SIGMA_WILSON"] = "1"
+            print("✓ Intensity-only ML Wilson Σ₀/B_W enabled (then σ_A with Σ frozen)")
+        elif lower in ("--no-fit-sigma-wilson", "fit_sigma_wilson=false", "fit_sigma_wilson=0"):
+            os.environ["PHRIDGE_FIT_SIGMA_WILSON"] = "0"
+            print("✓ Moment-plot Σ₀/B_W only (no intensity ML Wilson)")
+        elif lower in ("--omit-windows", "omit_windows=true", "omit_windows=1"):
+            os.environ["PHRIDGE_OMIT_WINDOWS"] = "1"
+            print("✓ Windowed omit map coefficients enabled (ml_i_omit_windows)")
+        elif lower in ("--no-omit-windows", "omit_windows=false", "omit_windows=0"):
+            os.environ["PHRIDGE_OMIT_WINDOWS"] = "0"
+            print("✓ Windowed omit map coefficients disabled")
+        elif lower.startswith("--omit-box-size=") or lower.startswith("omit_box_size="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_OMIT_BOX_SIZE"] = val
+            print(f"✓ Omit window box size: {val} Å")
+        elif lower.startswith("--omit-mode=") or lower.startswith("omit_mode="):
+            val = arg.split("=", 1)[1].strip().lower()
+            os.environ["PHRIDGE_OMIT_MODE"] = val
+            print(f"✓ Omit window mode: {val} (boxes|residue_blocks)")
+        elif lower.startswith("--omit-prefix=") or lower.startswith("omit_prefix="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_OMIT_PREFIX"] = val
+            print(f"✓ Omit output prefix: {val}")
+        elif lower.startswith("--omit-chunk-size=") or lower.startswith("omit_chunk_size="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_OMIT_CHUNK_SIZE"] = val
+            print(f"✓ Omit chunk size: {val}")
         elif lower in ("--memory", "memory=true", "memory=1"):
             os.environ["PHRIDGE_MEMORY"] = "1"
             os.environ.pop("PHRIDGE_REDIS_URL", None)

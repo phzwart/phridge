@@ -24,6 +24,7 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.contrib.intensity_ll.ops import OP_NAME, register_ops
+from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME, OmitWindowStore
 from phridge.sfcalc.client import RemoteTargetFunctor, _flex
 
 
@@ -141,6 +142,63 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
                 pass
         raw = self.bridge.call(OP_NAME, f_calc=miller_from_cctbx(f_calc), **kw)
         return RemoteIntensityMapResult(raw)
+
+
+class RemoteOmitWindowCoefficients:
+    """Torch-free client for ``ml_i_omit_windows``."""
+
+    def __init__(
+        self,
+        bridge: Any,
+        f_obs: Any,
+        target_spec: dict,
+        *,
+        omit: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> None:
+        register_ops()
+        if target_spec.get("name") != "ml_i":
+            raise ValueError("RemoteOmitWindowCoefficients needs an ml_i target spec")
+        self.bridge = bridge
+        self.f_obs = f_obs
+        self.target_spec = dict(target_spec)
+        self.omit = dict(omit or {})
+        self._extra = dict(kwargs)
+
+    def __call__(
+        self,
+        f_model: Any,
+        xray: Any,
+        table: Any,
+        params: Any,
+        *,
+        k_scale: Any = None,
+        residue_ids: Any = None,
+    ) -> OmitWindowStore:
+        from phridge.client.convert import miller_from_cctbx
+
+        kw = dict(self._extra)
+        kw["f_obs"] = miller_from_cctbx(self.f_obs) if hasattr(self.f_obs, "indices") else self.f_obs
+        kw["f_model"] = miller_from_cctbx(f_model) if hasattr(f_model, "indices") else f_model
+        kw["target"] = self.target_spec
+        kw["xray"] = xray
+        kw["table"] = table
+        kw["params"] = params
+        kw["omit"] = self.omit
+        if k_scale is not None:
+            kw["k_scale"] = k_scale
+        if residue_ids is not None:
+            kw["residue_ids"] = residue_ids
+        raw = self.bridge.call(OMIT_OP_NAME, **kw)
+        return OmitWindowStore(
+            hkl=np.asarray(raw["hkl"]),
+            coef_model=np.asarray(raw["coef_model"]) if raw.get("coef_model") is not None else None,
+            coef_difference=np.asarray(raw["coef_difference"]) if raw.get("coef_difference") is not None else None,
+            beta_adjust=np.asarray(raw["beta_adjust"]),
+            window_meta=dict(raw.get("window_meta") or {}),
+            window_ids=np.asarray(raw["window_ids"]),
+            atom_to_window=np.asarray(raw["atom_to_window"]),
+        )
 
 
 def __getattr__(name: str) -> Any:

@@ -1173,7 +1173,7 @@ ml_i_target_and_gradients.compute_dtype = "float64"  # type: ignore[attr-defined
 
 
 def register_ops() -> None:
-    """Register ``ml_i_maps``, ``ml_i_nuisance_fit``, and target_and_gradients."""
+    """Register ``ml_i_maps``, ``ml_i_nuisance_fit``, ``ml_i_omit_windows``, ``ml_i_surrogate_fit``, and target_and_gradients."""
     register_op(OP_NAME, ml_i_maps, inputs=dict(_INPUTS), outputs=dict(_OUTPUTS))
     register_op(NUISANCE_FIT_OP_NAME, ml_i_nuisance_fit, inputs=dict(_NUISANCE_INPUTS), outputs=dict(_NUISANCE_OUTPUTS))
     register_op(
@@ -1181,6 +1181,28 @@ def register_ops() -> None:
         ml_i_target_and_gradients,
         inputs=dict(_TARGET_AND_GRADIENTS_INPUTS),
         outputs=dict(_TARGET_AND_GRADIENTS_OUTPUTS),
+    )
+    from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME
+    from phridge.contrib.intensity_ll.omit_windows_op import (
+        _OMIT_INPUTS,
+        _OMIT_OUTPUTS,
+        ml_i_omit_windows,
+    )
+
+    register_op(OMIT_OP_NAME, ml_i_omit_windows, inputs=dict(_OMIT_INPUTS), outputs=dict(_OMIT_OUTPUTS))
+
+    from phridge.contrib.intensity_ll.surrogate_op import (
+        _SURROGATE_INPUTS,
+        _SURROGATE_OUTPUTS,
+        SURROGATE_FIT_OP_NAME,
+        ml_i_surrogate_fit,
+    )
+
+    register_op(
+        SURROGATE_FIT_OP_NAME,
+        ml_i_surrogate_fit,
+        inputs=dict(_SURROGATE_INPUTS),
+        outputs=dict(_SURROGATE_OUTPUTS),
     )
 
 

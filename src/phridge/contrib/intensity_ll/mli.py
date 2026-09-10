@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import math
 from functools import lru_cache
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import torch
@@ -55,30 +55,95 @@ def _hermite(n: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _golub_welsch(t: np.ndarray, pdf: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
-    pdf = pdf / pdf.sum()
-    alpha: list[float] = []
-    beta: list[float] = []
-    p_prev = np.zeros_like(t)
-    p = np.ones_like(t)
-    norm_prev = None
-    for k in range(n):
-        norm = np.sum(pdf * p * p)
-        alpha.append(float(np.sum(pdf * t * p * p) / norm))
-        if k > 0:
-            beta.append(float(norm / norm_prev))
-        p_next = (t - alpha[-1]) * p - (beta[-1] if k > 0 else 0.0) * p_prev
-        p_prev, p, norm_prev = p, p_next, norm
-    J = np.diag(alpha) + np.diag(np.sqrt(beta), 1) + np.diag(np.sqrt(beta), -1)
-    ev, V = np.linalg.eigh(J)
-    return ev, V[0] ** 2
+    """Discrete Golub–Welsch quadrature from samples ``(t, pdf)``.
+
+    Hardened against underflow / non-finite weights: clamps norms, forces
+    non-negative Jacobi β, and falls back to fewer nodes if ``eigh`` fails.
+    """
+    pdf = np.asarray(pdf, dtype=np.float64)
+    t = np.asarray(t, dtype=np.float64)
+    pdf = np.where(np.isfinite(pdf), np.maximum(pdf, 0.0), 0.0)
+    s = float(pdf.sum())
+    if not np.isfinite(s) or s <= 0.0:
+        t0 = float(np.nanmean(t)) if np.any(np.isfinite(t)) else 0.0
+        return np.array([t0], dtype=np.float64), np.array([1.0], dtype=np.float64)
+    pdf = pdf / s
+    n = max(1, int(n))
+
+    def _build(n_nodes: int) -> tuple[np.ndarray, np.ndarray]:
+        alpha: list[float] = []
+        beta: list[float] = []
+        p_prev = np.zeros_like(t)
+        p = np.ones_like(t)
+        norm_prev = 1.0
+        for k in range(n_nodes):
+            norm = float(np.sum(pdf * p * p))
+            if not np.isfinite(norm) or norm <= 1e-300:
+                break
+            num = float(np.sum(pdf * t * p * p))
+            if not np.isfinite(num):
+                break
+            alpha.append(num / norm)
+            if k > 0:
+                beta.append(max(norm / max(norm_prev, 1e-300), 0.0))
+            b_km1 = beta[-1] if k > 0 else 0.0
+            p_next = (t - alpha[-1]) * p - b_km1 * p_prev
+            if not np.all(np.isfinite(p_next)):
+                break
+            p_prev, p, norm_prev = p, p_next, norm
+        n_use = len(alpha)
+        if n_use <= 0:
+            t0 = float(np.sum(pdf * t))
+            return np.array([t0], dtype=np.float64), np.array([1.0], dtype=np.float64)
+        if n_use == 1:
+            return np.array([alpha[0]], dtype=np.float64), np.array([1.0], dtype=np.float64)
+        beta_arr = np.maximum(np.asarray(beta[: n_use - 1], dtype=np.float64), 0.0)
+        J = np.diag(alpha[:n_use]) + np.diag(np.sqrt(beta_arr), 1) + np.diag(np.sqrt(beta_arr), -1)
+        if not np.all(np.isfinite(J)):
+            raise np.linalg.LinAlgError("non-finite Jacobi matrix")
+        ev, V = np.linalg.eigh(J)
+        w = np.asarray(V[0] ** 2, dtype=np.float64)
+        w = np.where(np.isfinite(w), np.maximum(w, 0.0), 0.0)
+        w_sum = float(w.sum())
+        if w_sum <= 0.0 or not np.isfinite(w_sum):
+            raise np.linalg.LinAlgError("Golub-Welsch weights vanished")
+        return ev, w / w_sum
+
+    last_exc: Optional[Exception] = None
+    for n_try in (n, max(1, n // 2), max(1, min(8, n)), 1):
+        try:
+            return _build(int(n_try))
+        except Exception as exc:  # noqa: BLE001 — fall through to coarser rule
+            last_exc = exc
+            continue
+    raise RuntimeError(f"_golub_welsch failed for n={n}: {last_exc}")
 
 
 @lru_cache(maxsize=None)
 def _loggamma_rule(nu: float, n: int) -> tuple[np.ndarray, np.ndarray]:
     """Gauss rule for the density of u = log(lambda), lambda ~ Gamma(nu/2, rate nu/2)."""
-    u = np.linspace(-14.0, 6.0, 200001)
-    lp = (nu / 2) * u - (nu / 2) * np.exp(u)
-    pdf = np.exp(lp - lp.max())
+    nu_f = float(nu)
+    if not np.isfinite(nu_f) or nu_f < 1.05:
+        # Invalid / missing ν → near-Gaussian mixture (large ν)
+        nu_f = 200.0
+    n = max(1, int(n))
+    # Large ν → λ→1 (u→0); single-node rule matches the normal-noise limit.
+    if nu_f >= 199.0:
+        return np.array([0.0], dtype=np.float64), np.array([1.0], dtype=np.float64)
+    nu_f = min(nu_f, 198.0)
+    # Concentrate the grid around the mode of log-Gamma as ν grows
+    u_lo, u_hi = -14.0, 6.0
+    if nu_f >= 40.0:
+        u_lo, u_hi = -6.0, 3.0
+    if nu_f >= 120.0:
+        u_lo, u_hi = -3.0, 1.5
+    u = np.linspace(u_lo, u_hi, 200001)
+    lp = (nu_f / 2.0) * u - (nu_f / 2.0) * np.exp(u)
+    lp = np.where(np.isfinite(lp), lp, -np.inf)
+    m = float(np.max(lp))
+    if not np.isfinite(m):
+        return np.array([0.0], dtype=np.float64), np.array([1.0], dtype=np.float64)
+    pdf = np.exp(lp - m)
     return _golub_welsch(u, pdf, n)
 
 
@@ -432,6 +497,7 @@ def log_likelihood_t(
     """
     Ec, sA, Zo, sZ = torch.broadcast_tensors(Ec, sA, Zo, sZ)
     nu_t = torch.as_tensor(nu, dtype=Ec.dtype, device=Ec.device).expand_as(Ec)
+    nu_t = torch.nan_to_num(nu_t, nan=200.0, posinf=200.0, neginf=2.5).clamp(2.05, 500.0)
     centric_t = torch.as_tensor(centric, device=Ec.device).bool().expand_as(Ec)
     out = torch.empty_like(Ec)
     for nu_val in torch.unique(nu_t.detach()).tolist():

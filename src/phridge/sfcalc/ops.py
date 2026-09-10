@@ -141,6 +141,7 @@ def _observations(
     beta=None,
     epsilon=None,
     centric=None,
+    nu=None,
 ) -> Observations:
     import torch
 
@@ -159,6 +160,7 @@ def _observations(
         beta=_np(beta, np_dtype),
         epsilon=_np(epsilon, np_dtype),
         centric=_np(centric),
+        nu=_np(nu, np_dtype),
     )
 
 
@@ -185,6 +187,7 @@ def target_eval(
     beta=None,
     epsilon=None,
     centric=None,
+    nu=None,
     compute_curvature: bool = True,
 ) -> PackedTargetResult:
     """Evaluate a registered target on given F_calc; returns value, dQ/dF, curvature."""
@@ -193,7 +196,7 @@ def target_eval(
     if _np(f_calc.hkl).shape != _np(f_obs.hkl).shape or not np.array_equal(_np(f_calc.hkl), _np(f_obs.hkl)):
         raise ValueError("f_calc and f_obs must be on identical hkl lists")
     tgt = build_target(dict(target))
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric)
+    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
     dev = _DEVICE["device"]
     is_mps = dev.startswith("mps")
     cdtype = torch.complex64 if is_mps else torch.complex128
@@ -218,6 +221,7 @@ def refine_gradients(
     beta=None,
     epsilon=None,
     centric=None,
+    nu=None,
     compute_curvature: bool = True,
 ) -> dict:
     """Whole chain: F_calc -> target -> dQ/dF -> dQ/d(scatterer params)."""
@@ -225,7 +229,7 @@ def refine_gradients(
 
     eng = _engine(xray, table, _np(f_obs.hkl), params)
     tgt = build_target(dict(target))
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric)
+    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
     p = eng.tensors(requires_grad=True)
     fc = eng.f_calc(*p)
     ev = tgt.evaluate(fc.detach(), obs, compute_curvature=bool(compute_curvature))

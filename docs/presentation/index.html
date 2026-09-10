@@ -671,29 +671,37 @@
         </div>
       </section>
 
-      <!-- SLIDE 5: Phridge Engine Architecture -->
-      <section class="slide" data-slide="5" data-title="Phridge Architecture">
-        <div class="slide-tag">Systems Architecture · PyTorch &amp; Redis Streams</div>
-        <h1 class="slide-title">Differentiable Crystallography at Scale</h1>
-        <p class="slide-subtitle">Decoupled CCTBX drivers and PyTorch workers communicating via high-throughput memory buffers or Redis streams.</p>
+      <!-- SLIDE 5: Phridge Engine Architecture & Phenix Host Mode -->
+      <section class="slide" data-slide="5" data-title="Phridge Architecture &amp; Phenix Host">
+        <div class="slide-tag">Systems Architecture · phenix.refine Host Mode</div>
+        <h1 class="slide-title">Keep <code>phenix.refine</code>, Swap the Target</h1>
+        <p class="slide-subtitle">Stock Phenix outer loop + CCTBX-shaped facades + Bridge RPC. Two-stage Wilson ML then \(\sigma_A\) — no joint \((\Sigma_0,\sigma_A)\).</p>
         
         <div class="grid-2">
           <div class="card">
-            <h3>High-Performance PyTorch sfcalc</h3>
-            <ul class="feature-list">
-              <li><strong>Analytical Structure Factors</strong>: Exact \(F_{\text{calc}}\) via Gaussian scattering factor tables and GPU/CPU FFT gridding.</li>
-              <li><strong>Student-t Likelihood</strong>: Continuous scale-mixture representation fitting \(\nu\), \(\sigma_A\), and scale \(k_F\).</li>
-              <li><strong>Autograd Derivatives</strong>: Exact analytical first and second derivatives (\(\partial \mathrm{LL}/\partial x\), \(\partial \mathrm{LL}/\partial B\)).</li>
-              <li><strong>Zero Cross-Contamination</strong>: Phenix/CCTBX never imports PyTorch; PyTorch never imports CCTBX.</li>
+            <h3>Host Interaction Mode</h3>
+            <p style="font-size: 0.85rem; margin-bottom: 0.6rem;"><code>enable_intensity_in_phenix()</code> patches the touchpoints Phenix already calls:</p>
+            <ul class="feature-list" style="font-size: 0.82rem;">
+              <li><strong>Register</strong> <code>mli_quad</code> / <code>mli</code> in <code>target_names</code></li>
+              <li><strong>PHIL</strong> so <code>refinement.main.target=mli_quad</code> validates</li>
+              <li><strong>fmodel</strong> → <code>IntensityFModel</code> (<code>i_obs</code> real; amplitude scaffold for bookkeeping)</li>
+              <li><strong>target_functor</strong> → NLL + \(d\mathrm{LL}/dF_c\) via Bridge</li>
+              <li><strong>Maps &amp; stats</strong> → posterior-mode coeffs; \(R_{\text{mode}}\), \(R_I\), free NLL weights</li>
+              <li><strong>No French–Wilson</strong> on the intensity path</li>
             </ul>
           </div>
           <div class="card">
-            <h3>Second-Derivative Geometry Preconditioning</h3>
-            <p style="margin-bottom: 0.8rem;">Macromolecular stiffness is off-diagonal (bond networks). Diagonal Jacobi preconditioning fails (450 CG iterations). Phridge factorizes the exact Gauss-Newton matrix:</p>
-            <div style="background: var(--bg-primary); padding: 0.8rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; border: 1px solid var(--border);">
-              H_GN = 2 J^T W J + diag(extra) + mu I<br>
-              • Sparse LU / CHOLMOD: 1 CG iteration<br>
-              • Block-Tridiagonal LDL^T: 12 CG iterations (O(N) cost)
+            <h3>Two-Stage Nuisance Fit</h3>
+            <p style="font-size: 0.85rem; margin-bottom: 0.6rem;"><code>ml_i_nuisance_fit</code> (default) — never free \(\Sigma_0\) jointly with \(\sigma_A\):</p>
+            <ul class="feature-list" style="font-size: 0.82rem;">
+              <li><strong>Stage 1</strong>: Intensity-only ML Wilson \(\Sigma(s)=\Sigma_0 e^{-0.5 B_W s^2}\) (\(\Sigma_0&gt;0\); no \(F_c\); Jacobian \(\log p(I)=\log p(Z)-\log(\varepsilon\Sigma)\))</li>
+              <li><strong>Stage 2</strong>: Freeze \(\Sigma\); fit monotone \(\sigma_A(s)\) (+ optional \(\nu\), TV)</li>
+              <li><strong>Report</strong> \(\beta=\Sigma(1-\sigma_A^2)\) (classic residual alongside correlation)</li>
+              <li><strong>Why</strong>: Joint \((\Sigma_0,\sigma_A)\) drives \(\sigma_A\to 0.999\)</li>
+            </ul>
+            <div style="background: var(--bg-primary); padding: 0.7rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.78rem; border: 1px solid var(--border); margin-top: 0.7rem;">
+              phridge-refine model.pdb data.mtz \<br>
+              &nbsp;&nbsp;refinement.main.target=mli_quad
             </div>
           </div>
         </div>
@@ -1169,7 +1177,7 @@
             <h3>Three-Way Reflection Quarantining</h3>
             <ul class="feature-list" style="margin-top: 0.5rem;">
               <li><strong>Working Set (\(|W|\), ~80–90%)</strong>: Refines atomic positions \((x, y, z)\) and B-factors.</li>
-              <li><strong>Tuning Set (\(|\text{Tune}|\), ~5–10%)</strong>: Quarantined set used strictly to fit nuisance parameters: overall scale \(k_F\), \(\sigma_A\) error model, and degrees of freedom \(\nu\).</li>
+              <li><strong>Tuning Set (\(|\text{Tune}|\), ~5–10%)</strong>: Quarantined set used strictly to fit nuisance parameters: intensity-only ML Wilson \(\Sigma(s)\), then \(\sigma_A\), and optional \(\nu\).</li>
               <li><strong>Audit Set (\(|A|\), ~5–10%)</strong>: Strictly quarantined reflections evaluated <em>only once</em> at the final model to compute audit Negative Log-Likelihood (NLL).</li>
             </ul>
           </div>
@@ -1401,8 +1409,8 @@
             </div>
             <p style="font-size: 0.82rem; margin-bottom: 0.6rem;">The intensity target gradient difference map is <strong>+2.39σ higher and sharper</strong>, cleanly defining the unmodeled loop trajectory.</p>
             <div style="background: var(--bg-primary); padding: 0.7rem; border-radius: 6px; font-size: 0.8rem; border: 1px solid var(--border);">
-              <strong>Robust \(\sigma_A\) Regularization:</strong><br>
-              Overlapping bins + 1D Total Variation (\(\lambda_{\text{TV}} = 0.04\)) + monotonic PAVA regression eliminates high-frequency free-set oscillations across all coordinate perturbation levels (\(\Delta r = 0.0\)–\(1.2\) Å).
+              <strong>Phenix path — two-stage nuisance:</strong> Intensity-only ML Wilson \(\Sigma(s)\) (\(\Sigma_0&gt;0\), no model), then freeze \(\Sigma\) and fit \(\sigma_A\); report \(\beta=\Sigma(1-\sigma_A^2)\).<br>
+              <strong>Standalone CLI:</strong> Overlapping bins + TV (\(\lambda_{\text{TV}} = 0.04\)) + PAVA still regularize shell \(\sigma_A\) under coordinate error (\(\Delta r = 0.0\)–\(1.2\) Å).
             </div>
           </div>
         </div>
@@ -1488,7 +1496,7 @@
         <div class="card" style="border-left: 4px solid var(--accent); display: flex; align-items: center; justify-content: space-between;">
           <div>
             <h3 style="margin-bottom: 0.2rem;">Ready for Automated Pipeline Integration</h3>
-            <p style="font-size: 0.88rem;">Phridge provides drop-in command-line tools (<code>phridge-intensity</code>) and client APIs (<code>JointSiteRefinement</code>) compatible with existing Phenix and CCP4 pipelines.</p>
+            <p style="font-size: 0.88rem;">Drop-in host mode: <code>phridge-refine … target=mli_quad</code> keeps stock <code>phenix.refine</code>; client APIs (<code>JointSiteRefinement</code>, <code>IntensityFModel</code>) share the same Bridge contracts.</p>
           </div>
           <button class="btn btn-primary" onclick="alert('Presentation Kit ready! Markdown briefing document available at docs/presentation/presentation_kit.md');">
             Presentation Kit Ready
@@ -1556,7 +1564,7 @@
         2: "For forty years, crystallographers have relied on French-Wilson to convert observed intensities into amplitudes. But French-Wilson squashes variance, truncates negative observations, and creates an artificial noise floor. Phridge solves this by evaluating likelihood directly on measured intensities.",
         3: "Here is the exact likelihood theory. Rather than forming amplitudes, we marginalize the error-free amplitude E under Rice (acentric) or Woolfson (centric) priors. Crucially, working in intensity (I = E^2) removes the coordinate singularity and merges the Rice exponential directly into the Gaussian noise, simplifying the problem to a single shifted Gaussian window times a smooth Bessel factor. Outliers are handled via a Student-t continuous scale mixture.",
         4: "Evaluating numerical likelihood integrals over 100,000 reflections must be rapid and exact. Phridge finds the mode in 3.4 Newton iterations, then branches adaptively: 7-node Gauss-Hermite in I for strong acentrics (error < 5e-7), and 24-node Gauss-Legendre on a clipped window for weak, negative, or centric reflections. Score vectors and difference maps follow analytically from Fisher's identity without ever calculating |Fo|.",
-        5: "Phridge does not approximate gradients through finite differences. It derives exact gradients via autograd in PyTorch. For geometry, standard L-BFGS stalls because chain stiffness is off-diagonal. Phridge's block-tridiagonal and sparse Gauss-Newton solvers resolve tight geometry in 1 to 12 steps.",
+        5: "We did not rewrite phenix.refine. Macro cycles, restraints, and I/O stay in Phenix. enable_intensity_in_phenix() installs a thin host mode: register mli_quad, patch PHIL, swap fmodel and target_functor, override maps and stats, disable French-Wilson. Heavy math goes over Bridge RPC. Nuisance parameters use a two-stage fit: intensity-only ML Wilson for Sigma with positive Sigma_0 and the intensity Jacobian, then freeze Sigma and fit sigma_A—never jointly free Sigma_0 with sigma_A, which drives sigma_A to 0.999. We report beta equals Sigma times (1 minus sigma_A squared).",
         6: "Water omission is the ultimate test of difference map signal-to-noise. We removed all 72 ordered waters from 6CZG (leaving 1,616 protein atoms) and computed difference maps under both ml_i and ml_f across 9 synthetic noise levels plus authentic experimental data.",
         7: "Notice the contrast at standard 1.0x noise: under ml_i, the weakest water is 3.60σ, while the highest noise peak is 2.99σ, leaving a clean +0.61σ margin with 0 false positives. Under ml_f, noise peaks rise to 3.49σ, creating an inverted -0.51σ gap where noise outranks true solvent.",
         8: "At 50x noise, ml_i still recovers 59 of 72 waters (81.9%), while ml_f drops half the solvent shell. Furthermore, difference peak heights anti-correlate strongly with atomic B-factors (r ≈ -0.83), proving peak height directly encodes thermal disorder and occupancy.",
@@ -1570,7 +1578,7 @@
         16: "On 1EE2 (>100,000 reflections), ml_i achieves an NLL reduction of 0.0014 nats per reflection across nearly 2,000 audit reflections (p = 2.49e-3, Log Bayes Factor +2.85 nats), with gains concentrated in high-resolution outer shells.",
         17: "Under extreme noise (50x-100x), French-Wilson causes B-factors to scramble away from physical reality (r = 0.77). Direct intensity likelihood protects B-factor rank ordering (r = 0.83). On 0.94 Å lysozyme, omitting the catalytic loop produces a +17.58σ gradient peak on Asp52, +2.39σ higher and sharper than standard difference density.",
         18: "Refinement requires seamless coordination between x-ray targets and stereochemistry. Phridge's block-tridiagonal and sparse Gauss-Newton solvers eliminate off-diagonal chain stiffness, while empirical Bayes ADP restraints prevent thermal runaway.",
-        19: "To summarize: direct intensity likelihood provides measurable gains for difference density clarity, weak ligand discovery, parameter stability, and model accuracy. Phridge offers production-ready tools for automated model building and crystallographic pipelines."
+        19: "To summarize: direct intensity likelihood provides measurable gains for difference density clarity, weak ligand discovery, parameter stability, and model accuracy. Deployment is practical—keep phenix.refine, change the target via the host hook. Phridge is ready for automated model building and crystallographic pipelines."
       };
 
       // Populate Slide Picker & Grid Modal

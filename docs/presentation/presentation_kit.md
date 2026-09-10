@@ -161,14 +161,35 @@ Because Phridge never forms $|F_o|$, all difference and model electron density m
 
 ---
 
-### 6. Regularized $\sigma_A$ Estimation: Overlapping Bins & Total Variation
+### 6. Two-Stage Nuisance Fit: Intensity ML Wilson, then $\sigma_A$
 
-In standard refinement, $\sigma_A$ is estimated in disjoint resolution shells, leading to noisy oscillations and unphysical upward spikes on sparse test sets. Phridge employs a threefold regularization strategy:
-1. **Overlapping Resolution Bins (`--overlap-bins 1`)**: Sliding window of $2N + 1$ shells triples statistical power per bin.
-2. **1D Total Variation (TV) Regularization**:
-   $$\min_{\mathbf{x} \in [0.01, 0.999]^B} \frac{1}{2}\sum_{b=1}^B w_b (x_b - y_b)^2 + \lambda_{\text{TV}} \sum_{b=1}^{B-1} |x_{b+1} - x_b|$$
-   penalizes erratic shell-to-shell jumps while preserving physical resolution drop-offs.
-3. **Monotonic Enforcement via PAVA**: Weighted isotonic regression ensures $\sigma_{A, b+1} \le \sigma_{A, b}$, matching physical expectation ($\sigma_A(s) \propto e^{-\frac{\pi^2}{2} (\Delta r)^2 s^2}$).
+Freeing overall Wilson scale $\Sigma_0$ jointly with $\sigma_A$ is **not identifiable**: the NLL can trade $\sigma_A \to 1$ against $\Sigma_0 \to \infty$ (Rice width $a = 1-\sigma_A^2$ collapses). Phridge therefore uses a **two-stage** procedure on the tune set (Phenix `ml_i_nuisance_fit`; default on):
+
+#### Stage 1 — Intensity-only ML Wilson (no atomic model)
+
+$$\Sigma(s) = \Sigma_0\,\exp(-0.5\,B_W s^2),\qquad \Sigma_0 = e^{\ell} > 0$$
+
+- **No $F_{\mathrm{calc}}$**, $\sigma_A \to 0$: pure Wilson prior $\times$ Gaussian measurement noise on $I_{\mathrm{obs}}\pm\sigma_I$ (negatives retained).
+- Initialized by a moment Wilson plot; refined by L-BFGS on the **intensity** likelihood.
+- Critical Jacobian: `mli` returns $\log p(Z)$ with $Z = I/(\varepsilon\Sigma)$; stage 1 maximizes
+  $$\log p(I) = \log p(Z) - \log(\varepsilon\Sigma).$$
+  Without $-\log(\varepsilon\Sigma)$, $\Sigma_0$ diverges and stage-2 $\sigma_A$ collapses to $0.999$.
+
+#### Stage 2 — Freeze $\Sigma$, fit $\sigma_A$ (and optional $\nu$)
+
+- Monotone resolution bins (default) or Read curve; optional TV (`--tv-norm`) and bin count (`--sigma-a-bins`).
+- Optional Student-$t$ $\nu$: same shells as $\sigma_A$ by default (`nu_mode=bins`), co-refined with TV; `nu_mode=global` keeps a scalar. Per-reflection $\nu$ is piecewise-constant (not interpolated) so the Student-$t$ quadrature stays grouped by shell.
+- Standalone `phridge-intensity` still supports overlapping bins / PAVA for shell-wise $\sigma_A$.
+
+#### Classic $\alpha$/$\beta$ reporting
+
+After stage 2 we report the Read / cctbx residual
+
+$$\beta_h = \Sigma(s_h)\,(1-\sigma_{A,h}^2)$$
+
+so **correlation** ($\alpha=\sigma_A$) and **unexplained intensity variance** ($\beta$) are separate components — the right pair if a future joint residual/correlation fit is desired, not $(\sigma_A,\Sigma_0)$.
+
+CLI: `--fit-sigma-wilson` (default) / `--no-fit-sigma-wilson`; env `PHRIDGE_FIT_SIGMA_WILSON`.
 
 ---
 
@@ -261,7 +282,7 @@ Omission of 58 non-hydrogen atoms of cholic acid across two crystallographic bin
 
 Testing whether `ml_i` improves real, published crystallographic coordinates directly without artificial shaking, evaluated under a strict 3-way partition:
 - **Working Set ($W$)**: Used solely for coordinate ($x, y, z$) refinement.
-- **Tuning Set ($\text{Tune}$)**: Used solely to tune nuisance parameters ($k_F, \sigma_A, \nu$).
+- **Tuning Set ($\text{Tune}$)**: Used solely to tune nuisance parameters (Wilson $\Sigma$ via intensity-only ML, then $\sigma_A$, optional $\nu$; overall $F_c$ scale when enabled).
 - **Audit Set ($A$)**: Strictly quarantined; evaluates final negative log-likelihood (NLL).
 
 #### Re-Refinement Performance Summary
@@ -329,7 +350,8 @@ Net Peak Sharpening / Boost:      +2.39 σ
 ```
 
 - **Gradient Map Clarity**: The intensity target gradient map ($F_{\text{grad}} = -\frac{1}{2}\frac{\partial Q}{\partial F_{\text{model}}}$) produces a **+17.58σ peak** centered exactly on catalytic Asp52, compared to +15.19σ for the conventional $\sigma_A$-weighted difference map.
-- **$\sigma_A$ Regularization Benchmark**: Across 7 coordinate error levels ($\Delta r = 0.0$ to $1.2\text{ Å}$), disjoint resolution binning produced jagged non-monotonic spikes at high resolution. Combining overlapping bins ($N=1$) with 1D Total Variation regularization ($\lambda_{\text{TV}} = 0.04$) and monotonic PAVA completely eliminated high-frequency noise spikes, producing smooth physical decay curves.
+- **$\sigma_A$ / Wilson nuisance (Phenix path)**: Intensity-only ML Wilson $\Sigma(s)$ first (positive $\Sigma_0$, measurement noise, no model), then freeze $\Sigma$ and fit $\sigma_A$; report $\beta=\Sigma(1-\sigma_A^2)$. Standalone CLI still offers overlapping bins + TV + PAVA for shell $\sigma_A$.
+- **$\sigma_A$ Regularization Benchmark** (standalone): Across 7 coordinate error levels ($\Delta r = 0.0$ to $1.2\text{ Å}$), disjoint resolution binning produced jagged non-monotonic spikes at high resolution. Combining overlapping bins ($N=1$) with 1D Total Variation regularization ($\lambda_{\text{TV}} = 0.04$) and monotonic PAVA completely eliminated high-frequency noise spikes, producing smooth physical decay curves.
 
 ---
 
@@ -357,7 +379,7 @@ Net Peak Sharpening / Boost:      +2.39 σ
 | **2** | The Paradigm: Why Amplitudes are Problematic | French-Wilson truncates negative intensities and distorts low-SNR measurements | 2 min |
 | **3** | Theory: Direct Marginalization & Noise Modeling | Marginalizing $E$ under Rice/Woolfson priors and Student-$t$ scale mixtures | 2.5 min |
 | **4** | Implementation: Adaptive Quadrature & Analytic Gradients | Damped Newton mode finder, 7-node Hermite vs 24-node Legendre, Fisher score | 2.5 min |
-| **5** | Phridge Systems Architecture & Engine Core | PyTorch tensor engine, decoupled CCTBX drivers, Redis streams, and SF calculation | 1.5 min |
+| **5** | Phridge Systems Architecture & Phenix Host Mode | Keep `phenix.refine`; Bridge RPC; two-stage Wilson ML then $\sigma_A$ (no $\Sigma_0$–$\sigma_A$ joint) | 2.5 min |
 | **6** | Case 1: 6CZG Water Omission Experimental Setup | 72 ordered waters omitted to test difference density signal vs noise floor | 1.5 min |
 | **7** | Case 1: The Clean Separation Margin | `ml_i` gives +0.61σ clean gap; `ml_f` suffers -0.51σ inverted gap with spurious noise | 2 min |
 | **8** | Case 1: Extreme Noise Resilience & B-Factor Physics | `ml_i` detects waters out to 50x-100x noise; peak height strongly anti-correlates with B ($r \approx -0.83$) | 1.5 min |
@@ -437,16 +459,29 @@ Net Peak Sharpening / Boost:      +2.39 σ
 
 ---
 
-### Slide 5: Phridge Engine Architecture
-- **Header**: Differentiable Crystallography with PyTorch & CCTBX
+### Slide 5: Phridge Engine Architecture & Phenix Host Mode
+- **Header**: Differentiable Crystallography — Keep `phenix.refine`, Swap the Target
 - **Core Components**:
   - *Autograd Structure Factors*: Analytical FFT and direct summation engines computing $\partial \mathrm{LL} / \partial x_i$, $\partial \mathrm{LL} / \partial B_i$.
-  - *Student-$t$ Likelihood*: Robust noise modeling with nuisance parameters ($k_F, \sigma_A, \nu$) fit on dedicated tuning partitions.
-  - *Decoupled Distributed Protocol*: CCTBX Python client communicating with PyTorch worker processes via high-throughput memory buffers or Redis streams.
+  - *Decoupled Bridge Protocol*: CCTBX Python client ↔ PyTorch worker via in-process memory or Redis streams (`target_eval`, `ml_i_maps`, `ml_i_nuisance_fit`). Zero PyTorch imports on the Phenix side.
+  - *Phenix Host Interaction Mode* (`enable_intensity_in_phenix()`): general pattern for plugging a remote likelihood into stock `phenix.refine` without forking Phenix.
+- **The Host Mode Pattern** (reusable for any new reciprocal-space target):
+  1. **Register** target name in `mmtbx.refinement.targets.target_names` (`mli_quad` / `mli`).
+  2. **Augment PHIL** so `refinement.main.target=mli_quad` validates.
+  3. **Intercept fmodel construction** → CCTBX-compatible facade (`IntensityFModel` subclassing `mmtbx.f_model.manager`; amplitude scaffold for legacy bookkeeping, true `i_obs` for scoring).
+  4. **Route `target_functor`** → `IntensityTargetFunctor` / `IntensityTargetResult` conforming to `target_result_mixin`; Bridge RPC for NLL + $d\mathrm{LL}/dF_c$.
+  5. **Override maps & stats** → posterior-mode coefficients and $R_{\text{mode}}$ / $R_{\text{intensity}}$ / free-set NLL (including XYZ/ADP weight selection ranked by NLL).
+  6. **Disable French–Wilson** on the intensity path; twinning hard-errors until supported.
+- **Two-stage nuisance fit** (`ml_i_nuisance_fit`, default):
+  1. Intensity-only ML Wilson $\Sigma(s)=\Sigma_0 e^{-0.5 B_W s^2}$ ($\Sigma_0>0$; no $F_c$; Jacobian $\log p(I)=\log p(Z)-\log(\varepsilon\Sigma)$).
+  2. Freeze $\Sigma$; fit monotone $\sigma_A(s)$ (+ optional $\nu$, TV). Report $\beta=\Sigma(1-\sigma_A^2)$.
+  - Never jointly free $(\Sigma_0,\sigma_A)$ — that drives $\sigma_A\to 0.999$.
+- **Entry points**: `phridge-refine … refinement.main.target=mli_quad`, or `phenix.python scripts/phenix_refine_mli.py …` (`--fit-sigma-wilson` / `--tv-norm` / `--sigma-a-bins`).
 - **Talking Points**:
-  - "Phridge does not approximate gradients through finite differences. It derives exact gradients via autograd and custom CUDA/CPU kernels.
-  - The architecture completely separates crystallographic bookkeeping—space group symmetries, Miller indices, bulk solvent masks—from gradient computation.
-  - A CCTBX-based client handles data ingestion, while PyTorch tensors handle the likelihood evaluation and Hessian-vector products."
+  - "We did not rewrite `phenix.refine`. Macro cycles, restraints, simulated annealing, and I/O stay in Phenix. We install a thin hook layer that swaps in our intensity target at the six places Phenix asks CCTBX for a target, an fmodel, maps, or R-factors.
+  - That same pattern is general: any new likelihood that speaks Bridge RPC and returns CCTBX-shaped target results can ride the identical host mode—register, PHIL, fmodel facade, target functor, maps, stats.
+  - Process separation is deliberate: CCTBX bookkeeping never imports PyTorch; the worker never imports CCTBX. Communication is packed Miller / structure envelopes over Redis or an in-process Bridge.
+  - Scale and correlation are separated carefully: Wilson $\Sigma$ is fit from intensities alone (noise-aware ML with positive $\Sigma_0$), then frozen; $\sigma_A$ is fit afterwards. Jointly freeing $\Sigma_0$ with $\sigma_A$ is degenerate — you get $\sigma_A$ stuck at one. We report the classic residual $\beta=\Sigma(1-\sigma_A^2)$ alongside $\sigma_A$."
 
 ---
 
@@ -685,11 +720,14 @@ Net Peak Sharpening / Boost:      +2.39 σ
   2. **Statistically Proven Generalization**: Re-refinement of deposited structures yields significant audit set likelihood gains ($p < 0.003$) driven purely by coordinate improvements.
   3. **Robust Noise & Drift Resistance**: Student-$t$ noise likelihood preserves physical B-factors and noise-free structure factors even under extreme noise multipliers.
   4. **High-Performance Architecture**: Differentiable PyTorch structure factors coupled with exact geometry curvature make full Newton-CG refinement practical on standard hardware.
+  5. **Phenix Host Mode is Drop-in**: `enable_intensity_in_phenix()` keeps stock `phenix.refine` as the outer loop; the same interception pattern generalizes to other remote targets.
 - **Recommended Next Steps**:
   - Replace French-Wilson amplitude conversion in automated ligand-fitting and water-building pipelines.
   - Adopt audit set negative log-likelihood (NLL) as a proper scoring rule alongside traditional $R_{\text{free}}$.
+  - Treat the Phenix hook as the default integration path for production pipelines (`phridge-refine` / `phenix_refine_mli.py`).
 - **Talking Points**:
   - "To conclude: direct intensity likelihood is not merely a theoretical curiosity. It provides immediate, measurable benefits for difference density clarity, weak ligand discovery, and model accuracy.
+  - And the deployment story is practical: you keep `phenix.refine`; you change the target.
   - Thank you. We will now open the floor for questions."
 
 ---
@@ -715,3 +753,7 @@ Net Peak Sharpening / Boost:      +2.39 σ
 ### Q5: "How does Phridge avoid calculating $|F_o|$ in difference maps?"
 - **Answer**:
   "In Phridge, difference map coefficients are derived directly from the score of the likelihood: $\sqrt{\varepsilon\Sigma}(\langle E m\rangle - \sigma_A E_C) e^{i\varphi_c}$, where $\langle E m \rangle$ is the posterior expectation of $E \cdot m(E)$ evaluated over the same quadrature nodes used for refinement. When data are strong, $\langle E m \rangle$ reproduces $m|F_o|$. When data are uninformative or noisy, the posterior collapses onto the prior, the score integrates to zero, and the coefficient cleanly vanishes without amplifying high-frequency noise."
+
+### Q6: "Did you fork Phenix? How general is the integration?"
+- **Answer**:
+  "No fork. `enable_intensity_in_phenix()` dynamically patches the touchpoints Phenix already uses: target name registry, PHIL choice validation, `fmodel_manager2`, `target_functor`, electron-density maps, `info()` statistics, French–Wilson disablement, and XYZ/ADP weight selection. The intensity engine lives behind Bridge RPC (`target_eval`, `ml_i_maps`, …) and returns objects that satisfy CCTBX mixins (`target_result_mixin`, `f_model.manager` subclass). That is a reusable host mode: a new reciprocal-space target needs a CCTBX-shaped facade plus worker ops—not a Phenix rewrite. Entry points are `phridge-refine … target=mli_quad` or `scripts/phenix_refine_mli.py`."

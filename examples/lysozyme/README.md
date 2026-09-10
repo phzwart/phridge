@@ -71,11 +71,22 @@ phridge-view --prefix examples/lysozyme/1iee_omit_zero_occ
 ```
 Drag and drop `1iee_omit_delete_gradient.ccp4` into the window to see the prominent green contour (+3\(\sigma\), +6\(\sigma\), +10\(\sigma\)) filling the loop vacancy.
 
-## \(\sigma_A\) Estimation: Overlapping Bins & Total Variation Regularization
+## \(\sigma_A\) and Wilson Scale (Nuisance Fit)
 
-Estimating \(\sigma_A\) per resolution bin by independent, disjoint minimization can suffer from sampling variance and erratic non-monotonic oscillations across bins—especially on sparse cross-validation test sets (Free R reflections) or when models contain coordinate errors.
+### Phenix / `mli_quad` path (default): two-stage
 
-To address this, `phridge-intensity` implements:
+Jointly freeing overall Wilson \(\Sigma_0\) with \(\sigma_A\) is degenerate (\(\sigma_A\to 0.999\), \(\Sigma_0\to\infty\)). The working procedure on each `update_all_scales`:
+
+1. **Intensity-only ML Wilson** — fit \(\Sigma(s)=\Sigma_0 e^{-0.5 B_W s^2}\) with \(\Sigma_0>0\), no \(F_{\mathrm{calc}}\), pure Wilson prior × Gaussian noise on \(I\pm\sigma_I\). Uses \(\log p(I)=\log p(Z)-\log(\varepsilon\Sigma)\).
+2. **Freeze \(\Sigma\)** — fit monotone bin (or Read) \(\sigma_A\) (+ optional \(\nu\), `--tv-norm`). Report \(\beta=\Sigma(1-\sigma_A^2)\).
+
+CLI: `--fit-sigma-wilson` (default) / `--no-fit-sigma-wilson`. See `docs/phenix_refine_integration.md` §6b.
+
+### Standalone `phridge-intensity`: overlapping bins & TV
+
+Estimating \(\sigma_A\) per resolution bin by independent, disjoint minimization can suffer from sampling variance and erratic non-monotonic oscillations—especially on sparse free sets or when models contain coordinate errors.
+
+`phridge-intensity` implements:
 1. **Overlapping Resolution Bins (`--overlap-bins N`, default `1`)**:
    Instead of strictly disjoint shells, each bin gathers reflections across a sliding window of \(2N + 1\) bins (e.g. \(N=1\) shares reflections with immediate neighbor shells). This roughly triples statistical power on free reflection sets, eliminating jagged bin-to-bin jumps.
 2. **Total Variation (TV) Regularization (`--tv-norm \lambda`, e.g. `0.04`)**:

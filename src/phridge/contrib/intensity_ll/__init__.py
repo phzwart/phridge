@@ -14,6 +14,8 @@ from phridge.contrib.intensity_ll.ops import (
     TARGET_AND_GRADIENTS_OP_NAME,
     register_ops,
 )
+from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME
+from phridge.contrib.intensity_ll.surrogate_op import SURROGATE_FIT_OP_NAME
 from phridge.contrib.intensity_ll.target import IntensityLogLikelihood, IntensityLogLikelihoodOptions
 
 __all__ = [
@@ -21,6 +23,8 @@ __all__ = [
     "IntensityLogLikelihoodOptions",
     "MAPS_OP_NAME",
     "NUISANCE_FIT_OP_NAME",
+    "OMIT_OP_NAME",
+    "SURROGATE_FIT_OP_NAME",
     "TARGET_AND_GRADIENTS_OP_NAME",
     "log_likelihood_normal",
     "log_likelihood_t",

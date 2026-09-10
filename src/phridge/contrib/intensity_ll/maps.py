@@ -108,7 +108,27 @@ def _score_from_Em(Em: Tensor, Ec: Tensor, sA: Tensor, centric: Tensor) -> Tenso
     return pref * (Em - sA * Ec)
 
 
-def posterior_moments(
+@dataclass
+class PosteriorNodes:
+    """Frozen quadrature nodes and the joint posterior on them.
+
+    This is the single object both :func:`posterior_moments` and the Rice surrogate
+    fit (:mod:`phridge.contrib.intensity_ll.surrogate`) read, so no consumer can
+    drift onto a different set of nodes than the one the likelihood integrated on.
+    """
+
+    nodes: Tensor  # (N, n_u, J) amplitude nodes E
+    terms: Tensor  # (N, n_u, J) log integrand + log quadrature weight
+    p: Tensor  # (N, n_u, J) joint posterior on the (u, E) nodes
+    u_nodes: Tensor  # (N, n_u) log(lambda) nodes; zeros for normal noise
+    log_lik: Tensor  # (N,)
+    Ec: Tensor  # (N,)
+    sA: Tensor  # (N,)
+    centric: Tensor  # (N,) bool
+    stats: dict[str, Any]
+
+
+def posterior_node_cache(
     Ec: Tensor,
     sA: Tensor,
     Zo: Tensor,
@@ -121,11 +141,11 @@ def posterior_moments(
     n_hermite: int = 7,
     n_legendre: int = 24,
     k_window: float = 8.0,
-) -> PosteriorMoments:
-    """Posterior averages of the true amplitude on the ``mli`` quadrature nodes.
+) -> PosteriorNodes:
+    """Build the frozen nodes and the joint posterior ``p(E, u | Z_o, E_C)`` on them.
 
-    Same arguments as ``log_likelihood_normal`` / ``log_likelihood_t``. Nodes are frozen
-    (no gradient through the window); the moments are returned detached.
+    Same arguments as ``log_likelihood_normal`` / ``log_likelihood_t``. Everything is
+    computed under ``no_grad`` (the window is frozen) and returned detached.
     """
     with torch.no_grad():
         Ec, sA, Zo, sZ = torch.broadcast_tensors(Ec, sA, Zo, sZ)
@@ -160,6 +180,60 @@ def posterior_moments(
         flat_terms = terms.reshape(terms.shape[0], -1)
         log_lik = torch.logsumexp(flat_terms, dim=1)
         p = torch.softmax(flat_terms, dim=1).reshape(terms.shape)  # joint posterior on (u, E) nodes
+
+    return PosteriorNodes(
+        nodes=nodes,
+        terms=terms,
+        p=p,
+        u_nodes=u_nodes,
+        log_lik=log_lik,
+        Ec=Ec,
+        sA=sA,
+        centric=centric_t,
+        stats=stats,
+    )
+
+
+def posterior_moments(
+    Ec: Tensor,
+    sA: Tensor,
+    Zo: Tensor,
+    sZ: Tensor,
+    centric: Union[Tensor, bool],
+    nu: Optional[Union[float, Tensor]] = None,
+    *,
+    n_u: int = 12,
+    snr_strong: float = 5.0,
+    n_hermite: int = 7,
+    n_legendre: int = 24,
+    k_window: float = 8.0,
+    cache: Optional[PosteriorNodes] = None,
+) -> PosteriorMoments:
+    """Posterior averages of the true amplitude on the ``mli`` quadrature nodes.
+
+    Same arguments as ``log_likelihood_normal`` / ``log_likelihood_t``. Nodes are frozen
+    (no gradient through the window); the moments are returned detached. Pass ``cache``
+    to reuse nodes already built by :func:`posterior_node_cache`.
+    """
+    with torch.no_grad():
+        if cache is None:
+            cache = posterior_node_cache(
+                Ec,
+                sA,
+                Zo,
+                sZ,
+                centric,
+                nu,
+                n_u=n_u,
+                snr_strong=snr_strong,
+                n_hermite=n_hermite,
+                n_legendre=n_legendre,
+                k_window=k_window,
+            )
+        Ec, sA, centric_t = cache.Ec, cache.sA, cache.centric
+        nodes, p, u_nodes = cache.nodes, cache.p, cache.u_nodes
+        stats = cache.stats
+        log_lik = cache.log_lik
 
         E = nodes
         m = _fom_at(E, Ec[:, None, None], sA[:, None, None], centric_t[:, None, None])
