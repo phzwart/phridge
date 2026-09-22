@@ -31,6 +31,7 @@ _INPUTS = {
     "epsilon": "array",
     "centric": "array",
     "nu": "array",
+    "beta_residual": "array",
     "maps": "json",
     "d_spacings": "array",
 }
@@ -65,11 +66,19 @@ _NUISANCE_INPUTS = {
     "n_sigma_a_bins": "json",
     "tv_norm": "json",
     "fit_sigma_wilson": "json",
+    "wilson_model": "json",
+    "wilson_max_iter": "json",
+    "beta_mode": "json",
+    "sigma_a_shape": "json",
+    "smooth_sigma_a": "json",
+    "smooth_beta": "json",
+    "beta_consistency_prior": "json",
 }
 _NUISANCE_OUTPUTS = {
     "sigma_a": "array",
     "sigma_wilson": "array",
     "beta": "array",
+    "beta_residual": "array",
     "nu": "json",
     "nu_per_refl": "array",
     "nu_se": "json",
@@ -101,6 +110,7 @@ def ml_i_maps(
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
     nu: Optional[Any] = None,
+    beta_residual: Optional[Any] = None,
     maps: Optional[dict] = None,
     d_spacings: Optional[Any] = None,
 ) -> dict[str, Any]:
@@ -122,7 +132,10 @@ def ml_i_maps(
     tgt = build_target(spec)
     assert isinstance(tgt, IntensityLogLikelihood)
     opts = IntensityMapOptions.model_validate(maps or {})
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
+    obs = _observations(
+        f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu,
+        beta_residual=beta_residual,
+    )
     dev = _DEVICE["device"]
     is_mps = dev.startswith("mps")
     cdtype = torch.complex64 if is_mps else torch.complex128
@@ -234,7 +247,9 @@ def ml_i_maps(
         eps_s = torch.where(ok, eps, torch.ones_like(eps))
         fc_s = torch.where(ok, fc_abs, torch.ones_like(fc_abs))
         fo_s = torch.where(ok, fo, torch.zeros_like(fo))
-        Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+        # Through the target so the reported posterior statistics describe the same prior
+        # the refinement target used; otherwise S_post would audit a different model.
+        Ec, sA_n, Zo, sZ, _ = tgt.normalized(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s, obs)
         # Keep Rice width a=1-σ_A² away from 0 for stable reporting quadrature
         sA_n = sA_n.clamp(1e-4, 1.0 - 1e-4)
         # float64 on CPU for reporting accuracy (MPS maps may be float32).
@@ -309,7 +324,7 @@ def ml_i_maps(
             score_test=_score_test_enabled(),
         )
         r_val_dict.update(rint.as_s_values())
-        r_val_dict["s_report_version"] = 7
+        r_val_dict["s_report_version"] = 9
 
         # E_C = |F_c|/sqrt(εΣ) must be O(1) by construction. When it is not, the
         # Wilson Σ (obs.beta) is broken and every normalized-unit statistic is
@@ -446,6 +461,147 @@ def _compute_s_sq(unit_cell: Any, hkl: np.ndarray) -> np.ndarray:
     return np.einsum("ni,ij,nj->n", hkl_d, G_star, hkl_d)
 
 
+def _shell_standard_errors(
+    *,
+    torch: Any,
+    fb: Any,
+    normalize: Any,
+    log_likelihood_normal: Any,
+    log_likelihood_t: Any,
+    sigma_a: np.ndarray,
+    beta: np.ndarray,
+    free_beta: bool,
+    shell_idx: Any,
+    fc_t: Any,
+    io_t: Any,
+    si_t: Any,
+    eps_t: Any,
+    sw_t: Any,
+    cen_t: Any,
+    nu_tune: Any,
+    nu_scalar: Optional[float],
+    dtype: Any,
+    device: Any,
+) -> Any:
+    """Standard errors of per-shell ``(σ_A, β)`` from the Hessian of the tune NLL.
+
+    Every reflection belongs to exactly one shell, so the NLL is a sum of independent
+    per-shell terms and its Hessian is **block diagonal** with 2x2 blocks. That is worth
+    exploiting: two Hessian-vector products recover every block, where a dense Hessian
+    would cost one backward pass per parameter (40 for 20 shells). Probing with a vector
+    of ones in the σ_A slots picks out each block's σ_A column precisely *because* the
+    off-diagonal blocks vanish.
+
+    The Hessian is of the unpenalized NLL: these say how well the data pin each shell, and
+    the smoothness penalty is not data. Evaluated in a fresh free logit parameterization at
+    the optimum, so a monotone fit still gets honest per-shell errors.
+
+    In constrained mode β is not free; its error follows from σ_A by the delta method on
+    ``β = 1 - σ_A²``, which is where the exact ``-1`` correlation comes from.
+    """
+    k = int(len(sigma_a))
+    u = torch.as_tensor(fb.logit_from_sigma_a(sigma_a), dtype=dtype, device=device)
+    u = u.clone().requires_grad_(True)
+    v = torch.as_tensor(fb.logit_from_beta(beta), dtype=dtype, device=device)
+    v = v.clone().requires_grad_(True)
+
+    def _nll(u_vec: Any, v_vec: Any) -> Any:
+        sa_bins = fb.SIGMA_A_LO + fb.SIGMA_A_SPAN * torch.sigmoid(u_vec)
+        sa_t = sa_bins[shell_idx]
+        ec, sa_n, zo, sz = normalize(fc_t, io_t, si_t, eps_t, sw_t, sa_t)
+        if free_beta:
+            b_bins = fb.BETA_LO + fb.BETA_SPAN * torch.sigmoid(v_vec)
+            ec, sa_n = fb.rice_inputs(ec, sa_t, b_bins[shell_idx])
+        if nu_tune is not None:
+            ll = log_likelihood_t(ec, sa_n, zo, sz, cen_t, nu=nu_tune, n_u=10)
+        elif nu_scalar is not None and float(nu_scalar) < 199.0:
+            ll = log_likelihood_t(ec, sa_n, zo, sz, cen_t, nu=float(nu_scalar), n_u=10)
+        else:
+            ll = log_likelihood_normal(ec, sa_n, zo, sz, cen_t)
+        return -ll.sum()
+
+    params = [u, v] if free_beta else [u]
+    grads = torch.autograd.grad(_nll(u, v), params, create_graph=True)
+
+    def _hvp(seeds: list[Any]) -> list[Any]:
+        dot = sum((g * s).sum() for g, s in zip(grads, seeds))
+        out = torch.autograd.grad(dot, params, retain_graph=True, allow_unused=True)
+        return [
+            torch.zeros_like(p) if o is None else o.detach() for p, o in zip(params, out)
+        ]
+
+    ones = torch.ones(k, dtype=dtype, device=device)
+    zeros = torch.zeros(k, dtype=dtype, device=device)
+    hess = np.zeros((2 * k, 2 * k), dtype=np.float64)
+    if free_beta:
+        col_u = _hvp([ones, zeros])
+        col_v = _hvp([zeros, ones])
+        h_uu = col_u[0].cpu().numpy().astype(np.float64)
+        h_vu = col_u[1].cpu().numpy().astype(np.float64)
+        h_vv = col_v[1].cpu().numpy().astype(np.float64)
+        for i in range(k):
+            hess[i, i] = h_uu[i]
+            hess[k + i, k + i] = h_vv[i]
+            hess[i, k + i] = hess[k + i, i] = h_vu[i]
+        return fb.shell_errors_from_hessian(hess, sigma_a, beta)
+
+    h_uu = _hvp([ones])[0].cpu().numpy().astype(np.float64)
+    with np.errstate(all="ignore"):
+        var_u = np.where(h_uu > 0.0, 1.0 / np.maximum(h_uu, 1e-300), np.nan)
+        frac = np.clip((np.asarray(sigma_a) - fb.SIGMA_A_LO) / fb.SIGMA_A_SPAN, 1e-12, 1 - 1e-12)
+        se_sa = fb.SIGMA_A_SPAN * frac * (1.0 - frac) * np.sqrt(var_u)
+        # β = 1 - σ_A² is a deterministic function of σ_A here, so its error is |dβ/dσ_A|
+        # times σ_A's and the two are perfectly anti-correlated by construction.
+        se_beta = 2.0 * np.asarray(sigma_a, dtype=np.float64) * se_sa
+    corr = np.where(np.isfinite(se_sa), -1.0, np.nan)
+    return fb.ShellErrors(se_sa, se_beta, corr, bool(np.all(np.isfinite(se_sa))))
+
+
+def _data_frac_spread_by_shell(
+    sigma_w: np.ndarray,
+    sigma_i: np.ndarray,
+    epsilon: np.ndarray,
+    s_sq: np.ndarray,
+    n_shells: int = 8,
+) -> dict[str, Any]:
+    """Within-shell spread of ``data%`` = σ_Z⁻²/(1+σ_Z⁻²), σ_Z = σ_I/(ε Σ_W).
+
+    Equal-count shells in ``s_sq``, so resolution is held fixed inside a shell and the
+    only thing left to spread ``data%`` is direction (plus genuine σ_I variation). Under
+    an isotropic Σ_W the anisotropy shows up here as a wide p90−p10; under a correct
+    tensor it should collapse. Reported per shell and pooled.
+    """
+    from phridge.contrib.intensity_ll.wilson import data_frac_spread
+
+    denom = np.maximum(epsilon * sigma_w, 1e-30)
+    sz = np.asarray(sigma_i, dtype=np.float64) / denom
+    with np.errstate(divide="ignore", invalid="ignore"):
+        inv = 1.0 / np.maximum(sz, 1e-30) ** 2
+        frac = inv / (1.0 + inv)
+    frac = np.where(np.isfinite(frac), frac, np.nan)
+
+    order = np.argsort(np.asarray(s_sq, dtype=np.float64))
+    ns = max(1, int(n_shells))
+    bounds = np.linspace(0, order.size, ns + 1).astype(int)
+    rows: list[dict[str, float]] = []
+    for i in range(ns):
+        sel = order[bounds[i] : bounds[i + 1]]
+        if sel.size == 0:
+            continue
+        sp = data_frac_spread(frac[sel])
+        rows.append(
+            {
+                "n": int(sel.size),
+                "p10": sp.p10,
+                "p50": sp.p50,
+                "p90": sp.p90,
+                "spread": sp.spread,
+            }
+        )
+    pooled = float(np.nanmean([r["spread"] for r in rows])) if rows else float("nan")
+    return {"shells": rows, "mean_spread": pooled}
+
+
 def ml_i_nuisance_fit(
     f_calc: PackedMiller,
     f_obs: PackedMiller,
@@ -462,31 +618,60 @@ def ml_i_nuisance_fit(
     n_sigma_a_bins: Optional[Any] = None,
     tv_norm: Optional[Any] = 0.0,
     fit_sigma_wilson: Optional[Any] = True,
+    wilson_model: Optional[Any] = "anisotropic",
+    wilson_max_iter: Optional[Any] = 60,
+    beta_mode: Optional[Any] = "free",
+    sigma_a_shape: Optional[Any] = "free",
+    smooth_sigma_a: Optional[Any] = 1.0,
+    smooth_beta: Optional[Any] = 1.0,
+    beta_consistency_prior: Optional[Any] = 0.0,
 ) -> dict[str, Any]:
     """Worker implementation for held-out nuisance parameter fitting (theta).
 
     Two-stage fit on the tune set (no joint Σ₀–σ_A free scale):
 
-      1. **Wilson Σ(s) from intensities alone** (no atomic model):
-         ``Σ(s) = Σ₀ exp(-0.5 B_W s²)`` with ``Σ₀ > 0``.
+      1. **Wilson Σ from intensities alone** (no atomic model): by default the tensor
+         form ``Σ(h) = Σ₀ exp(-0.5 s_cartᵀ B s_cart)``, or with
+         ``wilson_model="isotropic"`` the scalar ``Σ(s) = Σ₀ exp(-0.5 B_W s²)``,
+         ``Σ₀ > 0`` (see :mod:`phridge.contrib.intensity_ll.wilson`).
          Initialized by a moment Wilson plot, then (by default) refined by
          maximizing the intensity likelihood under a pure Wilson prior
          (``σ_A → 0``) times Gaussian measurement noise — so noisy / negative
          ``I_obs`` are handled properly. No ``F_calc`` enters this stage.
 
-      2. **σ_A (and optional ν, F_c scale) with Σ frozen**:
-         monotone resolution bins (default) or Read-style curve; optional TV
-         on adjacent σ_A bins. Student-t ``ν`` defaults to the **same**
-         resolution shells with the same TV penalty (``nu_mode=bins``);
-         ``nu_mode=global`` keeps a single scalar ``ν``.
+         The anisotropic fit starts from ``B = B_W·I``, which reproduces the
+         isotropic Σ exactly for any cell, so it can only improve the likelihood.
+         It requires the model-side ``k_anisotropic`` to be constrained to
+         isotropic: the two are degenerate and only one may be free.
 
-    After stage 2 the cctbx-style residual scale
-    ``β = Σ (1 - σ_A²)`` is reported alongside ``σ_A`` (the classic split of
-    correlation vs unexplained intensity variance).
+      2. **σ_A and β (and optional ν) with Σ frozen**: one independent logit per
+         resolution shell for each, regularized by a second-difference
+         smoothness penalty (``smooth_sigma_a``, ``smooth_beta``) instead of a
+         monotonicity constraint. Student-t ``ν`` defaults to the **same**
+         resolution shells (``nu_mode=bins``); ``nu_mode=global`` keeps a single
+         scalar ``ν``. A Read-style σ_A curve is still available via
+         ``sigma_a_mode="read"``.
+
+         In normalized units ``E[Z_o|E_C] = σ_A² E_C² + β`` exactly, so within a
+         shell σ_A² is the slope and β the intercept. Fitting β frees the
+         intercept: the classical ``β = 1 - σ_A²`` forces the line through
+         (1, 1), which asserts the Wilson normalization is exact, and when it is
+         not the constrained fit tilts the slope and launders the normalization
+         error into σ_A. ``beta_mode="constrained"`` and
+         ``sigma_a_shape="monotone"`` restore the old behaviour exactly.
+
+         β free makes σ_A degenerate with an overall ``F_c`` scale (only
+         ``σ_A²k²`` enters the slope), so ``fit_scale`` must be off; the op
+         raises rather than reporting an arbitrary split.
+
+    The returned ``β`` array is in absolute units, ``Σ_W β_shell`` — the
+    unexplained intensity variance, the companion to σ_A's correlation.
     """
     import torch
     from scipy.optimize import minimize_scalar
 
+    from phridge.contrib.intensity_ll import free_beta as _fb
+    from phridge.contrib.intensity_ll import wilson as _wilson
     from phridge.contrib.intensity_ll.maps import posterior_moments
     from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
     from phridge.sfcalc.ops import _DEVICE, _np
@@ -505,13 +690,23 @@ def ml_i_nuisance_fit(
     eps_np = _np(epsilon, np.float64) if epsilon is not None else np.ones(n, dtype=np.float64)
     cen_np = _np(centric, bool) if centric is not None else np.zeros(n, dtype=bool)
 
+    try:
+        uc_for_report: Any = (
+            f_obs.meta.crystal.unit_cell if hasattr(f_obs, "meta") else f_obs.crystal.unit_cell
+        )
+    except Exception:
+        uc_for_report = (1.0, 1.0, 1.0, 90.0, 90.0, 90.0)
+
     if s_sq is not None:
         s_sq_np = _np(s_sq, np.float64)
     else:
-        uc = f_obs.meta.crystal.unit_cell if hasattr(f_obs, "meta") else f_obs.crystal.unit_cell
-        s_sq_np = _compute_s_sq(uc, _np(f_obs.hkl))
+        s_sq_np = _compute_s_sq(uc_for_report, _np(f_obs.hkl))
 
     mode = str(sigma_a_mode or "bins").strip().lower()
+    # "monotone" names a *shape* for the binned fit, not a third functional form, but it
+    # reads naturally in the sigma_a_mode slot and older callers spell it there.
+    if mode in ("monotone", "monotonic"):
+        mode, sigma_a_shape = "bins", "monotone"
     if mode not in ("bins", "read", "bin", "shell", "shells"):
         mode = "bins"
     if mode in ("bin", "shell", "shells"):
@@ -526,6 +721,39 @@ def ml_i_nuisance_fit(
         n_mode = "global"
     tv_lam_val = 0.0 if tv_norm is None else max(0.0, float(tv_norm))
     do_fit_sw = bool(fit_sigma_wilson)
+    wilson_opts = _wilson.WilsonOptions(
+        wilson_model=_wilson.normalize_wilson_model(wilson_model),
+        max_iter=int(wilson_max_iter) if wilson_max_iter else 60,
+    )
+    want_aniso = wilson_opts.anisotropic
+    wilson_max_iter = wilson_opts.max_iter
+
+    shell_opts = _fb.ShellFitOptions(
+        beta_mode=_fb.normalize_beta_mode(beta_mode),
+        sigma_a_shape=_fb.normalize_sigma_a_shape(sigma_a_shape),
+        lambda_u=0.0 if smooth_sigma_a is None else max(0.0, float(smooth_sigma_a)),
+        lambda_v=0.0 if smooth_beta is None else max(0.0, float(smooth_beta)),
+        lambda_consistency=(
+            0.0 if beta_consistency_prior is None else max(0.0, float(beta_consistency_prior))
+        ),
+    )
+    # β free leaves σ_A and an overall F_c scale exactly degenerate: only σ_A²k² enters
+    # the slope of Z_o on E_C². Refining both returns one of infinitely many splits, each
+    # fitting equally well, so refuse rather than report an arbitrary one.
+    if shell_opts.beta_free and bool(fit_scale):
+        raise ValueError(
+            "fit_scale=True with beta_mode='free' is not identifiable: σ_A and the overall "
+            "F_c scale k enter the Rice first moment only as σ_A²k², so the likelihood "
+            "cannot separate them and the reported split would be arbitrary. Either fix the "
+            "scale during stage 2 (fit_scale=False, e.g. let bulk-solvent scaling own it) "
+            "or use beta_mode='constrained', where β = 1 - σ_A² breaks the degeneracy."
+        )
+    # Read-style σ_A is a two-parameter curve with no shells, so there is nowhere to hang
+    # an independent per-shell β. Fall back to the constrained form and say so.
+    beta_fallback: Optional[str] = None
+    if shell_opts.beta_free and mode != "bins":
+        beta_fallback = f"sigma_a_mode={mode!r} has no resolution shells to fit β in"
+        shell_opts = shell_opts.model_copy(update={"beta_mode": "constrained"})
 
     def _nu_init_scalar(nu_in: Any) -> Optional[float]:
         if nu_in is None:
@@ -600,15 +828,85 @@ def ml_i_nuisance_fit(
             return x
         return float(math.log(math.expm1(x)))
 
+    # Anisotropic Σ_W needs the Cartesian reciprocal vectors, so it needs the cell. If
+    # the cell is unreachable, fall back to isotropic and say so rather than guessing a
+    # metric from raw integer indices, which would fit a tensor in the wrong basis.
+    s_cart_np: Optional[np.ndarray] = None
+    wilson_fallback: Optional[str] = None
+    if want_aniso:
+        try:
+            uc_aniso = (
+                f_obs.meta.crystal.unit_cell if hasattr(f_obs, "meta") else f_obs.crystal.unit_cell
+            )
+            s_cart_np = _wilson.reciprocal_cartesian(uc_aniso, _np(f_obs.hkl))
+            if s_cart_np.shape != (n, 3) or not np.all(np.isfinite(s_cart_np)):
+                raise ValueError(f"reciprocal vectors have shape {s_cart_np.shape}")
+        except Exception as exc:
+            wilson_fallback = f"no usable unit cell for the anisotropic fit ({exc})"
+            s_cart_np, want_aniso = None, False
+
+    if want_aniso and s_cart_np is not None:
+        # Six components need directions that span the sphere. A line, a plane or a
+        # narrow cone leaves the tensor unconstrained in some direction, and an
+        # unconstrained tensor reports a confident number that means nothing -- so fall
+        # back to the scalar rather than fit something unidentifiable. Judged on the tune
+        # set, which is what stage 1 actually sees.
+        ident = _wilson.tensor_identifiability(s_cart_np[tune])
+        if ident < _wilson.MIN_TENSOR_IDENTIFIABILITY:
+            wilson_fallback = (
+                f"reflection directions cannot determine a tensor "
+                f"(identifiability {ident:.2e} < {_wilson.MIN_TENSOR_IDENTIFIABILITY:g}); "
+                f"fitted isotropic instead"
+            )
+            want_aniso = False
+
+    do_aniso = bool(want_aniso and do_fit_sw and s_cart_np is not None)
     wilson_nll_final: Optional[float] = None
+    b_cart_final = np.eye(3, dtype=np.float64) * b_wilson_init
+
     if do_fit_sw:
         log_s0 = torch.tensor(math.log(sigma_0_init), dtype=dtype, device=dev, requires_grad=True)
-        u_bw = torch.tensor(_inv_softplus(b_wilson_init), dtype=dtype, device=dev, requires_grad=True)
+        params_w = [log_s0]
+        if do_aniso:
+            # B = L Lᵀ in the Cartesian reciprocal frame, log-diagonal: PSD is automatic
+            # and LBFGS stays unconstrained. Started at B = B_W·I, which reproduces the
+            # isotropic Σ_W exactly for any cell, so the fit can only improve the NLL.
+            ld_init, od_init = _wilson.isotropic_cholesky_params(b_wilson_init)
+            log_diag = torch.tensor(ld_init, dtype=dtype, device=dev, requires_grad=True)
+            off_diag = torch.tensor(od_init, dtype=dtype, device=dev, requires_grad=True)
+            s_cart_t = torch.as_tensor(s_cart_np[tune], dtype=dtype, device=dev)
+            params_w += [log_diag, off_diag]
+        else:
+            u_bw = torch.tensor(
+                _inv_softplus(b_wilson_init), dtype=dtype, device=dev, requires_grad=True
+            )
+            params_w.append(u_bw)
+
+        def _b_tensor() -> Any:
+            low = torch.zeros(3, 3, dtype=dtype, device=dev)
+            d = torch.exp(log_diag)
+            low = low + torch.diag(d)
+            low = low + torch.stack(
+                [
+                    torch.zeros(3, dtype=dtype, device=dev),
+                    torch.stack([off_diag[0], torch.zeros((), dtype=dtype, device=dev),
+                                 torch.zeros((), dtype=dtype, device=dev)]),
+                    torch.stack([off_diag[1], off_diag[2],
+                                 torch.zeros((), dtype=dtype, device=dev)]),
+                ]
+            )
+            return low @ low.T
+
+        def _sigma_w_now(s0_t: Any) -> Any:
+            if do_aniso:
+                quad = torch.einsum("ni,ij,nj->n", s_cart_t, _b_tensor(), s_cart_t)
+            else:
+                quad = torch.nn.functional.softplus(u_bw) * s_sq_t
+            return (s0_t * torch.exp(-0.5 * quad)).clamp(min=1e-12)
 
         def _wilson_nll() -> Any:
             s0_t = torch.exp(log_s0).clamp(min=1e-12)  # Σ₀ > 0
-            bw_t = torch.nn.functional.softplus(u_bw)
-            sw_now = (s0_t * torch.exp(-0.5 * bw_t * s_sq_t)).clamp(min=1e-12)
+            sw_now = _sigma_w_now(s0_t)
             Ec, sA_n, Zo, sZ = normalize(fc_wilson, io_t, si_t, eps_t, sw_now, sa_wilson)
             # mli returns log-density of Z = I/(εΣ); convert to log-density of I:
             #   p(I) dI = p(Z) dZ  ⇒  log p(I) = log p(Z) - log(εΣ)
@@ -616,7 +914,9 @@ def ml_i_nuisance_fit(
             ll_i = ll_z - torch.log((eps_t * sw_now).clamp(min=1e-12))
             return -ll_i.sum()
 
-        opt_w = torch.optim.LBFGS([log_s0, u_bw], max_iter=60, line_search_fn="strong_wolfe")
+        opt_w = torch.optim.LBFGS(
+            params_w, max_iter=int(wilson_max_iter), line_search_fn="strong_wolfe"
+        )
 
         def _wilson_closure():
             opt_w.zero_grad()
@@ -631,10 +931,24 @@ def ml_i_nuisance_fit(
 
         with torch.no_grad():
             sigma_0 = float(torch.exp(log_s0).clamp(min=1e-12).item())
-            b_wilson = float(torch.nn.functional.softplus(u_bw).item())
+            if do_aniso:
+                b_cart_final = _b_tensor().detach().cpu().numpy().astype(np.float64)
+                # The scalar B_W keeps a meaning for every isotropic consumer: the
+                # gauge-fixed trace/3, which is what the eigen-report calls b_iso.
+                b_wilson = float(np.trace(b_cart_final) / 3.0)
+            else:
+                b_wilson = float(torch.nn.functional.softplus(u_bw).item())
+                b_cart_final = np.eye(3, dtype=np.float64) * b_wilson
             wilson_nll_final = float(_wilson_nll().item() / max(float(tune.sum()), 1.0))
+    else:
+        b_cart_final = np.eye(3, dtype=np.float64) * b_wilson
 
-    sigma_w_full = sigma_0 * np.exp(-0.5 * b_wilson * s_sq_np)
+    if do_aniso:
+        sigma_w_full = _wilson.sigma_w_from_b(
+            s_cart=s_cart_np, sigma_0=sigma_0, b_cart=b_cart_final
+        )
+    else:
+        sigma_w_full = sigma_0 * np.exp(-0.5 * b_wilson * s_sq_np)
     sw_t = torch.as_tensor(sigma_w_full[tune], dtype=dtype, device=dev)
 
     # ------------------------------------------------------------------
@@ -646,6 +960,8 @@ def ml_i_nuisance_fit(
     do_fit_nu = bool(fit_nu) and (nu_init is None or nu_init < 199.0)
     do_fit_scale = bool(fit_scale)
     us = torch.tensor(0.0, dtype=dtype, device=dev, requires_grad=True) if do_fit_scale else None
+    do_free_beta = bool(shell_opts.beta_free and mode == "bins")
+    do_monotone = bool(shell_opts.monotone)
 
     sa_bin_centers: Optional[np.ndarray] = None
     sa_bin_values: Optional[np.ndarray] = None
@@ -667,27 +983,84 @@ def ml_i_nuisance_fit(
             edges = np.linspace(s_lo, s_hi, n_sa + 1)
         shell_idx_tune = np.clip(np.digitize(s_sq_tune_np, edges[1:-1], right=False), 0, n_sa - 1)
         shell_idx_t = torch.as_tensor(shell_idx_tune, dtype=torch.long, device=dev)
-        u0 = torch.tensor(2.0, dtype=dtype, device=dev, requires_grad=True)
-        if n_sa > 1:
-            raw_deltas = torch.full((n_sa - 1,), 0.3, dtype=dtype, device=dev, requires_grad=True)
-            sa_params = [u0, raw_deltas] + ([us] if do_fit_scale else [])
+        if not do_monotone or do_free_beta:
+            # Moment start: regress Z_o on E_C² per shell, slope → σ_A², intercept → β.
+            # Crude, but it lands near the answer exactly when the normalization is off —
+            # the case the constrained start handles worst and the joint fit would
+            # otherwise have to walk out of with two strongly correlated parameters.
+            denom_i = np.maximum(eps_np[tune] * sigma_w_full[tune], 1e-30)
+            sa_init_np, beta_init_np = _fb.moment_init_shells(
+                z_obs=io[tune] / denom_i,
+                e_c_sq=(fc_raw[tune] ** 2) / denom_i,
+                sigma_z=sig[tune] / denom_i,
+                shell_idx=shell_idx_tune,
+                n_shells=n_sa,
+            )
         else:
-            raw_deltas = None
-            sa_params = [u0] + ([us] if do_fit_scale else [])
-
-        def _sa_bins_from_params():
-            if n_sa == 1 or raw_deltas is None:
-                logits = u0.reshape(1)
-            else:
-                drops = torch.nn.functional.softplus(raw_deltas)
-                cum = torch.cat(
-                    [torch.zeros(1, dtype=dtype, device=dev), torch.cumsum(drops, dim=0)]
+            sa_init_np = np.full(n_sa, 0.7, dtype=np.float64)
+            beta_init_np = np.full(n_sa, 0.5, dtype=np.float64)
+        if do_monotone:
+            # Legacy cumulative-drop σ_A: logits fall by softplus(δ) per shell, so the
+            # profile can never rise. Kept verbatim so old runs reproduce bit-for-bit.
+            u0 = torch.tensor(2.0, dtype=dtype, device=dev, requires_grad=True)
+            if n_sa > 1:
+                raw_deltas = torch.full(
+                    (n_sa - 1,), 0.3, dtype=dtype, device=dev, requires_grad=True
                 )
-                logits = u0 - cum
-            return 0.01 + 0.989 * torch.sigmoid(logits)
+                sa_params = [u0, raw_deltas] + ([us] if do_fit_scale else [])
+            else:
+                raw_deltas = None
+                sa_params = [u0] + ([us] if do_fit_scale else [])
+            u_sa = None
+
+            def _sa_bins_from_params():
+                if n_sa == 1 or raw_deltas is None:
+                    logits = u0.reshape(1)
+                else:
+                    drops = torch.nn.functional.softplus(raw_deltas)
+                    cum = torch.cat(
+                        [torch.zeros(1, dtype=dtype, device=dev), torch.cumsum(drops, dim=0)]
+                    )
+                    logits = u0 - cum
+                return 0.01 + 0.989 * torch.sigmoid(logits)
+
+        else:
+            # One free logit per shell. σ_A is depressed at low resolution where the
+            # solvent model is poor and can dip mid-range (ice rings, detector artifacts);
+            # a monotone profile has to push that structure into neighbouring shells.
+            # Smoothness (applied in the closure) is the honest replacement: it says the
+            # profile has no kinks, not that it never rises.
+            u0 = None
+            raw_deltas = None
+            u_sa = torch.as_tensor(
+                _fb.logit_from_sigma_a(sa_init_np), dtype=dtype, device=dev
+            ).clone().requires_grad_(True)
+            sa_params = [u_sa] + ([us] if do_fit_scale else [])
+
+            def _sa_bins_from_params():
+                return _fb.SIGMA_A_LO + _fb.SIGMA_A_SPAN * torch.sigmoid(u_sa)
+
+        if do_free_beta:
+            v_beta = torch.as_tensor(
+                _fb.logit_from_beta(beta_init_np), dtype=dtype, device=dev
+            ).clone().requires_grad_(True)
+            sa_params = list(sa_params) + [v_beta]
+
+            def _beta_bins_from_params():
+                return _fb.BETA_LO + _fb.BETA_SPAN * torch.sigmoid(v_beta)
+
+        else:
+            v_beta = None
+
+            def _beta_bins_from_params():
+                sa = _sa_bins_from_params()
+                return 1.0 - sa**2
 
         def _sa_tune_from_params():
             return _sa_bins_from_params()[shell_idx_t]
+
+        def _beta_tune_from_params():
+            return _beta_bins_from_params()[shell_idx_t]
 
         sa_bin_centers = 0.5 * (edges[:-1] + edges[1:])
     else:
@@ -696,14 +1069,22 @@ def ml_i_nuisance_fit(
         sa_params = [uk, ub] + ([us] if do_fit_scale else [])
         raw_deltas = None
         u0 = None
+        u_sa = None
+        v_beta = None
 
         def _sa_bins_from_params():
             raise RuntimeError("bin σ_A accessor unavailable in read mode")
+
+        def _beta_bins_from_params():
+            raise RuntimeError("bin β accessor unavailable in read mode")
 
         def _sa_tune_from_params():
             k_t = 0.999 * torch.sigmoid(uk) + 1e-4
             b_t = torch.nn.functional.softplus(ub)
             return torch.clamp(torch.sqrt(k_t) * torch.exp(-0.25 * b_t * s_sq_t), 1e-4, 0.9999)
+
+        def _beta_tune_from_params():
+            return 1.0 - _sa_tune_from_params() ** 2
 
     do_fit_nu_bins = bool(do_fit_nu and n_mode == "bins" and mode == "bins" and shell_idx_t is not None)
     do_fit_nu_global = bool(do_fit_nu and not do_fit_nu_bins)
@@ -735,6 +1116,14 @@ def ml_i_nuisance_fit(
         sa_t = _sa_tune_from_params()
         fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
         Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
+        if do_free_beta:
+            # Exact: the integrands use (E_C, σ_A) only through the product σ_A·E_C and
+            # through a = 1 - σ_A², so this substitution makes a = β while preserving the
+            # product, giving a Rice prior with E[Z_o|E_C] = σ_A²E_C² + β. The quadrature,
+            # target and gradients are untouched — see free_beta.rice_inputs. The
+            # constrained path deliberately does not route through here, because the
+            # round trip sqrt(1-(1-σ_A²)) is not bit-identical to σ_A.
+            Ec, sA_n = _fb.rice_inputs(Ec, sa_t, _beta_tune_from_params())
         if do_fit_nu_bins:
             ll = log_likelihood_t(Ec, sA_n, Zo, sZ, cen_t, nu=_nu_tune_from_params(), n_u=10)
         elif nu_val is not None and float(nu_val) < 199.0:
@@ -745,18 +1134,44 @@ def ml_i_nuisance_fit(
 
     opt = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
 
-    def closure():
-        opt.zero_grad()
-        loss = compute_nll(current_nu)
-        if tv_lam_val > 0.0 and mode == "bins" and n_sa > 1:
+    def _penalty():
+        """Regularization added to the NLL. Never included in reported standard errors."""
+        pen = None
+        if mode != "bins" or n_sa <= 1:
+            return pen
+        if tv_lam_val > 0.0:
             sa_bins = _sa_bins_from_params()
             diffs = sa_bins[1:] - sa_bins[:-1]
-            loss = loss + tv_lam_val * torch.sqrt(diffs**2 + 1e-6).sum()
+            pen = tv_lam_val * torch.sqrt(diffs**2 + 1e-6).sum()
             if do_fit_nu_bins:
                 nu_bins = _nu_bins_from_params()
                 nd = nu_bins[1:] - nu_bins[:-1]
                 # Scale TV so ν jumps (~few units) are comparable to σ_A (~0.01–0.1)
-                loss = loss + tv_lam_val * torch.sqrt((nd / 10.0) ** 2 + 1e-6).sum()
+                pen = pen + tv_lam_val * torch.sqrt((nd / 10.0) ** 2 + 1e-6).sum()
+        # Smoothness on the logits, in place of monotonicity. On the logits rather than on
+        # σ_A itself so the penalty is scale-free near the bounds, and second-difference so
+        # a straight trend through the shells is free and only kinks are charged.
+        if u_sa is not None and shell_opts.lambda_u > 0.0:
+            term = shell_opts.lambda_u * _fb.second_difference_penalty(u_sa)
+            pen = term if pen is None else pen + term
+        if v_beta is not None and shell_opts.lambda_v > 0.0:
+            term = shell_opts.lambda_v * _fb.second_difference_penalty(v_beta)
+            pen = term if pen is None else pen + term
+        if do_free_beta and shell_opts.lambda_consistency > 0.0:
+            # Optional pull toward the constrained form, for data too weak to determine
+            # both. Off by default: the point of a free β is to let it disagree.
+            sa_bins = _sa_bins_from_params()
+            gap = _beta_bins_from_params() - (1.0 - sa_bins**2)
+            term = shell_opts.lambda_consistency * (gap**2).sum()
+            pen = term if pen is None else pen + term
+        return pen
+
+    def closure():
+        opt.zero_grad()
+        loss = compute_nll(current_nu)
+        pen = _penalty()
+        if pen is not None:
+            loss = loss + pen
         loss.backward()
         return loss
 
@@ -912,6 +1327,9 @@ def ml_i_nuisance_fit(
                     b_final = 0.0
             else:
                 b_final = 0.0
+            beta_bin_values = (
+                _beta_bins_from_params().detach().cpu().numpy().astype(np.float64)
+            )
             sigma_a_params = {
                 "mode": "bins",
                 "n_bins": int(n_sa),
@@ -928,22 +1346,143 @@ def ml_i_nuisance_fit(
                 np.sqrt(k_final) * np.exp(-0.25 * b_final * s_sq_np), 1e-4, 0.9999
             )
             sigma_a_params = {"mode": "read", "k": k_final, "b_delta": b_final}
+            beta_bin_values = None
 
         final_tune_nll = float(compute_nll(best_nu).item() / max(float(tune.sum()), 1.0))
 
-    # cctbx-style residual: β = Σ (1 - σ_A²)  (unexplained intensity variance)
-    beta_full = sigma_w_full * (1.0 - np.clip(sigma_a_full, 0.0, 0.9999) ** 2)
+    shell_errors = _fb.ShellErrors(
+        np.full(max(n_sa, 1), np.nan),
+        np.full(max(n_sa, 1), np.nan),
+        np.full(max(n_sa, 1), np.nan),
+        False,
+    )
+    if mode == "bins" and sa_bin_values is not None:
+        try:
+            shell_errors = _shell_standard_errors(
+                torch=torch,
+                fb=_fb,
+                normalize=normalize,
+                log_likelihood_normal=log_likelihood_normal,
+                log_likelihood_t=log_likelihood_t,
+                sigma_a=sa_bin_values,
+                beta=(
+                    beta_bin_values
+                    if beta_bin_values is not None
+                    else 1.0 - sa_bin_values**2
+                ),
+                free_beta=do_free_beta,
+                shell_idx=shell_idx_t,
+                fc_t=fc_t,
+                io_t=io_t,
+                si_t=si_t,
+                eps_t=eps_t,
+                sw_t=sw_t,
+                cen_t=cen_t,
+                nu_tune=(
+                    _nu_tune_from_params().detach() if do_fit_nu_bins else None
+                ),
+                nu_scalar=best_nu,
+                dtype=dtype,
+                device=dev,
+            )
+        except Exception:
+            pass  # an error bar must never cost a macro cycle
+
+    # β in absolute units: the unexplained intensity variance. Constrained, this is the
+    # cctbx-style Σ(1 - σ_A²); free, the fitted intercept carries the Wilson scale.
+    if do_free_beta and beta_bin_values is not None:
+        assert edges is not None and sa_bin_centers is not None
+        if n_sa == 1:
+            beta_norm_full = np.full(n, float(beta_bin_values[0]), dtype=np.float64)
+        else:
+            # Interpolated on the same bin centres as σ_A, so σ_A² + β stays a meaningful
+            # per-reflection consistency check rather than mixing two griddings.
+            beta_norm_full = np.interp(
+                s_sq_np,
+                sa_bin_centers,
+                beta_bin_values,
+                left=float(beta_bin_values[0]),
+                right=float(beta_bin_values[-1]),
+            )
+        beta_norm_full = np.clip(beta_norm_full, _fb.BETA_MIN, _fb.BETA_MAX)
+        beta_full = sigma_w_full * beta_norm_full
+    else:
+        beta_norm_full = 1.0 - np.clip(sigma_a_full, 0.0, 0.9999) ** 2
+        beta_full = sigma_w_full * beta_norm_full
+
+    if mode == "bins" and sa_bin_values is not None and sa_bin_centers is not None:
+        shell_table = _fb.describe_shells(
+            centers_s_sq=sa_bin_centers,
+            sigma_a=sa_bin_values,
+            beta=(
+                beta_bin_values if beta_bin_values is not None else 1.0 - sa_bin_values**2
+            ),
+            errors=shell_errors,
+            options=shell_opts,
+        )
+        sigma_a_params.update(shell_table.as_json())
+    else:
+        # Read mode has no shells, so there is no table -- but the report still has to say
+        # which β form was used, and this is the one mode where the fallback fires.
+        sigma_a_params["beta_mode"] = shell_opts.beta_mode
+        sigma_a_params["sigma_a_shape"] = shell_opts.sigma_a_shape
+    if beta_fallback:
+        sigma_a_params["beta_fallback"] = beta_fallback
 
     n_nu_params = 0
     if best_nu is not None:
         n_nu_params = int(n_sa) if nu_params.get("mode") == "bins" else 1
-    p_theta = (int(n_sa) if mode == "bins" else 2) + n_nu_params + (1 if do_fit_scale else 0)
-    p_theta += 2  # Wilson Σ₀, B_W
+    # Two parameters per shell once β is free, and the report has to say so: p_theta is
+    # what the held-out statistics are corrected by.
+    n_shell_params = (int(n_sa) * (2 if do_free_beta else 1)) if mode == "bins" else 2
+    p_theta = n_shell_params + n_nu_params + (1 if do_fit_scale else 0)
+    # Wilson: Σ₀ + either the scalar B_W or the 6 tensor components.
+    n_wilson_params = 7 if do_aniso else 2
+    p_theta += n_wilson_params
+
+    # Report the normalization in its inspectable eigen-form. Raw B components are
+    # basis-dependent and not comparable between data sets; eigenvalues and directions
+    # are. The isotropic fit goes through the same description so the header never
+    # branches and delta_b_aniso is exactly 0 there.
+    wilson_tensor = _wilson.describe_wilson_tensor(
+        sigma_0=sigma_0,
+        b_cart=b_cart_final,
+        unit_cell=uc_for_report,
+        model="anisotropic" if do_aniso else "isotropic",
+        nll_per_refl=float("nan") if wilson_nll_final is None else wilson_nll_final,
+        n_params=n_wilson_params,
+    )
+    wilson_params: dict[str, Any] = {
+        "sigma_0": float(sigma_0),
+        "b_wilson": float(b_wilson),
+        "sigma_0_init": sigma_0_init,
+        "b_wilson_init": b_wilson_init,
+        "fitted": bool(do_fit_sw),
+        "method": "intensity_ml" if do_fit_sw else "moment_plot",
+        "wilson_nll": wilson_nll_final,
+    }
+    wilson_params.update(wilson_tensor.as_json())
+    wilson_params["wilson_model_requested"] = wilson_opts.wilson_model
+    if s_cart_np is not None:
+        wilson_params["tensor_identifiability"] = float(
+            _wilson.tensor_identifiability(s_cart_np[tune])
+        )
+    if wilson_fallback:
+        wilson_params["wilson_fallback"] = wilson_fallback
+    # data% spread per shell: under an isotropic Σ_W this contains the anisotropy, so a
+    # collapse here is the direct evidence that the tensor did its job.
+    wilson_params["data_frac_spread"] = _data_frac_spread_by_shell(
+        sigma_w_full, sig, eps_np, s_sq_np
+    )
 
     return {
         "sigma_a": sigma_a_full,
         "sigma_wilson": sigma_w_full,
         "beta": beta_full,
+        # The same residual variance in normalized units, which is what the target and the
+        # maps consume: they divide by Σ_W themselves. None when β is tied, so a consumer
+        # that sees None keeps the classical 1 - σ_A² and nothing changes.
+        "beta_residual": beta_norm_full if do_free_beta else None,
         "nu": best_nu,
         "nu_per_refl": nu_full if best_nu is not None else np.full(n, np.nan, dtype=np.float64),
         "nu_se": nu_se,
@@ -952,15 +1491,7 @@ def ml_i_nuisance_fit(
         "p_theta": int(p_theta),
         "tune_nll": final_tune_nll,
         "sigma_a_params": sigma_a_params,
-        "sigma_wilson_params": {
-            "sigma_0": float(sigma_0),
-            "b_wilson": float(b_wilson),
-            "sigma_0_init": sigma_0_init,
-            "b_wilson_init": b_wilson_init,
-            "fitted": bool(do_fit_sw),
-            "method": "intensity_ml" if do_fit_sw else "moment_plot",
-            "wilson_nll": wilson_nll_final,
-        },
+        "sigma_wilson_params": wilson_params,
     }
 
 
@@ -982,6 +1513,7 @@ _TARGET_AND_GRADIENTS_INPUTS = {
     "epsilon": "array",
     "centric": "array",
     "nu": "array",
+    "beta_residual": "array",
     "precondition": "json",
     "damping": "json",
     "scale_factor": "json",
@@ -1030,6 +1562,7 @@ def ml_i_target_and_gradients(
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
     nu: Optional[Any] = None,
+    beta_residual: Optional[Any] = None,
     precondition: Optional[Any] = False,
     damping: Optional[Any] = 0.05,
     scale_factor: Optional[Any] = 1.0,
@@ -1063,7 +1596,10 @@ def ml_i_target_and_gradients(
     if spec.get("name") != "ml_i":
         spec["name"] = "ml_i"
     tgt = build_target(spec)
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
+    obs = _observations(
+        f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu,
+        beta_residual=beta_residual,
+    )
 
     p = eng.tensors(requires_grad=True)
     fc = eng.f_calc(*p)

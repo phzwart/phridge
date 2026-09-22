@@ -241,6 +241,7 @@ _TARGET_INPUTS = {
     "epsilon": "array",
     "centric": "array",
     "nu": "array",
+    "beta_residual": "array",
     "compute_curvature": "json",
 }
 

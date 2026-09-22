@@ -435,7 +435,14 @@ def intensity_map_coefficients_batch(
             fc_s = torch.where(ok, fc, torch.ones_like(fc))
             fo_s = torch.where(ok, fo, torch.zeros_like(fo))
             with torch.no_grad():
-                Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+                # Through the target so the omit maps use the same prior as the refinement
+                # target: with a free beta the residual variance is not 1 - sigma_A^2, and a
+                # map built on the wrong prior would be wrong in the weak windows first.
+                # Only Em_mean and the (reparameterization-invariant) product sigma_A*E_C
+                # are used below, so no Jacobian is needed.
+                Ec, sA_n, Zo, sZ, _ = target.normalized(
+                    fc_s, fo_s, sig_s, eps_s, sW_s, sA_s, obs
+                )
                 post = posterior_moments(
                     Ec,
                     sA_n,

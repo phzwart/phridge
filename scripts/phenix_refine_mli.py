@@ -159,6 +159,30 @@ def run(args: list[str]) -> int:
             val = arg.split("=", 1)[1].strip().lower()
             os.environ["PHRIDGE_WEIGHT_METRIC"] = val
             print(f"✓ Weight trial metric: {val} (PHRIDGE_WEIGHT_METRIC)")
+        elif lower in ("--interleaved", "target_mode=interleaved"):
+            os.environ["PHRIDGE_TARGET_MODE"] = "interleaved"
+            print(
+                "✓ Interleaved target mode: inner blocks run on a per-reflection "
+                "surrogate; each block is adjudicated by an exact evaluation and the "
+                "final macro cycle is fully exact"
+            )
+        elif lower in ("--exact", "target_mode=exact"):
+            os.environ["PHRIDGE_TARGET_MODE"] = "exact"
+            print("✓ Exact target mode: every target call is an exact quadrature (default)")
+        elif lower.startswith("--interleaved-tol=") or lower.startswith("interleaved_tol="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_INTERLEAVED_TOL"] = val
+            print(f"✓ Interleaved block acceptance tolerance: {val} (per-reflection-mean NLL)")
+        elif lower.startswith("--interleaved-max-halvings=") or lower.startswith(
+            "interleaved_max_halvings="
+        ):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_INTERLEAVED_MAX_HALVINGS"] = val
+            print(f"✓ Interleaved rejected-block retries before exact fallback: {val}")
+        elif lower.startswith("--interleaved-refresh=") or lower.startswith("interleaved_refresh="):
+            val = arg.split("=", 1)[1].strip().lower()
+            os.environ["PHRIDGE_INTERLEAVED_REFRESH"] = val
+            print(f"✓ Interleaved surrogate refresh: {val} (full|visible_fraction)")
         else:
             filtered_args.append(arg)
 
@@ -183,6 +207,12 @@ def run(args: list[str]) -> int:
     print(f"✓ Heartbeat every {os.environ.get('PHRIDGE_HEARTBEAT_INTERVAL', '30')}s")
     metric = os.environ.get("PHRIDGE_WEIGHT_METRIC", "nll")
     print(f"✓ XYZ/ADP weight selection metric: {metric} (nll|rfree)")
+    mode = os.environ.get("PHRIDGE_TARGET_MODE", "exact").strip().lower() or "exact"
+    if mode == "interleaved":
+        tol = os.environ.get("PHRIDGE_INTERLEAVED_TOL", "0.0")
+        print(f"✓ Target mode: interleaved (block tolerance {tol}; final macro cycle exact)")
+    else:
+        print("✓ Target mode: exact (every target call is an exact quadrature)")
     if os.environ.get("PHRIDGE_VERBOSE_TARGET", "0").strip() in ("1", "true", "yes", "on"):
         print("✓ Per-eval mli_quad target banners: ON")
     else:

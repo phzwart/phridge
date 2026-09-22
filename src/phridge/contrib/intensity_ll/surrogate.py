@@ -663,7 +663,16 @@ def fit_surrogate_for_observations(
         fc_s = torch.where(ok, fc, torch.ones_like(fc))
         fo_s = torch.where(ok, fo, torch.zeros_like(fo))
 
+        # Two coordinate systems, deliberately both spelled out. The surrogate lives in the
+        # true t = E_C, because amplitude_units maps it to ml_f through F = S E and the
+        # inner loop varies |F_c|. The quadrature has to run in the effective pair so it
+        # integrates the same prior the target does -- with a free beta the residual
+        # variance is not 1 - sigma_A^2, and a surrogate fitted against the wrong exact
+        # likelihood would approximate the wrong function.
         Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+        Ec_q, sA_q, _, _, jac = target.normalized(
+            fc_s, fo_s, sig_s, eps_s, sW_s, sA_s, obs
+        )
         nu = target._nu(obs)
         quad_kw = dict(
             n_u=target.n_u,
@@ -672,14 +681,18 @@ def fit_surrogate_for_observations(
             n_legendre=target.n_legendre,
             k_window=target.k_window,
         )
-        cache = posterior_node_cache(Ec, sA_n, Zo, sZ, centric, nu, **quad_kw)
-        post = posterior_moments(Ec, sA_n, Zo, sZ, centric, nu, cache=cache, **quad_kw)
+        cache = posterior_node_cache(Ec_q, sA_q, Zo, sZ, centric, nu, **quad_kw)
+        post = posterior_moments(Ec_q, sA_q, Zo, sZ, centric, nu, cache=cache, **quad_kw)
 
         g1, g2 = exact_score_and_curvature(cache)
         if opts.curvature == "finite_difference":
             g2 = curvature_by_finite_difference(
-                Ec, sA_n, Zo, sZ, centric, nu, rel_step=opts.fd_rel_step, **quad_kw
+                Ec_q, sA_q, Zo, sZ, centric, nu, rel_step=opts.fd_rel_step, **quad_kw
             )
+        # Chain rule back to the true E_C. jac = dE_C_eff/dE_C does not depend on E_C, so
+        # the second derivative picks up exactly jac**2 and no extra term.
+        g1 = g1 * jac
+        g2 = g2 * jac**2
 
         fit = fit_rice_surrogate(
             Ec,

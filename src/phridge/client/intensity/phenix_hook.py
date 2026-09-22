@@ -24,6 +24,7 @@ from phridge.client.intensity.engine import (
     IntensityFModelInfo,
     IntensityTargetFunctor,
     IntensityTwinningError,
+    _resolve_intensity_engine,
     amplitude_scaffold_from_intensities,
     recover_i_obs_from_fmodel,
     register_mli_targets,
@@ -206,7 +207,7 @@ def patch_weight_selection() -> bool:
                     print(
                         f" Phridge weight metric: free-set NLL "
                         f"(best nll_free={float(self.nll_f[0]):.6f}, "
-                        f"r_free={float(self.rf[0]):.4f})",
+                        f"r_free={float(self.rf[0]):.4f} on French-Wilson amplitudes)",
                         file=self.log,
                     )
 
@@ -324,8 +325,21 @@ def register_target_names() -> None:
     register_mli_targets()
 
 
+_TARGET_MODE_PHIL = """\
+target_mode = *exact interleaved
+  .type = choice(multi=False)
+  .short_caption = Intensity target evaluation mode
+  .help = "exact evaluates the marginal intensity likelihood by quadrature at every \
+target call. interleaved runs each macro cycle's inner machinery on a per-reflection \
+Rice surrogate fitted to the exact score and curvature at a checkpoint, and spends the \
+exact target only to adjudicate the block. The exact NLL remains the sole arbiter and \
+the final macro cycle is always fully exact."
+  .expert_level = 2
+"""
+
+
 def patch_phil_master_params() -> bool:
-    """Augment phenix.refinement.master_params choices to accept 'mli_quad'."""
+    """Augment phenix.refinement.master_params: accept 'mli_quad' and 'target_mode'."""
     try:
         import iotbx.phil
         import phenix.refinement
@@ -346,6 +360,17 @@ def patch_phil_master_params() -> bool:
             caption = getattr(node, "caption", "")
             if caption and "MLI_QUAD" not in caption:
                 node.caption = f"{caption} MLI_QUAD"
+        except Exception:
+            pass
+        # refinement.target_mode = exact | interleaved
+        try:
+            if scope.get_without_substitution("refinement.target_mode"):
+                return
+            refinement = scope.get_without_substitution("refinement")
+            if not refinement:
+                return
+            addition = iotbx.phil.parse(_TARGET_MODE_PHIL)
+            refinement[0].adopt_scope(addition)
         except Exception:
             pass
 
@@ -383,6 +408,279 @@ def patch_phil_master_params() -> bool:
         pass
 
     return True
+
+
+class PhenixLbfgsBlockRunner:
+    """:class:`~phridge.client.intensity.interleaved.BlockRunner` over Phenix's LBFGS.
+
+    Phenix's ``mmtbx.refinement.minimization.lbfgs`` does the whole minimization in its
+    constructor, so one construction is exactly one re-runnable inner block: the model
+    on entry is the checkpoint, the model on exit is the block's proposal, and calling
+    the original constructor again with a halved ``max_iterations`` is the halved block
+    the rejection ladder asks for.
+
+    Every interaction with Phenix internals is guarded. A version whose interface does
+    not match degrades to exact mode rather than breaking a refinement.
+    """
+
+    def __init__(
+        self,
+        orig_init: Callable[..., Any],
+        instance: Any,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        fmodels: Any,
+        model: Any = None,
+    ) -> None:
+        self._orig_init = orig_init
+        self._instance = instance
+        self._args = args
+        self._kwargs = kwargs
+        self._fmodels = fmodels
+        self._model = model
+        self._base_iterations = self._read_max_iterations()
+
+    # -- budget -----------------------------------------------------------------
+    def _termination(self) -> Any:
+        return self._kwargs.get("lbfgs_termination_params")
+
+    def _read_max_iterations(self) -> Optional[int]:
+        term = self._termination()
+        val = getattr(term, "max_iterations", None) if term is not None else None
+        try:
+            return int(val) if val is not None else None
+        except Exception:
+            return None
+
+    def full_budget(self) -> Any:
+        from phridge.client.intensity.interleaved import BlockBudget
+
+        return BlockBudget(max_iterations=self._base_iterations, step_scale=1.0)
+
+    # -- state ------------------------------------------------------------------
+    def _xray_structure(self) -> Any:
+        try:
+            return self._fmodels.fmodel_xray().xray_structure
+        except Exception:
+            return getattr(self._fmodels, "xray_structure", None)
+
+    def save_state(self) -> Any:
+        xs = self._xray_structure()
+        if xs is None:
+            return None
+        try:
+            return xs.deep_copy_scatterers()
+        except Exception:
+            return None
+
+    def restore_state(self, state: Any) -> None:
+        if state is None:
+            return
+        try:
+            self._fmodels.update_xray_structure(xray_structure=state, update_f_calc=True)
+        except Exception:
+            try:
+                self._fmodels.fmodel_xray().update_xray_structure(
+                    xray_structure=state, update_f_calc=True
+                )
+            except Exception:
+                return
+        if self._model is not None:
+            try:
+                self._model.set_sites_cart(state.sites_cart())
+            except Exception:
+                pass
+
+    def interpolate_state(self, a: Any, b: Any, frac: float) -> Any:
+        """Linear interpolation of the sites; ADPs stay at ``a``."""
+        if a is None or b is None:
+            return a
+        try:
+            mid = a.deep_copy_scatterers()
+            sa, sb = a.sites_cart(), b.sites_cart()
+            mid.set_sites_cart(sa + (sb - sa) * float(frac))
+            return mid
+        except Exception:
+            return a
+
+    # -- run --------------------------------------------------------------------
+    def run(self, budget: Any) -> None:
+        kwargs = dict(self._kwargs)
+        term = self._termination()
+        if term is not None and budget.max_iterations is not None:
+            try:
+                kwargs["lbfgs_termination_params"] = term.__class__(
+                    max_iterations=int(budget.max_iterations)
+                )
+            except Exception:
+                kwargs["lbfgs_termination_params"] = term
+        self._orig_init(self._instance, *self._args, **kwargs)
+
+
+def patch_minimization_blocks() -> bool:
+    """Drive Phenix's LBFGS through the interleaved accept/reject/halve ladder.
+
+    Only active when ``refinement.target_mode=interleaved`` (or
+    ``PHRIDGE_TARGET_MODE=interleaved``) and the fmodel is an intensity fmodel; in
+    every other case the original constructor runs untouched.
+    """
+    try:
+        import mmtbx.refinement.minimization as mini
+    except ImportError:
+        return False
+    if not hasattr(mini, "lbfgs"):
+        return False
+    if "mmtbx.refinement.minimization.lbfgs.__init__" in _ORIGINALS:
+        return True
+
+    orig_init = mini.lbfgs.__init__
+    _ORIGINALS["mmtbx.refinement.minimization.lbfgs.__init__"] = orig_init
+
+    def patched_lbfgs_init(self: Any, *args: Any, **kwargs: Any) -> None:
+        fmodels = kwargs.get("fmodels", args[0] if args else None)
+        engine = _resolve_intensity_engine_from_fmodels(fmodels)
+        controller = None
+        if engine is not None:
+            try:
+                controller = engine.interleaved_controller(log=kwargs.get("log"))
+            except Exception:
+                controller = None
+        if controller is None:
+            return orig_init(self, *args, **kwargs)
+
+        runner = PhenixLbfgsBlockRunner(
+            orig_init,
+            self,
+            args,
+            kwargs,
+            fmodels,
+            model=kwargs.get("model"),
+        )
+        try:
+            controller.run_macro_cycle(
+                runner,
+                final=_is_final_macro_cycle(engine),
+                site=_block_site(engine, orig_init, self, args, kwargs),
+            )
+        except Exception as exc:
+            # A controller failure must never cost the refinement: fall back to the
+            # stock exact block.
+            print(f"[interleaved] disabled for this block: {exc}", file=sys.stderr)
+            engine.use_surrogate(False)
+            return orig_init(self, *args, **kwargs)
+
+    mini.lbfgs.__init__ = patched_lbfgs_init
+    return True
+
+
+def _call_arguments(
+    func: Callable[..., Any], instance: Any, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Resolve a call's arguments to names, whether they were passed positionally.
+
+    Used for logging only, so a signature that will not bind yields the keywords alone
+    rather than raising.
+    """
+    try:
+        import inspect
+
+        bound = inspect.signature(func).bind_partial(instance, *args, **kwargs)
+        return {k: v for k, v in bound.arguments.items() if k != "self"}
+    except Exception:
+        return dict(kwargs)
+
+
+def _block_site(
+    engine: Any,
+    orig_init: Callable[..., Any],
+    instance: Any,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+) -> Any:
+    """Name the refinement stage and macro cycle this LBFGS call belongs to.
+
+    ``mmtbx.refinement.minimization.lbfgs`` takes ``refine_xyz`` / ``refine_adp`` /
+    ``refine_occupancies`` flags and a ``macro_cycle`` number, which between them are
+    exactly the "where" and "when" the interleaved telemetry needs. Anything the call
+    does not supply falls back to the engine's own macro-cycle counter, and a signature
+    that matches nothing still yields a usable label rather than raising.
+    """
+    from phridge.client.intensity.interleaved import BlockSite
+
+    call = _call_arguments(orig_init, instance, args, kwargs)
+    flags = [
+        ("coordinates (xyz)", ("refine_xyz", "refine_sites")),
+        ("B-factors (ADP)", ("refine_adp", "refine_u_iso")),
+        ("occupancies", ("refine_occupancies", "refine_occ")),
+    ]
+    active = [name for name, keys in flags if any(bool(call.get(k)) for k in keys)]
+    stage = " + ".join(active) + " minimization" if active else "LBFGS minimization"
+
+    cycle = call.get("macro_cycle")
+    try:
+        cycle = int(cycle) if cycle is not None else None
+    except Exception:
+        cycle = None
+    if cycle is None:
+        cycle = getattr(engine, "macro_cycle_index", None) or None
+
+    total = getattr(engine, "total_macro_cycles", None)
+    try:
+        total = int(total) if total else None
+    except Exception:
+        total = None
+
+    return BlockSite(stage=stage, macro_cycle=cycle, total_macro_cycles=total)
+
+
+def _resolve_intensity_engine_from_fmodels(fmodels: Any) -> Optional[Any]:
+    if fmodels is None:
+        return None
+    try:
+        fmodel = fmodels.fmodel_xray()
+    except Exception:
+        fmodel = fmodels
+    if not _fmodel_is_mli(fmodel):
+        return None
+    return _resolve_intensity_engine(fmodel)
+
+
+def _apply_target_mode(fmodel: Any, params: Any) -> None:
+    """Copy ``refinement.target_mode`` and the macro-cycle count onto the fmodel.
+
+    The PHIL parameter wins over ``PHRIDGE_TARGET_MODE`` when it is present, so a
+    ``.eff`` file is reproducible without the environment.
+    """
+    from phridge.client.intensity.interleaved import TargetMode
+
+    raw = getattr(params, "target_mode", None)
+    if raw is not None:
+        try:
+            fmodel.target_mode = TargetMode(str(raw).strip().lower())
+        except ValueError:
+            pass
+    try:
+        n = getattr(getattr(params, "main", None), "number_of_macro_cycles", None)
+        if n is not None:
+            fmodel.total_macro_cycles = int(n)
+    except Exception:
+        pass
+    if fmodel.target_mode is TargetMode.interleaved:
+        print(
+            "Phridge target_mode=interleaved: inner blocks run on a per-reflection "
+            "surrogate; every block is adjudicated by an exact evaluation and the "
+            "final macro cycle is fully exact.",
+            flush=True,
+        )
+
+
+def _is_final_macro_cycle(engine: Any) -> bool:
+    """True on the last macro cycle, which always runs fully exact."""
+    total = getattr(engine, "total_macro_cycles", None)
+    index = getattr(engine, "macro_cycle_index", None)
+    if not total or not index:
+        return False
+    return int(index) >= int(total)
 
 
 def patch_target_functor() -> bool:
@@ -757,6 +1055,9 @@ def patch_setup_fmodels() -> bool:
                     alpha_beta_params=getattr(params, "alpha_beta", None),
                 )
 
+        if isinstance(fmodel_xray, IntensityFModel):
+            _apply_target_mode(fmodel_xray, params)
+
         return orig_setup(
             fmodel_xray=fmodel_xray,
             fmodel_neutron=fmodel_neutron,
@@ -784,6 +1085,7 @@ def enable_intensity_in_phenix() -> None:
     patch_fmodel_methods()
     patch_setup_fmodels()
     patch_weight_selection()
+    patch_minimization_blocks()
 
     _ENABLED = True
 
@@ -857,6 +1159,13 @@ def disable_intensity_in_phenix() -> None:
             adp_ref.refine_adp.show = _ORIGINALS.pop("adp.refine_adp.show")
         if "adp.refine_adp.__init__" in _ORIGINALS:
             adp_ref.refine_adp.__init__ = _ORIGINALS.pop("adp.refine_adp.__init__")
+    except ImportError:
+        pass
+
+    try:
+        import mmtbx.refinement.minimization as mini
+        if "mmtbx.refinement.minimization.lbfgs.__init__" in _ORIGINALS:
+            mini.lbfgs.__init__ = _ORIGINALS.pop("mmtbx.refinement.minimization.lbfgs.__init__")
     except ImportError:
         pass
 

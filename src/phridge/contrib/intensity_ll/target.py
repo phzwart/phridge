@@ -11,6 +11,14 @@ Observation mapping (same ``alpha`` / ``beta`` slots as ``ml_f``, different mean
 * ``obs.centric`` — centric flags (default False)
 * ``obs.alpha`` — sigma_A in (0, 1); else scalar ``sigma_a`` option
 * ``obs.beta`` — Wilson scale Sigma = <|F|^2>/epsilon; else ``sigma_wilson`` option
+* ``obs.beta_residual`` — residual variance in *normalized* units when it is fitted
+  independently of sigma_A; absent means the classical ``1 - sigma_A^2``. Note the slot
+  names: for this target ``beta`` is the Wilson scale, so the free residual variance needed
+  a name of its own.
+
+Every consumer of this posterior -- the NLL, the map coefficients, the omit maps, the
+surrogate -- must obtain its normalized inputs from :meth:`IntensityLogLikelihood.normalized`
+so none of them can integrate a different prior than the one the nuisance fit reported.
 """
 
 from __future__ import annotations
@@ -37,6 +45,15 @@ class IntensityLogLikelihoodOptions(BaseModel):
         default=None,
         gt=0.0,
         description="Scalar Wilson scale Sigma when obs.beta is absent.",
+    )
+    beta_residual: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        lt=1.0,
+        description=(
+            "Scalar residual variance in normalized units when obs.beta_residual is "
+            "absent. None ties it to 1 - sigma_A**2, the classical form."
+        ),
     )
     sigma: float = Field(
         default=1.0,
@@ -90,6 +107,7 @@ class IntensityLogLikelihood(Target):
         super().__init__(**opts.model_dump())
         self.sigma_a: Optional[float] = opts.sigma_a
         self.sigma_wilson: Optional[float] = opts.sigma_wilson
+        self.beta_residual: Optional[float] = opts.beta_residual
         self.sigma: float = opts.sigma
         self.use_sigmas: bool = opts.use_sigmas
         self.nu: Optional[float] = opts.nu
@@ -132,14 +150,55 @@ class IntensityLogLikelihood(Target):
             return self.nu
         return None
 
+    def _beta_residual(self, obs: Observations) -> Any:
+        """Free residual variance in normalized units, or ``None`` when it is tied.
+
+        ``None`` means the classical ``beta = 1 - sigma_A^2``, which is what every caller
+        got before beta could be fitted, so an absent array keeps the old behaviour.
+        """
+        import torch
+
+        value = getattr(obs, "beta_residual", None)
+        if value is not None:
+            return value
+        if self.beta_residual is not None:
+            return torch.full_like(obs.data, float(self.beta_residual))
+        return None
+
+    def normalized(
+        self, fc: Any, fo: Any, sig: Any, eps: Any, sW: Any, sA: Any, obs: Observations
+    ) -> tuple[Any, Any, Any, Any, Any]:
+        """``normalize`` plus the free-beta reparameterization, in one place.
+
+        Returns ``(E_C, sigma_A, Z_o, sigma_Z, jacobian)`` ready to hand to the likelihood.
+        Every consumer of the intensity posterior -- the target, the map coefficients, the
+        omit maps, the surrogate -- goes through here, so none of them can end up
+        integrating a different prior than the one the nuisance fit reported.
+
+        When ``obs.beta_residual`` is set, the returned ``(E_C, sigma_A)`` are the
+        *effective* pair from :func:`free_beta.rice_inputs`: the likelihood's internal
+        ``a = 1 - sigma_A^2`` becomes ``beta`` while the product ``sigma_A * E_C`` is
+        preserved, which is exactly the Rice model with a free intercept and needs no change
+        to the quadrature. ``jacobian`` is ``d E_C_eff / d E_C``, which autograd applies for
+        itself but a closed-form score (``maps.posterior_moments().score``) must be
+        multiplied by. It is 1 when beta is tied.
+        """
+        import torch
+
+        from phridge.contrib.intensity_ll.free_beta import rice_inputs
+        from phridge.contrib.intensity_ll.mli import normalize
+
+        e_c, sa_n, z_o, s_z = normalize(fc, fo, sig, eps, sW, sA)
+        beta = self._beta_residual(obs)
+        if beta is None:
+            return e_c, sa_n, z_o, s_z, torch.ones_like(e_c)
+        e_c_eff, sa_eff = rice_inputs(e_c, sa_n, beta)
+        return e_c_eff, sa_eff, z_o, s_z, sa_n / sa_eff
+
     def per_reflection(self, f_calc, obs: Observations):
         import torch
 
-        from phridge.contrib.intensity_ll.mli import (
-            log_likelihood_normal,
-            log_likelihood_t,
-            normalize,
-        )
+        from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t
 
         fo = obs.data
         fc = f_calc.abs()
@@ -165,7 +224,9 @@ class IntensityLogLikelihood(Target):
         fc_s = torch.where(ok, fc, torch.ones_like(fc))
         fo_s = torch.where(ok, fo, torch.zeros_like(fo))
 
-        Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+        # The Jacobian is unused here: autograd differentiates the reparameterization
+        # itself, so the gradient w.r.t. F_calc comes out right without help.
+        Ec, sA_n, Zo, sZ, _ = self.normalized(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s, obs)
         q_kw = dict(
             snr_strong=self.snr_strong,
             n_hermite=self.n_hermite,

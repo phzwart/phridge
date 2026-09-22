@@ -231,9 +231,17 @@ def test_intensity_only_wilson_ml_positive_sigma0():
     assert moment["sigma_wilson_params"]["method"] == "moment_plot"
     # Synthetic generator uses Σ₀=200, B_W=10
     assert 20.0 < swp["sigma_0"] < 2000.0
-    # Classic residual β = Σ (1 - σ_A²)
+    # β is fitted independently of σ_A by default, so it is no longer Σ(1 - σ_A²); it must
+    # still be a positive variance in absolute units.
     beta = np.asarray(ml_w["beta"], dtype=np.float64)
     sa = np.asarray(ml_w["sigma_a"], dtype=np.float64)
     sw = np.asarray(ml_w["sigma_wilson"], dtype=np.float64)
-    np.testing.assert_allclose(beta, sw * (1.0 - sa**2), rtol=1e-6)
+    assert np.all(np.isfinite(beta)) and np.all(beta > 0.0)
+    assert np.all(beta <= sw * (1.0 + 1e-9))
+    # The classic residual is still available on request, exactly.
+    tied = ml_i_nuisance_fit(**common, fit_sigma_wilson=True, beta_mode="constrained")
+    beta_t = np.asarray(tied["beta"], dtype=np.float64)
+    sa_t = np.asarray(tied["sigma_a"], dtype=np.float64)
+    sw_t = np.asarray(tied["sigma_wilson"], dtype=np.float64)
+    np.testing.assert_allclose(beta_t, sw_t * (1.0 - sa_t**2), rtol=1e-6)
     assert sa.max() < 0.995

@@ -176,6 +176,129 @@ $$
 with solvent and scales of the **full** refined model held fixed (no per-window
 mask recompute).
 
+### Anisotropic Wilson normalization: exactly one anisotropy carrier is free
+
+$\Sigma_W$ is fitted as a tensor, $\Sigma_0\exp(-\tfrac12\,\mathbf{s}^{\mathsf T} B\,\mathbf{s})$
+with $\mathbf{s}=O^{-\mathsf T}\mathbf{h}$ the Cartesian reciprocal vector — **this is the
+default** (`PHRIDGE_WILSON_MODEL=anisotropic`), because real data are anisotropic and a
+scalar normalization is a modelling error rather than a conservative choice. The isotropic
+form $\Sigma_0\exp(-\tfrac12 B_W s^2)$ remains available on request. See
+[`wilson.py`](wilson.py) for the parameterization.
+
+The one automatic exception is identifiability: six components need reflection directions
+that span the sphere, so a set confined to a line, a plane or a narrow cone falls back to
+the scalar and records why in `sigma_wilson_params["wilson_fallback"]`, rather than
+reporting a tensor whose unconstrained directions are arbitrary.
+
+**Design decision.** An anisotropic $\Sigma_W$ and `f_model`'s `k_anisotropic` are
+*degenerate*: both absorb the same directional falloff, so fitting both yields a good
+fit and two individually meaningless tensors. Exactly one may be free, and it must be
+the normalization, because $\Sigma_W$ is the **prior** and three downstream quantities
+are only interpretable if the prior describes the observations' directional falloff:
+
+1. $\sigma_Z=\sigma_I/(\varepsilon\Sigma_W)$ and hence the reported `data%`, otherwise
+   too high in weak directions and too low in strong ones;
+2. the prior variance $\beta=\Sigma_W(1-\sigma_A^2)$, mis-priced the same way, which
+   biases the per-reflection posterior weights and so the map coefficients
+   *directionally*;
+3. the per-shell $\sigma_A(s)$, a scalar, which otherwise absorbs the residual as
+   "model error".
+
+With the prior carrying it, `k_anisotropic` has nothing legitimate left to carry, so it
+is constrained to isotropic and the constraint is logged. Concretely, both
+`bulk_solvent_and_scale.anisotropic_scaling` and
+`bulk_solvent_and_scale.minimization_b_cart` are set to `False` — clearing only the first
+leaves the `b_cart` minimizer free to fit the tensor anyway. Because the default is now
+anisotropic, this happens on every run. The guard measures the anisotropy *actually
+applied* to $F_{\mathrm{calc}}$ after scaling and raises if both carriers are live — a
+flag records the intent, not the outcome, and across mmtbx versions setting one is
+best-effort.
+
+**Centric normalization is already correct and needs no factor.** The Wilson mean is
+$\varepsilon\Sigma$ for both parities; only the variance differs (1 acentric, 2
+centric). The centric factor therefore belongs in the likelihood's centric branch and
+*not* in $Z=I/(\varepsilon\Sigma)$. Verified numerically: the stage-1 NLL minimizes at
+the true $\Sigma$ for pure-acentric and pure-centric sets alike, and the fitted tensor
+does not move when centrics are excluded (`test_centrics_do_not_drive_the_tensor`). Had
+the factor leaked into the normalization, a tensor fit would have absorbed the
+acentric/centric imbalance into $B$.
+
+**Gauge.** $\Sigma_0$ and $\mathrm{tr}\,B$ are partially degenerate, so reporting fixes
+the convention: the eigen-decomposition, with $B_{\mathrm{iso}}=\mathrm{tr}B/3$ and the
+comparable anisotropy $\Delta B=\lambda_{\max}-\lambda_{\min}$ separated. Raw $B$
+components are basis-dependent and are not the primary output.
+
+### Free $\beta$: the intercept is a parameter, not a constraint
+
+In normalized units the Rice first moment is exact:
+
+$$
+E[Z_o \mid E_C] = \sigma_A^2 E_C^2 + \beta
+$$
+
+so within a shell $\sigma_A^2$ is the **slope** and $\beta$ the **intercept**. The classical
+$\beta = 1-\sigma_A^2$ forces that line through $(1,1)$, which is exactly the assertion that
+the Wilson normalization is correct. When it is not — residual anisotropy, an inadequate
+solvent model, tNCS — the constrained fit can only reach the data by tilting the slope, and
+the normalization error is **laundered into $\sigma_A$**. Measured on synthetic data with
+$\beta$ inflated 1.5x at a true $\sigma_A=0.85$: the constrained fit returns $0.80$ and
+reports $\sigma_A^2+\beta = 1.000$ by construction, so it cannot even signal the problem;
+the free fit returns $0.856$ and reports $1.09$, which is the diagnostic
+(`tests/contrib/test_free_beta.py`). Where the normalization is right the two agree, so
+freeing $\beta$ costs nothing.
+
+Both $Z_o$ and $E_C^2$ are divided by the same $\Sigma_W$, so the **slope is invariant** to
+an error in $\Sigma_0$ and only the intercept scales. That is why $\sigma_A$ is recoverable
+at all, and why $\sigma_A^2+\beta$ is the column to read.
+
+**No monotonicity.** $\sigma_A$ is commonly depressed at low resolution where the solvent
+model is poor and can dip mid-range (ice rings, detector artifacts). A cumulative-drop
+parameterization can only fall, so it pushes such structure into neighbouring shells. It is
+replaced by a **second-difference penalty on the logits**, which charges curvature and
+leaves a straight trend free — a claim that the profile is smooth, which is defensible,
+rather than that it never rises, which is not. The strengths are regularization and are
+chosen on the tune set, never on the audit set.
+
+**Exactness.** Freeing $\beta$ required **no change to the quadrature, target or
+gradients**. The integrands use $(E_C,\sigma_A)$ only through the product $\sigma_A E_C$ and
+through the prior variance $a = 1-\sigma_A^2$, so the substitution
+
+$$
+\sigma_A^{\text{eff}} = \sqrt{1-\beta}, \qquad
+E_C^{\text{eff}} = \sigma_A E_C/\sqrt{1-\beta}
+$$
+
+gives $a=\beta$ while preserving the product, hence a Rice prior with
+$E[E^2]=\sigma_A^2E_C^2+\beta$. Verified to machine precision for both parities. See
+[`free_beta.py`](free_beta.py).
+
+**Identifiability.** With $\beta$ free, $\sigma_A$ and an overall $F_c$ scale $k$ are exactly
+degenerate — only $\sigma_A^2k^2$ enters the slope — so stage 2 refuses to refine a joint
+scale rather than report one of infinitely many equally good splits.
+
+**Where $\beta$ lands.** The fitted $\beta$ is not a diagnostic; it is the prior variance, so
+it reaches the refinement target, the gradients, the map coefficients, the omit maps and the
+Rice surrogate. It travels as `obs.beta_residual` (normalized units — for `ml_i` the `beta`
+slot already holds $\Sigma_W$) and every consumer reads it through
+`IntensityLogLikelihood.normalized`, which is the single place the reparameterization is
+applied. An absent array means the classical $1-\sigma_A^2$, bit-for-bit.
+
+Two chain rules matter. Autograd differentiates the reparameterization itself, so the
+**target** gradient needs nothing. A **closed-form** score does:
+`posterior_moments().score` is $\partial\log L/\partial E_C$ in whatever parameterization it
+was handed, so the maps multiply it by $\mathrm{d}E_C^{\text{eff}}/\mathrm{d}E_C =
+\sigma_A/\sqrt{1-\beta}$, and the surrogate — which must live in the true $t=E_C$ because
+`amplitude_units` maps it to `ml_f` through $F=SE$ — scales its score by that factor and its
+curvature by its square (the factor is independent of $E_C$, so there is no extra term).
+Omitting it biases every map gradient by ~6% on the measured case: small, silent, and
+checked against finite differences of the exact likelihood in
+`test_map_gradient_matches_finite_differences_under_a_free_beta`.
+
+Measured effect of the correctly-plumbed $\beta$ on the laundering case: NLL improves 0.025
+nats/reflection, mean $|\partial\log L/\partial|F_c||$ moves 28%, and the mean figure of
+merit **falls** from 0.758 to 0.700 — the right direction, because the true residual
+variance exceeds $1-\sigma_A^2$ and the constrained prior was overconfident about phases.
+
 ### Residual-variance adjustment
 
 Maps use Wilson $\Sigma$ in the `beta` slot and $\sigma_A$ in `alpha`. Residual

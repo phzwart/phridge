@@ -238,6 +238,18 @@ def _env_flag_enabled(name: str, default: str = "0") -> bool:
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_float(name: str, default: float) -> float:
+    """Non-negative float from the environment; unparseable or negative falls back."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return float(default)
+    try:
+        value = float(raw)
+    except ValueError:
+        return float(default)
+    return value if value >= 0.0 and value == value else float(default)
+
+
 # Smallest test set worth fitting σ_A on: the worker defaults to ``n_tune // 250``
 # resolution bins with a floor of 6, so below this the bins are too sparse to be
 # better than the (biased) work-set fit.
@@ -900,10 +912,23 @@ class IntensityTargetFunctor:
                 f_calc = self.manager.f_model_scaled_with_k1()
             else:
                 f_calc = self.manager.f_model()
-        kw = self._engine._common_eval_kwargs()
-        kw["target"] = self._engine.target_spec
+        surrogate = bool(getattr(self._engine, "surrogate_active", lambda: False)())
+        if surrogate:
+            # Inner block of an interleaved macro cycle: stock ml_f fed with the
+            # per-reflection surrogate arrays fitted at the last exact checkpoint.
+            # No quadrature is evaluated here.
+            kw = self._engine._surrogate_eval_kwargs()
+        else:
+            kw = self._engine._common_eval_kwargs()
+            kw["target"] = self._engine.target_spec
         kw["compute_curvature"] = bool(compute_gradients)
-        label = f"target_eval#{getattr(self._engine, '_mli_eval_count', 0) + 1}"
+        prefix = "surrogate_eval#" if surrogate else "target_eval#"
+        count = (
+            getattr(self._engine, "_surrogate_eval_count", 0)
+            if surrogate
+            else getattr(self._engine, "_mli_eval_count", 0)
+        )
+        label = f"{prefix}{count + 1}"
         if compute_gradients:
             label += "+grad"
         else:
@@ -912,6 +937,8 @@ class IntensityTargetFunctor:
 
         with mli_heartbeat(label, log=getattr(self.manager, "log", None), announce=False):
             raw = self._engine.bridge.call("target_eval", f_calc=f_calc, **kw)
+        if surrogate:
+            raw = self._engine._splice_exact_route(raw, f_calc, bool(compute_gradients))
         elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
         r_free = self._engine.r_free_flags()
@@ -922,7 +949,18 @@ class IntensityTargetFunctor:
             self._engine._mli_last_target_work = None
             self._engine._mli_total_time_ms = 0.0
 
-        self._engine._mli_eval_count += 1
+        if surrogate:
+            # Surrogate evaluations are counted separately: the whole point of the
+            # interleaved mode is that the exact-evaluation count stops tracking the
+            # number of times the minimizer asks for a target.
+            self._engine._surrogate_eval_count = (
+                getattr(self._engine, "_surrogate_eval_count", 0) + 1
+            )
+            ctrl = getattr(self._engine, "_interleaved", None)
+            if ctrl is not None:
+                ctrl.telemetry.n_surrogate_evals += 1
+        else:
+            self._engine._mli_eval_count += 1
         eval_idx = self._engine._mli_eval_count
         self._engine._mli_total_time_ms += elapsed_ms
 
@@ -1057,6 +1095,31 @@ class IntensityFModelInfo:
             return getattr(self._cctbx_info, name)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
+    def _cctbx_r_disagreement(self) -> str:
+        """Describe any material gap between cctbx's R fields and the FW ones.
+
+        Returns an empty string when they agree, when cctbx exposes nothing to compare,
+        or when the only difference is the percent-versus-fraction convention.
+        """
+        info = self._cctbx_info
+        if info is None:
+            return ""
+        parts = []
+        for name in ("r_work", "r_free"):
+            theirs = getattr(info, name, None)
+            ours = getattr(self, name, None)
+            try:
+                theirs, ours = float(theirs), float(ours)
+            except (TypeError, ValueError):
+                continue
+            if not (np.isfinite(theirs) and np.isfinite(ours)):
+                continue
+            candidates = (theirs, theirs / 100.0) if theirs > 1.0 else (theirs,)
+            if any(abs(c - ours) <= 5e-4 for c in candidates):
+                continue
+            parts.append(f"{name.upper()} {theirs:.4f} vs {ours:.4f}")
+        return "; ".join(parts)
+
     def show_remark_3(self, out: Optional[Any] = None) -> None:
         """Write REMARK 3 refinement header information for PDB export."""
         if out is None:
@@ -1064,6 +1127,29 @@ class IntensityFModelInfo:
         if self._cctbx_info is not None and hasattr(self._cctbx_info, "show_remark_3"):
             self._cctbx_info.show_remark_3(out=out)
             pr = "REMARK   3  "
+            # Restate the mandated R fields explicitly and unambiguously. The block
+            # above is written by cctbx; this one says which amplitudes were used, so
+            # nobody has to infer it from the target name.
+            #
+            # cctbx's info object is expected to have taken these from r_work() /
+            # r_free(), which are the French-Wilson bridge. If some version computes
+            # them itself it would use fmodel.f_obs() -- the sqrt(max(I,0)) scaffold --
+            # and REMARK 3 would then carry two different numbers under one field name.
+            # Say so loudly rather than let the wrong one be deposited.
+            mismatch = self._cctbx_r_disagreement()
+            if mismatch:
+                print(pr + "WARNING: THE R VALUES WRITTEN ABOVE DISAGREE WITH THE", file=out)
+                print(pr + " FRENCH-WILSON R VALUES BELOW: " + mismatch, file=out)
+                print(pr + " TRUST THE FRENCH-WILSON VALUES BELOW; THE ONES ABOVE WERE NOT", file=out)
+                print(pr + " COMPUTED FROM FRENCH-WILSON AMPLITUDES. DO NOT DEPOSIT THEM.", file=out)
+            print(pr + "R VALUES ABOVE ARE FRENCH-WILSON AMPLITUDE R FACTORS:", file=out)
+            print(pr + f" R VALUE     (WORKING + TEST SET) : {self.r_all:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + f" R VALUE            (WORKING SET) : {self.r_work:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + f" FREE R VALUE                     : {self.r_free:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + " F_OBS FOR THESE R VALUES = FRENCH-WILSON POSTERIOR AMPLITUDES FROM", file=out)
+            print(pr + " I_OBS UNDER THE WILSON PRIOR ALONE (NO MODEL). THE REFINEMENT TARGET", file=out)
+            print(pr + " ITSELF NEVER FORMS F_OBS: IT IS THE MARGINAL INTENSITY LIKELIHOOD.", file=out)
+            print(pr, file=out)
             print(pr + "PHRIDGE DIRECT INTENSITY LIKELIHOOD (MLI_QUAD).", file=out)
             nu_val = getattr(self.fmodel, "nu", "None")
             print(pr + f" STUDENT-T NU PARAMETER                : {str(nu_val):<8}", file=out)
@@ -1076,16 +1162,21 @@ class IntensityFModelInfo:
             print(pr + f"  POSTERIOR MEAN <F> (WORK / FREE)     : {self.r_post_work:.4f} / {self.r_post_free:.4f}", file=out)
             print(pr + f"  POSTERIOR MODE     (WORK / FREE)     : {self.r_mode_work:.4f} / {self.r_mode_free:.4f}", file=out)
             print(pr, file=out)
+            self._write_aniso_b_remark_3(pr, out)
         else:
             pr = "REMARK   3  "
             print(pr + "REFINEMENT TARGET : MLI_QUAD", file=out)
             print(pr, file=out)
             print(pr + "FIT TO DATA USED IN REFINEMENT.", file=out)
-            # The mandated PDB fields carry the legacy French–Wilson amplitude R —
-            # the one statistic here that is genuinely an R factor.
-            print(pr + f" R VALUE     (WORKING + TEST SET) : {self.r_all:.4f}", file=out)
-            print(pr + f" R VALUE            (WORKING SET) : {self.r_work:.4f}", file=out)
-            print(pr + f" FREE R VALUE                     : {self.r_free:.4f}", file=out)
+            # The mandated PDB fields carry the French–Wilson amplitude R — the one
+            # statistic here that is genuinely an R factor. Labelled in the output,
+            # not just in this comment.
+            print(pr + f" R VALUE     (WORKING + TEST SET) : {self.r_all:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + f" R VALUE            (WORKING SET) : {self.r_work:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + f" FREE R VALUE                     : {self.r_free:.4f}  (FRENCH-WILSON)", file=out)
+            print(pr + " F_OBS FOR THESE R VALUES = FRENCH-WILSON POSTERIOR AMPLITUDES FROM", file=out)
+            print(pr + " I_OBS UNDER THE WILSON PRIOR ALONE (NO MODEL). THE REFINEMENT TARGET", file=out)
+            print(pr + " ITSELF NEVER FORMS F_OBS: IT IS THE MARGINAL INTENSITY LIKELIHOOD.", file=out)
             print(pr, file=out)
             print(pr + "PHRIDGE DIRECT INTENSITY LIKELIHOOD (MLI_QUAD).", file=out)
             nu_val = getattr(self.fmodel, "nu", "None")
@@ -1095,6 +1186,34 @@ class IntensityFModelInfo:
             print(pr + " S_POST / S_PRIOR ARE NOT R FACTORS: EXPECTED RESIDUAL UNDER THE", file=out)
             print(pr + " POSTERIOR / UNDER THE PRIOR. DO NOT COMPARE WITH DEPOSITED R.", file=out)
             print(pr, file=out)
+            self._write_aniso_b_remark_3(pr, out)
+
+    def _write_aniso_b_remark_3(self, pr: str, out: Any) -> None:
+        """Write the mandated OVERALL ANISOTROPIC B VALUE block.
+
+        cctbx cannot supply this one: ``b_cart`` on the fmodel is ``None`` by
+        construction, so a cctbx-written block would carry zeros or nothing at all for a
+        field that is supposed to describe the applied scale. The values here are fitted
+        from ``k_anisotropic`` itself, and the provenance is stated in the block so a
+        depositor is not left guessing.
+        """
+        from phridge.client.intensity.stats_report import format_aniso_scale_remark_3
+
+        try:
+            aniso = self.fmodel.aniso_scale() if hasattr(self.fmodel, "aniso_scale") else None
+        except Exception:
+            return
+        if aniso is None:
+            return
+        lines = format_aniso_scale_remark_3(aniso, prefix=pr)
+        if not lines:
+            return
+        for line in lines:
+            print(line, file=out)
+        print(pr + " ANISOTROPIC B FITTED FROM THE APPLIED K_ANISOTROPIC SCALE ARRAY,", file=out)
+        print(pr + " WHICH IS WHAT MULTIPLIES F_CALC IN F_MODEL. ANISOTROPY (SPREAD OF", file=out)
+        print(pr + f" PRINCIPAL VALUES) : {aniso.anisotropy:.5f} A**2", file=out)
+        print(pr, file=out)
 
     def show_rfactors_targets_scales_overall(self, header: Optional[str] = None, out: Optional[Any] = None) -> None:
         if out is None:
@@ -1103,6 +1222,14 @@ class IntensityFModelInfo:
         print("+" + "-" * 76 + "+", file=out)
         print(f"| Intensity Likelihood Refinement (mli_quad){header_text:<31}|", file=out)
         print("|" + " " * 76 + "|", file=out)
+        # The conventional R factor first, and named for the amplitudes it uses. This
+        # is the number that is comparable with deposited values; everything below it
+        # on this panel is not.
+        line_rfw = (
+            f"| R (French-Wilson):  r_work= {self.r_work:6.4f}   r_free= {self.r_free:6.4f}   "
+            f"r_all= {self.r_all:6.4f}"
+        )
+        print(f"{line_rfw:<77}|", file=out)
         line_ri = f"| Direct Intensity R: r_work= {self.r_intensity_work:6.4f}   r_free= {self.r_intensity_free:6.4f}   r_all= {self.r_intensity_all:6.4f}"
         print(f"{line_ri:<77}|", file=out)
         line_spost = (
@@ -1148,9 +1275,22 @@ class IntensityFModelInfo:
             hint = "| S_post: worker missing S-statistic code — restart phridge-worker or --memory"
             print(f"{hint:<77}|", file=out)
         self._pending_s_report_debug = rv.get("s_report_debug")
+        # Two CCs, two different provenances, and the difference matters more than the
+        # values: the posterior one correlates the model against a quantity that was
+        # itself shrunk toward the model, so it rises toward 1 as the data weaken.
+        # Naming the source on each line is the only thing that keeps them apart.
         if np.isfinite(self.cc_work) and np.isfinite(self.cc_free):
-            line_cc = f"| Correlation (CC):   cc_work= {self.cc_work:6.4f}   cc_free= {self.cc_free:6.4f}   cc_I_work= {self.cc_intensity_work:6.4f}"
+            line_cc = (
+                f"| CC posterior <F> vs |F_c| (shrunken): work= {self.cc_work:6.4f}   "
+                f"free= {self.cc_free:6.4f}"
+            )
             print(f"{line_cc:<77}|", file=out)
+        if np.isfinite(self.cc_intensity_work):
+            line_cci = (
+                f"| CC_I  I_obs vs I_calc (model-free):   work= {self.cc_intensity_work:6.4f}   "
+                f"free= {self.cc_intensity_free:6.4f}"
+            )
+            print(f"{line_cci:<77}|", file=out)
         if np.isfinite(self.target_work) and np.isfinite(self.target_free):
             line_tgt = f"| Target NLL:         target_work= {self.target_work:12.4f}   target_free= {self.target_free:12.4f}"
             print(f"{line_tgt:<77}|", file=out)
@@ -1159,7 +1299,38 @@ class IntensityFModelInfo:
         sol_str = f"   k_sol={ksol_val:.3f}   b_sol={bsol_val:.1f}" if ksol_val is not None and bsol_val is not None else ""
         line_sc = f"| Scale Factor k:     scale_k1= {self.overall_scale_k1:6.4f}{sol_str}   Student-t nu: {str(nu_val):<6}"
         print(f"{line_sc:<77}|", file=out)
+        # Overall anisotropic B of the global scale: the PDB REMARK 3 quantity, on the
+        # same panel as the other scale parameters it was fitted alongside.
+        aniso = self.fmodel.aniso_scale() if hasattr(self.fmodel, "aniso_scale") else None
+        if aniso is not None and getattr(aniso, "is_valid", False):
+            from phridge.client.intensity.stats_report import b_field
+
+            # b_field, not %7.3f: a symmetry-fixed component comes back as -1e-17 and
+            # would otherwise read "-0.000", which looks like a measurement.
+            b = [f"{b_field(x, 3):>7}" for x in aniso.b_cart]
+            line_b1 = (
+                f"| Aniso B (scale) Å²: B11= {b[0]}  B22= {b[1]}  B33= {b[2]}"
+                f"  aniso={aniso.anisotropy:7.3f}"
+            )
+            line_b2 = f"|                     B12= {b[3]}  B13= {b[4]}  B23= {b[5]}"
+            # Pad and truncate: a large anisotropy must not push the panel border out.
+            print(f"{line_b1:<77.77}|", file=out)
+            print(f"{line_b2:<77.77}|", file=out)
         print("+" + "-" * 76 + "+", file=out)
+        print(
+            "  R (French-Wilson) is the conventional R factor: F_obs are French-Wilson\n"
+            "  posterior amplitudes from I_obs under the Wilson prior alone (no model),\n"
+            "  so it is model-free on the observation side and comparable with deposited\n"
+            "  values. It is what r_work() / r_free() / REMARK 3 report. The refinement\n"
+            "  target never forms F_obs at all. Direct Intensity R, S_post and S_prior are\n"
+            "  different statistics — do not compare any of them with deposited R.\n"
+            "  CC posterior <F> is model-conditioned: <F> is shrunk toward sigma_A E_C, so\n"
+            "  the model sits on both sides and the value rises toward 1 as the data weaken\n"
+            "  (it reaches ~0.99 at I/sigma where CC_I has fallen to ~0.03). Holding\n"
+            "  reflections out does not protect the free value: the contamination enters\n"
+            "  per reflection through E_C. CC_I is the model-free one — prefer it.",
+            file=out,
+        )
         dbg = getattr(self, "_pending_s_report_debug", None)
         if dbg:
             print(f"  [S_post debug] {dbg}", file=out)
@@ -1181,10 +1352,13 @@ class IntensityFModelInfo:
             print("  (no S_post resolution bins — maps not yet computed or missing d_spacings)", file=out)
             return
         d_min = rv.get("bin_d_min") or []
-        r_iw = rv.get("s_post_work_bins") or []
-        r_if = rv.get("s_post_free_bins") or []
-        r_fw = rv.get("s_prior_work_bins") or []
-        r_ff = rv.get("s_prior_free_bins") or []
+        # Named for what they are. These were r_iw / r_fw / ... before the S-family
+        # rename, and "r_fw" in particular reads as "R French-Wilson", which is a
+        # different statistic entirely and the one thing this table does not contain.
+        s_post_w = rv.get("s_post_work_bins") or []
+        s_post_f = rv.get("s_post_free_bins") or []
+        s_prior_w = rv.get("s_prior_work_bins") or []
+        s_prior_f = rv.get("s_prior_free_bins") or []
         rho2_w = rv.get("rho2_work_bins") or []
         omega_b = rv.get("omega_bins") or []
         min_free = int(rv.get("min_free_per_shell", 30))
@@ -1214,10 +1388,10 @@ class IntensityFModelInfo:
         for i, dm in enumerate(d_max):
             nw = int(n_w[i]) if i < len(n_w) else 0
             nf = int(n_f[i]) if i < len(n_f) else 0
-            riw = float(r_iw[i]) if i < len(r_iw) else float("nan")
-            rif = float(r_if[i]) if i < len(r_if) else float("nan")
-            rfw = float(r_fw[i]) if i < len(r_fw) else float("nan")
-            rff = float(r_ff[i]) if i < len(r_ff) else float("nan")
+            riw = float(s_post_w[i]) if i < len(s_post_w) else float("nan")
+            rif = float(s_post_f[i]) if i < len(s_post_f) else float("nan")
+            rfw = float(s_prior_w[i]) if i < len(s_prior_w) else float("nan")
+            rff = float(s_prior_f[i]) if i < len(s_prior_f) else float("nan")
             r2w = float(rho2_w[i]) if i < len(rho2_w) else float("nan")
             lat_s = f"{1.0 - r2w:6.3f}" if np.isfinite(r2w) else f"{'n/a':>6}"
             dn = float(d_min[i]) if i < len(d_min) else float("nan")
@@ -1878,19 +2052,48 @@ class IntensityRValuesMixin:
         return float(rv.get("cc_post_free", rv.get("cc_free", float("nan"))))
 
     def r_factors(self, prefix: str = "", as_string: bool = True) -> Union[str, Any]:
-        """Format inferred R-factors mimicking mmtbx.f_model.manager.r_factors."""
+        """Format R-factors mimicking ``mmtbx.f_model.manager.r_factors``.
+
+        **These are French–Wilson amplitude R factors** and the label says so. They
+        must not be the posterior-mean statistic: that one shrinks toward
+        ``sigma_A E_C`` as the data weaken, so it *improves* when the data get worse.
+        ``r_post_*`` still exists as a diagnostic and is printed under an explicit
+        "biased low, not an R factor" heading; it is never what a caller asking for
+        "the R factors" receives. See :meth:`r_work` and :meth:`r_post_work`.
+        """
+        rw, rf, ra = self.r_work(), self.r_free(), self.r_all()
         rv = self.inferred_r_values()
-        rw = float(rv.get("r_post_work", rv.get("r_work", float("nan"))))
-        rf = float(rv.get("r_post_free", rv.get("r_free", float("nan"))))
-        ra = float(rv.get("r_post_all", rv.get("r_all", float("nan"))))
         cw = float(rv.get("cc_post_work", rv.get("cc_work", float("nan"))))
         cf = float(rv.get("cc_post_free", rv.get("cc_free", float("nan"))))
-        fmt = "%s r_work=%6.4f r_free=%6.4f r_all=%6.4f cc_work=%6.4f cc_free=%6.4f"
+        fmt = "%s r_work=%6.4f r_free=%6.4f r_all=%6.4f cc_work=%6.4f cc_free=%6.4f (French-Wilson amplitudes)"
         if as_string:
             return fmt % (prefix, rw, rf, ra, cw, cf)
         if group_args is not None:
-            return group_args(r_work=rw, r_free=rf, r_all=ra, cc_work=cw, cc_free=cf)
-        return {"r_work": rw, "r_free": rf, "r_all": ra, "cc_work": cw, "cc_free": cf}
+            return group_args(
+                r_work=rw, r_free=rf, r_all=ra, cc_work=cw, cc_free=cf, r_source="french_wilson"
+            )
+        return {
+            "r_work": rw,
+            "r_free": rf,
+            "r_all": ra,
+            "cc_work": cw,
+            "cc_free": cf,
+            "r_source": "french_wilson",
+        }
+
+    # Explicit aliases. Anything that wants to be unambiguous in a report, a column
+    # header or a REMARK should call these rather than the bare r_work / r_free.
+    def r_work_french_wilson(self) -> float:
+        """French–Wilson amplitude R on the working set (same as :meth:`r_work`)."""
+        return self._r_french_wilson("work")
+
+    def r_free_french_wilson(self) -> float:
+        """French–Wilson amplitude R on the free/test set (same as :meth:`r_free`)."""
+        return self._r_french_wilson("free")
+
+    def r_all_french_wilson(self) -> float:
+        """French–Wilson amplitude R on all reflections (same as :meth:`r_all`)."""
+        return self._r_french_wilson("all")
 
     def r_intensity_work(self) -> float:
         """Direct intensity R-factor on work reflections (I_obs vs I_calc)."""
@@ -2114,6 +2317,8 @@ class IntensityFModel(
         # Resolution binning & normalization factors
         self.binner = binner or self._i_obs.setup_binner(n_bins=self.n_bins)
         self.sigma_wilson = self._setup_sigma_wilson(sigma_wilson)
+        # Populated by the nuisance fit; None means β is tied to 1 - σ_A².
+        self.beta_residual: Optional[Any] = None
         self.sigma_a = self._setup_sigma_a(sigma_a)
 
         # Internal evaluation caches
@@ -2130,6 +2335,21 @@ class IntensityFModel(
         self._f_mode: Optional[Any] = None
         self._r_values: Optional[Dict[str, Any]] = None
         self._scale_fitted: bool = False
+
+        # Interleaved refinement (refinement.target_mode). Exact by default: the
+        # surrogate path is entirely opt-in and never active unless a controller has
+        # been installed and has switched it on.
+        from phridge.client.intensity.interleaved import target_mode_from_env
+
+        self.target_mode = target_mode_from_env()
+        self._surrogate: Optional[Dict[str, Any]] = None
+        self._use_surrogate: bool = False
+        self._interleaved: Optional[Any] = None
+        self._surrogate_eval_count: int = 0
+        # The final macro cycle always runs fully exact, so deposited statistics never
+        # touch the surrogate. total_macro_cycles is filled in from the Phenix params.
+        self.macro_cycle_index: int = 0
+        self.total_macro_cycles: Optional[int] = None
 
         # Seed overall isotropic scale into CCTBX scaffolding when provided
         # explicitly (before update_all_scales replaces it with fitted k_iso/k_aniso).
@@ -2221,7 +2441,223 @@ class IntensityFModel(
         nu_pr = getattr(self, "nu_per_refl", None)
         if nu_pr is not None:
             kw["nu"] = nu_pr
+        # The fitted residual variance in normalized units. Absent until a nuisance fit has
+        # run, and None whenever β is tied, in which case every consumer falls back to
+        # 1 - σ_A² exactly as before.
+        beta_res = getattr(self, "beta_residual", None)
+        if beta_res is not None:
+            kw["beta_residual"] = beta_res
         return kw
+
+    # ---------------------------------------------------------------- interleaved mode
+    def surrogate_active(self) -> bool:
+        """True while an interleaved inner block is running on the surrogate."""
+        return bool(self._use_surrogate and self._surrogate is not None)
+
+    def use_surrogate(self, enabled: bool) -> None:
+        """Switch the target functor between the exact quadrature and the surrogate.
+
+        Part of the :class:`~phridge.client.intensity.interleaved.InterleavedHost`
+        contract; the controller owns every call.
+        """
+        self._use_surrogate = bool(enabled) and self._surrogate is not None
+
+    def _announce_macro_cycle(self, log: Any = None) -> None:
+        """Mark the macro-cycle boundary and say whether it will interleave.
+
+        The controller logs each block, but only once a block starts. This line goes
+        out at the scale-update substage, so the log shows the "when" even for a cycle
+        whose blocks all end up exact.
+        """
+        from phridge.client.intensity.interleaved import TargetMode
+
+        mode = getattr(self, "target_mode", TargetMode.exact)
+        cycle = getattr(self, "macro_cycle_index", 0)
+        total = getattr(self, "total_macro_cycles", None)
+        when = f"macro cycle {cycle}/{total}" if total else f"macro cycle {cycle}"
+        if mode is not TargetMode.interleaved:
+            text = f"[interleaved] {when}: target_mode=exact -- every target call is an exact quadrature"
+        elif total is not None and cycle >= total:
+            text = (
+                f"[interleaved] {when}: FINAL macro cycle -- forced fully exact, "
+                "no interleaving from here on; deposited statistics are exact"
+            )
+        else:
+            text = (
+                f"[interleaved] {when}: interleaving enabled -- inner blocks in this cycle "
+                "run on the surrogate and each is adjudicated by an exact evaluation"
+            )
+        if log is not None and hasattr(log, "write"):
+            try:
+                print(text, file=log)
+            except Exception:
+                pass
+        print(text, flush=True)
+
+    def _surrogate_eval_kwargs(self) -> Dict[str, Any]:
+        """``target_eval`` kwargs for the stock ``ml_f`` path.
+
+        The surrogate arrays occupy the observation slots ``ml_f`` already has for
+        them: ``f_obs`` (amplitude), ``alpha`` (= sigma_A, shell-wise and pinned) and
+        ``beta`` (residual scale). ``epsilon``, ``centric`` and ``r_free`` are the same
+        arrays the exact target uses, so the work-set normalization is identical and
+        the two NLLs are directly comparable up to a per-reflection constant.
+        """
+        sur = self._surrogate
+        if sur is None:
+            raise RuntimeError("no surrogate is installed; call exact_checkpoint() first")
+        return {
+            "f_obs": sur["f_p_miller"],
+            "alpha": sur["alpha_p"],
+            "beta": sur["beta_p"],
+            "epsilon": self._i_obs.epsilons().data().as_double(),
+            "centric": self._i_obs.centric_flags().data(),
+            "r_free": self._r_free_flags.data() if self._r_free_flags is not None else None,
+            "target": {"name": "ml_f"},
+        }
+
+    def _splice_exact_route(self, raw: Any, f_calc: Any, compute_gradients: bool) -> Any:
+        """Route the unfittable reflections through the exact target inside the block.
+
+        Step 4 of the surrogate fallback ladder. These reflections should not occur --
+        they need both the Newton fit and the closed-form EM initialization to be
+        unusable -- so this costs an extra quadrature evaluation only in a case the
+        telemetry is already flagging. Both calls share ``r_free``, hence the same
+        ``1/n_work`` factor, so splicing the per-reflection arrays elementwise is exact.
+        """
+        sur = self._surrogate
+        if sur is None:
+            return raw
+        route = sur.get("exact_route")
+        if route is None or not bool(np.any(route)):
+            return raw
+        kw = self._common_eval_kwargs()
+        kw["target"] = self.target_spec
+        kw["compute_curvature"] = bool(compute_gradients)
+        exact = self.bridge.call("target_eval", f_calc=f_calc, **kw)
+
+        from phridge.sfcalc.packing import PackedTargetResult
+
+        sel = np.asarray(route, dtype=bool)
+        per = np.asarray(raw.per_reflection, dtype=np.float64).copy()
+        grad = np.asarray(raw.d_target_d_f_calc, dtype=np.complex128).copy()
+        per[sel] = np.asarray(exact.per_reflection, dtype=np.float64)[sel]
+        grad[sel] = np.asarray(exact.d_target_d_f_calc, dtype=np.complex128)[sel]
+        curv_r = curv_t = None
+        if raw.curv_radial is not None and exact.curv_radial is not None:
+            curv_r = np.asarray(raw.curv_radial, dtype=np.float64).copy()
+            curv_t = np.asarray(raw.curv_tangential, dtype=np.float64).copy()
+            curv_r[sel] = np.asarray(exact.curv_radial, dtype=np.float64)[sel]
+            curv_t[sel] = np.asarray(exact.curv_tangential, dtype=np.float64)[sel]
+        work = np.ones(per.shape, dtype=bool)
+        if self._r_free_flags is not None:
+            work = ~np.asarray(self._r_free_flags.data(), dtype=bool)
+        n_work = max(int(work.sum()), 1)
+        value = float(per[work].sum() / n_work)
+        value_test = None
+        if bool((~work).any()):
+            value_test = float(per[~work].sum() / max(int((~work).sum()), 1))
+        return PackedTargetResult(
+            name=raw.meta.name,
+            value=value,
+            per_reflection=per,
+            d_target_d_f_calc=grad,
+            curv_radial=curv_r,
+            curv_tangential=curv_t,
+            value_test=value_test,
+            scale_factor=raw.meta.scale_factor,
+        )
+
+    def _checkpoint_f_model(self) -> Any:
+        """The F on the observation scale that both the exact target and the fit see."""
+        if hasattr(self, "f_model_scaled_with_k1"):
+            try:
+                return self.f_model_scaled_with_k1()
+            except Exception:
+                pass
+        return self.f_model()
+
+    def exact_checkpoint(self) -> Any:
+        """One exact evaluation at the current model; fit and install the surrogate.
+
+        This is the only place the surrogate arrays are ever created or refreshed, and
+        the returned NLL is the value that adjudicates the block that follows. See
+        :mod:`phridge.client.intensity.interleaved`.
+        """
+        from phridge.client.intensity.interleaved import CheckpointResult
+        from phridge.contrib.intensity_ll.surrogate_op import SURROGATE_FIT_OP_NAME
+
+        kw = self._common_eval_kwargs()
+        kw["target"] = self.target_spec
+        f_model = self._checkpoint_f_model()
+        raw = self.bridge.call(SURROGATE_FIT_OP_NAME, f_calc=f_model, **kw)
+
+        f_p = np.asarray(raw["f_p"], dtype=np.float64)
+        alpha_p = np.asarray(raw["alpha_p"], dtype=np.float64)
+        beta_p = np.asarray(raw["beta_p"], dtype=np.float64)
+        mask = np.asarray(raw["mask"], dtype=np.int64)
+        from phridge.contrib.intensity_ll.surrogate import FIT_EXACT_ROUTE
+
+        self._surrogate = {
+            # Internal arrays. Never printed, never written to an output file.
+            "f_p_miller": self._i_obs.customized_copy(
+                data=flex.double(np.ascontiguousarray(f_p)), sigmas=None
+            ).set_observation_type_xray_amplitude(),
+            "alpha_p": flex.double(np.ascontiguousarray(alpha_p)),
+            "beta_p": flex.double(np.ascontiguousarray(beta_p)),
+            "exact_route": (mask & FIT_EXACT_ROUTE) != 0,
+            "telemetry": dict(raw.get("telemetry") or {}),
+        }
+        self._mli_eval_count = getattr(self, "_mli_eval_count", 0) + 1
+        nll = dict(raw.get("nll") or {})
+        return CheckpointResult(
+            nll=float(nll.get("work", float("nan"))),
+            nll_free=None if nll.get("free") is None else float(nll["free"]),
+            f_p=f_p,
+            alpha_p=alpha_p,
+            beta_p=beta_p,
+            mask=mask,
+            e_c=np.asarray(raw["e_c"], dtype=np.float64),
+            rho2=np.asarray(raw["rho2"], dtype=np.float64),
+            telemetry=dict(raw.get("telemetry") or {}),
+        )
+
+    def exact_nll(self) -> float:
+        """One exact evaluation at the current model. No refit, no statistics."""
+        kw = self._common_eval_kwargs()
+        kw["target"] = self.target_spec
+        kw["compute_curvature"] = False
+        raw = self.bridge.call("target_eval", f_calc=self._checkpoint_f_model(), **kw)
+        self._mli_eval_count = getattr(self, "_mli_eval_count", 0) + 1
+        return float(raw.meta.value)
+
+    def surrogate_nll(self) -> float:
+        """The surrogate's own value at the current model (diagnostic only)."""
+        if self._surrogate is None:
+            raise RuntimeError("no surrogate is installed")
+        kw = self._surrogate_eval_kwargs()
+        kw["compute_curvature"] = False
+        raw = self.bridge.call("target_eval", f_calc=self._checkpoint_f_model(), **kw)
+        return float(raw.meta.value)
+
+    def interleaved_controller(self, log: Any = None) -> Optional[Any]:
+        """The run's controller, created on first use; ``None`` in exact mode."""
+        from phridge.client.intensity.interleaved import (
+            InterleavedController,
+            TargetMode,
+            interleaved_options_from_env,
+        )
+
+        if self.target_mode is not TargetMode.interleaved:
+            return None
+        if self._interleaved is None:
+            self._interleaved = InterleavedController(
+                self,
+                interleaved_options_from_env(),
+                log=log,
+                mode=TargetMode.interleaved,
+            )
+        return self._interleaved
 
     def target_and_gradients(
         self,
@@ -2447,6 +2883,17 @@ class IntensityFModel(
         **kwargs: Any,
     ) -> Any:
         """Co-refine bulk solvent mask (k_sol, B_sol, k_aniso), sigma_A(s), Sigma_W(s), and scale factor k."""
+        # Phenix calls this once per macro cycle at the scale-update substage, so it is
+        # also the macro-cycle counter the interleaved controller reads to know when it
+        # has reached the final (always fully exact) cycle.
+        self.macro_cycle_index = getattr(self, "macro_cycle_index", 0) + 1
+        if self.total_macro_cycles is None:
+            try:
+                n = getattr(getattr(params, "main", None), "number_of_macro_cycles", None)
+                if n is not None:
+                    self.total_macro_cycles = int(n)
+            except Exception:
+                pass
         if not fit_nu:
             env_fit_nu = os.environ.get("PHRIDGE_FIT_NU")
             if env_fit_nu is not None and env_fit_nu.strip().lower() in ("1", "true", "yes", "on"):
@@ -2469,6 +2916,7 @@ class IntensityFModel(
                 self.__dict__["k_h"] = 0.0
                 self.__dict__["b_h"] = 0.0
                 self.__dict__["target_name"] = "mli_quad"
+                params = self._constrain_scaling_to_isotropic(params, log=log)
                 with mli_heartbeat("bulk_solvent_and_scaling", log=log, announce=True):
                     f_model_all_scales.run(
                         fmodel=self,
@@ -2529,6 +2977,10 @@ class IntensityFModel(
         tv_norm_env = os.environ.get("PHRIDGE_SIGMA_A_TV_NORM", "").strip()
         tv_norm = float(tv_norm_env) if tv_norm_env else 0.0
         fit_sigma_wilson = _env_flag_enabled("PHRIDGE_FIT_SIGMA_WILSON", "1")
+        # Before the nuisance fit consumes it: if Σ_W is about to carry the anisotropy,
+        # the scale must not still be carrying it too. Raising here, after scaling and
+        # before the tensor is fitted, is the last point where the two are separable.
+        self._assert_single_anisotropy_carrier(log=log)
         nu_mode = os.environ.get("PHRIDGE_NU_MODE", "bins").strip().lower() or "bins"
         raw = None
         with mli_heartbeat(
@@ -2546,16 +2998,36 @@ class IntensityFModel(
                 centric=self._i_obs.centric_flags().data(),
                 fit_nu=bool(fit_nu),
                 nu_mode=nu_mode,
-                fit_scale=bool(fit_scale and not bulk_solvent_and_scaling),
+                fit_scale=self._fix_scale_for_free_beta(
+                    bool(fit_scale and not bulk_solvent_and_scaling), log=log
+                ),
                 nu_bounds=list(nu_bounds),
                 nu=self.nu,
                 sigma_a_mode=sa_mode,
                 n_sigma_a_bins=n_sa_bins,
                 tv_norm=tv_norm,
                 fit_sigma_wilson=fit_sigma_wilson,
+                wilson_model=self.wilson_model,
+                beta_mode=self.beta_mode,
+                sigma_a_shape=self.sigma_a_shape,
+                smooth_sigma_a=_env_float("PHRIDGE_SMOOTH_SIGMA_A", 1.0),
+                smooth_beta=_env_float("PHRIDGE_SMOOTH_BETA", 1.0),
+                beta_consistency_prior=_env_float("PHRIDGE_BETA_CONSISTENCY_PRIOR", 0.0),
             )
         self.sigma_a = flex.double(np.asarray(raw["sigma_a"], dtype=np.float64))
         self.sigma_wilson = flex.double(np.asarray(raw["sigma_wilson"], dtype=np.float64))
+        # β reaches the target and the maps only through here. Set it to None when the fit
+        # tied it, so switching back to beta_mode=constrained genuinely restores the old
+        # prior rather than leaving a stale array behind.
+        br = raw.get("beta_residual")
+        if br is None:
+            self.beta_residual = None
+        else:
+            br_np = np.asarray(br, dtype=np.float64)
+            if br_np.shape == (self._i_obs.size(),) and np.all(np.isfinite(br_np)):
+                self.beta_residual = flex.double(np.ascontiguousarray(br_np))
+            else:
+                self.beta_residual = None
         self._sigma_a_params = dict(raw.get("sigma_a_params") or {})
         self._sigma_wilson_params = dict(raw.get("sigma_wilson_params") or {})
         self._nu_params = dict(raw.get("nu_params") or {})
@@ -2576,6 +3048,22 @@ class IntensityFModel(
         self._f_model = None
         self._last_maps = None
         self._r_values = None
+        # sigma_A(s) just moved, and alpha_p is pinned to it, so any surrogate fitted
+        # before this point is stale. Drop it rather than refresh it here: the
+        # controller's next checkpoint refits from the updated nuisance arrays, which
+        # keeps the count at exactly one exact evaluation per block.
+        self._surrogate = None
+        self._use_surrogate = False
+        # The anisotropic scale was just refitted, so the cached tensor is stale. Report
+        # it here, in the scaling method, next to the k_sol / b_sol it belongs with.
+        try:
+            self._report_aniso_scale(log=log)
+        except Exception:
+            pass  # a log line must never cost a macro cycle
+        try:
+            self._announce_macro_cycle(log=log)
+        except Exception:
+            pass  # a log line must never cost a macro cycle
         self._print_stats_report(log=log, label="after update_all_scales")
         if show:
             self.show(log=log)
@@ -2638,9 +3126,9 @@ class IntensityFModel(
                         file=sys.stderr,
                         flush=True,
                     )
-                elif rv.get("s_report_version") != 7:
+                elif rv.get("s_report_version") != 9:
                     print(
-                        "[mli_quad] S_post: stale phridge-worker (missing s_report_version=7) — "
+                        "[mli_quad] S_post: stale phridge-worker (missing s_report_version=9) — "
                         "re-run with ./scripts/run_phenix_intensity.sh --redis",
                         file=sys.stderr,
                         flush=True,
@@ -2660,6 +3148,8 @@ class IntensityFModel(
                     )
             except Exception as exc:
                 print(f"[mli_quad] S_post merge skipped: {exc}", file=sys.stderr, flush=True)
+            self._merge_agreement_stats_into_report(report)
+            self._attach_cc_isig_table(report)
             self._last_stats_report = report
             extras = []
             if log is not None and hasattr(log, "write"):
@@ -2672,6 +3162,296 @@ class IntensityFModel(
             except Exception:
                 pass
             return None
+
+    def _merge_agreement_stats_into_report(self, report: Any) -> None:
+        """Copy the R factor and the posterior point estimates onto the report.
+
+        The French-Wilson R comes from ``r_work()`` / ``r_free()`` (the model-free
+        bridge); the posterior estimates come from the maps ``r_values``. Both are
+        reporting-only, so a failure here must never cost a macro cycle.
+        """
+        try:
+            report.r_fw_work = self.r_work()
+            report.r_fw_free = self.r_free()
+        except Exception:
+            pass
+        try:
+            report.aniso_scale = self.aniso_scale()
+        except Exception:
+            pass
+        try:
+            rv = self.inferred_r_values()
+        except Exception:
+            return
+        for attr, key in (
+            ("r_post_work", "r_post_work"),
+            ("r_post_free", "r_post_free"),
+            ("r_mode_work", "r_mode_work"),
+            ("r_mode_free", "r_mode_free"),
+            ("r_intensity_work", "r_intensity_work"),
+            ("r_intensity_free", "r_intensity_free"),
+        ):
+            try:
+                setattr(report, attr, float(rv.get(key, float("nan"))))
+            except (TypeError, ValueError):
+                pass
+
+    @property
+    def wilson_model(self) -> str:
+        """``"anisotropic"`` (default) or ``"isotropic"`` — which Σ_W form the fit uses.
+
+        Read from ``PHRIDGE_WILSON_MODEL``. Real data are anisotropic, so the tensor is the
+        default and ``isotropic`` must be asked for explicitly. This is the switch that
+        decides which of the two degenerate anisotropy carriers is free, so it is resolved
+        in one place and every consumer reads it from here.
+        """
+        cached = getattr(self, "_wilson_model", None)
+        if cached is not None:
+            return str(cached)
+        from phridge.contrib.intensity_ll.wilson import normalize_wilson_model
+
+        value = normalize_wilson_model(os.environ.get("PHRIDGE_WILSON_MODEL"))
+        self._wilson_model = value
+        return value
+
+    @property
+    def beta_mode(self) -> str:
+        """``"free"`` (default) or ``"constrained"`` — how stage 2 treats β.
+
+        Read from ``PHRIDGE_BETA_MODE``. Free by default: in normalized units β is the
+        intercept of Z_o against E_C² and σ_A² the slope, so tying β = 1 − σ_A² asserts the
+        Wilson normalization is exact and launders any error in it into σ_A.
+        """
+        cached = getattr(self, "_beta_mode", None)
+        if cached is not None:
+            return str(cached)
+        from phridge.contrib.intensity_ll.free_beta import normalize_beta_mode
+
+        value = normalize_beta_mode(os.environ.get("PHRIDGE_BETA_MODE"))
+        self._beta_mode = value
+        return value
+
+    @property
+    def sigma_a_shape(self) -> str:
+        """``"free"`` (default) or ``"monotone"`` — whether σ_A(s) may rise.
+
+        Read from ``PHRIDGE_SIGMA_A_SHAPE``. Free by default and regularized by smoothness:
+        σ_A is commonly depressed at low resolution where the solvent model is poor, and a
+        monotone profile can only push that structure into neighbouring shells.
+        """
+        cached = getattr(self, "_sigma_a_shape", None)
+        if cached is not None:
+            return str(cached)
+        from phridge.contrib.intensity_ll.free_beta import normalize_sigma_a_shape
+
+        value = normalize_sigma_a_shape(os.environ.get("PHRIDGE_SIGMA_A_SHAPE"))
+        self._sigma_a_shape = value
+        return value
+
+    def _fix_scale_for_free_beta(self, fit_scale: bool, log: Any = None) -> bool:
+        """Drop the stage-2 F_c scale when β is free, because the two are degenerate.
+
+        Only ``σ_A²k²`` enters the slope of Z_o against E_C², so a free β leaves σ_A and an
+        overall scale unseparable. The op raises on the combination; this keeps production
+        out of that state instead of relying on the caller, in the same spirit as
+        :meth:`_constrain_scaling_to_isotropic`. Bulk-solvent scaling already owns the
+        overall scale in a normal phenix run, so there is usually nothing to give up.
+        """
+        if not fit_scale or self.beta_mode != "free":
+            return fit_scale
+        print(
+            "[mli_quad] β is fitted per shell, so the stage-2 F_c scale is fixed (σ_A and "
+            "an overall scale enter the Rice first moment only as σ_A²k² and cannot be "
+            "separated). Set PHRIDGE_BETA_MODE=constrained to refine a joint scale instead.",
+            file=log if log is not None else sys.stdout,
+        )
+        return False
+
+    def _constrain_scaling_to_isotropic(self, params: Any, log: Any = None) -> Any:
+        """Disable anisotropic scale-matrix refinement when Σ_W carries the anisotropy.
+
+        An anisotropic Σ_W and ``k_anisotropic`` absorb the same directional falloff, so
+        exactly one may be free (see :mod:`phridge.contrib.intensity_ll.wilson`). The
+        normalization is the one that must carry it, because ``data%``, β and the
+        posterior weights are only interpretable if the *prior* describes the
+        observations' falloff.
+
+        Setting the flag is best-effort across mmtbx versions; it is not the safety net.
+        :meth:`_assert_single_anisotropy_carrier` measures what was actually applied
+        afterwards, which is what a flag cannot tell us.
+        """
+        if self.wilson_model != "anisotropic":
+            return params
+        out = log if log is not None else sys.stdout
+        # The real phenix.refine scope is bulk_solvent_and_scale, which carries both
+        # anisotropic_scaling and minimization_b_cart -- turning off only the first still
+        # leaves the b_cart minimizer free to fit the tensor. Both have to go.
+        flags = ("anisotropic_scaling", "minimization_b_cart", "symmetry_constraints_on_b_cart")
+        holders = [("", params), ("bulk_solvent_and_scale.", getattr(params, "bulk_solvent_and_scale", None))]
+        touched, missing = [], []
+        for attr in flags:
+            if attr == "symmetry_constraints_on_b_cart":
+                continue  # harmless either way once b_cart is not refined
+            found = False
+            for prefix, holder in holders:
+                if holder is None or not hasattr(holder, attr):
+                    continue
+                try:
+                    setattr(holder, attr, False)
+                    touched.append(f"{prefix}{attr}")
+                    found = True
+                except Exception:
+                    pass
+            if not found:
+                missing.append(attr)
+        note = f"set {', '.join(touched)}" if touched else "no known flag found"
+        if missing:
+            note += f"; not present: {', '.join(missing)}"
+        print(
+            "[mli_quad] Wilson Σ_W is anisotropic, so the overall anisotropic scale is "
+            "constrained to isotropic (the two are degenerate and the prior must carry "
+            f"the anisotropy). Scaling params: {note}. The anisotropy actually applied to "
+            "F_calc is verified after scaling, so a missing flag fails loudly rather than "
+            "double-fitting.",
+            file=out,
+        )
+        return params
+
+    def _assert_single_anisotropy_carrier(self, log: Any = None) -> None:
+        """Raise if Σ_W and ``k_anisotropic`` are both carrying anisotropy.
+
+        Measures the anisotropy actually applied to F_calc rather than trusting the flag
+        we set, because a flag records the intent and this records the outcome. Both
+        carriers live is the one error mode that produces a well-fitting, uninterpretable
+        pair of anisotropy parameters, so it raises instead of warning.
+        """
+        if self.wilson_model != "anisotropic":
+            return
+        from phridge.contrib.intensity_ll.wilson import ANISO_NEGLIGIBLE_DELTA_B
+
+        applied = self.aniso_scale()
+        if applied is None or not getattr(applied, "is_valid", False):
+            return  # nothing measurable; the fit itself will still be reported
+        if applied.anisotropy <= ANISO_NEGLIGIBLE_DELTA_B:
+            return
+        raise ValueError(
+            "Wilson Σ_W and the overall scale both carry anisotropy: wilson_model="
+            f"'anisotropic' (the default) but the applied k_anisotropic still spans "
+            f"{applied.anisotropy:.3f} A**2 between principal values (limit "
+            f"{ANISO_NEGLIGIBLE_DELTA_B} A**2). These two are degenerate — fitting both "
+            "gives a good fit and two individually meaningless tensors.\n"
+            "  Fix: set bulk_solvent_and_scale.anisotropic_scaling=False and "
+            "bulk_solvent_and_scale.minimization_b_cart=False in the refinement "
+            "parameters (phridge sets these automatically when it can reach the params "
+            "object; this error means it could not).\n"
+            "  Escape hatch: PHRIDGE_WILSON_MODEL=isotropic reverts to a scalar Σ_W, at "
+            "the cost of directionally biased data%, beta and map coefficients."
+        )
+
+    def _report_aniso_scale(self, log: Any = None) -> None:
+        """Print the overall anisotropic B right after the global scaling that set it."""
+        from phridge.client.intensity.stats_report import format_aniso_scale_summary
+
+        aniso = self.aniso_scale(refresh=True)
+        if aniso is None:
+            return
+        out = log if log is not None else sys.stdout
+        print(f"[mli_quad] global scaling: {format_aniso_scale_summary(aniso)}", file=out)
+        mismatch = self._aniso_scale_disagreement()
+        if mismatch:
+            print(
+                f"[mli_quad] WARNING: stored b_cart disagrees with the applied "
+                f"anisotropic scale ({mismatch}); the fitted values above are the ones "
+                f"multiplying F_calc.",
+                file=out,
+            )
+
+    def aniso_scale(self, refresh: bool = False) -> Any:
+        """Overall anisotropic B of the global scale, recovered from ``k_anisotropic``.
+
+        ``b_cart`` on this object is deliberately ``None`` -- it exists so mmtbx internals
+        that touch the attribute do not trip -- so the anisotropic B has to come from the
+        scale array that is actually applied to F_calc. That is the better source anyway:
+        it reports the anisotropy the target sees rather than what a scaling object claims
+        to have fitted. Cached; pass ``refresh=True`` after re-scaling.
+        """
+        from phridge.client.intensity.stats_report import fit_aniso_scale
+
+        cached = getattr(self, "_aniso_scale", None)
+        if cached is not None and not refresh:
+            return cached
+        result = None
+        try:
+            k_aniso = np.asarray(self.k_anisotropic(), dtype=np.float64)
+            result = fit_aniso_scale(
+                # flex.miller_index is a sequence of triples, not an array; list() is
+                # what the rest of the client uses to get an (N, 3) block out of it.
+                miller_indices=np.asarray(list(self._i_obs.indices()), dtype=np.float64),
+                k_anisotropic=k_aniso,
+                unit_cell=tuple(float(x) for x in self._i_obs.unit_cell().parameters()),
+            )
+        except Exception as exc:
+            print(f"[mli_quad] anisotropic B unavailable: {exc}", file=sys.stderr, flush=True)
+        self._aniso_scale = result
+        return result
+
+    def _aniso_scale_disagreement(self) -> str:
+        """Describe any gap between a populated ``b_cart`` and the fitted tensor.
+
+        Empty when nothing was stored to compare against, which is the normal case here.
+        If some scaling path does write ``b_cart``, a mismatch means the deposited
+        anisotropic B would not be the one applied to F_calc -- worth saying out loud,
+        for the same reason the R fields are cross-checked.
+        """
+        stored = self.__dict__.get("b_cart")
+        fitted = self.aniso_scale()
+        if stored is None or fitted is None or not fitted.is_valid:
+            return ""
+        try:
+            theirs = [float(x) for x in stored]
+        except (TypeError, ValueError):
+            return ""
+        if len(theirs) != 6:
+            return ""
+        worst = max(abs(t - f) for t, f in zip(theirs, fitted.b_cart))
+        if worst <= 0.05:  # well below anything that changes an interpretation
+            return ""
+        return f"max component difference {worst:.3f} A**2"
+
+    def _attach_cc_isig_table(self, report: Any) -> None:
+        """Build the CC_I (fixed I/sigma bin x resolution) table onto the report.
+
+        ``I_calc = |F_model|^2`` on the same reflection list the target uses, matching
+        the worker's ``cc_intensity_*`` definition so the table's marginals line up with
+        the banner value. ``sigma_a`` is passed through so each resolution shell reports
+        the sigma_A that goes with it -- reading down a column is then a sigma_A scan.
+        """
+        from phridge.client.intensity.stats_report import compute_cc_isig_table
+
+        try:
+            i_obs = self._i_obs
+            if i_obs is None or i_obs.sigmas() is None:
+                return
+            data = self.f_model().data()
+            # flex arrays expose as_numpy_array; plain arrays do not. Accept either
+            # rather than hard-coding the cctbx spelling.
+            arr = data.as_numpy_array() if hasattr(data, "as_numpy_array") else np.asarray(data)
+            i_calc = np.abs(arr) ** 2
+            if i_calc.size != i_obs.size():
+                raise ValueError(
+                    f"f_model has {i_calc.size} reflections, i_obs has {i_obs.size()}"
+                )
+            flags = self._r_free_flags
+            report.cc_isig = compute_cc_isig_table(
+                intensities=i_obs.data(),
+                sigmas=i_obs.sigmas(),
+                d_spacings=i_obs.d_spacings().data(),
+                i_calc=i_calc,
+                r_free=flags.data() if flags is not None else None,
+                sigma_a=getattr(self, "sigma_a", None),
+            )
+        except Exception as exc:
+            print(f"[mli_quad] CC_I table skipped: {exc}", file=sys.stderr, flush=True)
 
     def stats_report(self, *, bin_size: Optional[int] = None, label: str = "") -> Any:
         """Compute (and return) the resolution-binned intensity / σ_A report."""
@@ -2837,6 +3617,13 @@ class IntensityFModel(
         cw = rv.get("cc_post_work", rv.get("cc_work", float("nan")))
         cf = rv.get("cc_post_free", rv.get("cc_free", float("nan")))
         print(f"  CC:  cc_work={cw:.4f} cc_free={cf:.4f}", file=target_out)
+        rfw_w, rfw_f, rfw_a = self.r_work(), self.r_free(), self.r_all()
+        if any(np.isfinite(float(x)) for x in (rfw_w, rfw_f, rfw_a)):
+            print(
+                f"  R (French-Wilson amplitudes):  r_work={rfw_w:.4f} "
+                f"r_free={rfw_f:.4f} all={rfw_a:.4f}",
+                file=target_out,
+            )
         if "r_intensity_work" in rv and "r_intensity_free" in rv:
             print(f"  Direct Intensity R (I):  r_work={rv['r_intensity_work']:.4f} r_free={rv['r_intensity_free']:.4f} all={rv.get('r_intensity_all', float('nan')):.4f}", file=target_out)
         s_w = rv.get("s_post_work", float("nan"))
@@ -2852,7 +3639,7 @@ class IntensityFModel(
             )
         elif rv.get("s_report_error"):
             print(f"  S_post: unavailable ({rv['s_report_error']})", file=target_out)
-        elif rv.get("s_report_version") != 7 and "r_intensity_work" in rv:
+        elif rv.get("s_report_version") != 9 and "r_intensity_work" in rv:
             print(
                 "  S_post: stale worker — restart with --redis",
                 file=target_out,

@@ -330,7 +330,7 @@ def intensity_map_coefficients(
     fc_s = torch.where(ok, fc, torch.ones_like(fc))
     fo_s = torch.where(ok, fo, torch.zeros_like(fo))
 
-    Ec, sA_n, Zo, sZ = normalize(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s)
+    Ec, sA_n, Zo, sZ, jac = target.normalized(fc_s, fo_s, sig_s, eps_s, sW_s, sA_s, obs)
     post = posterior_moments(
         Ec,
         sA_n,
@@ -347,9 +347,15 @@ def intensity_map_coefficients(
     scale = torch.sqrt(eps_s * sW_s)  # F = scale * E
     phase = f_calc / fc.clamp(min=1e-300)
 
+    # sA_n * Ec is the posterior's model term <E_model> = sigma_A E_C, and the free-beta
+    # reparameterization preserves that product exactly, so these two lines are correct
+    # under either form without a branch.
     diff_E = post.Em_mean - sA_n * Ec
     model_E = torch.where(centric, post.Em_mean, 2 * post.Em_mean - sA_n * Ec)
-    grad_F = post.score / scale  # d log L / d|F_c|
+    # post.score is d log L / d E_C in whatever parameterization it was handed, so it needs
+    # the chain rule back to the real E_C. Autograd does this for the target; a closed-form
+    # score has to be told. jac is 1 unless beta is free.
+    grad_F = post.score * jac / scale  # d log L / d|F_c|
     curv_F = _radial_curvature(target, f_calc, obs, opts.differentiate_window)  # already in F units
     pos = curv_F[ok & (curv_F > 0)]
     mu = opts.newton_damping * (pos.median() if pos.numel() else torch.tensor(1.0, dtype=curv_F.dtype))

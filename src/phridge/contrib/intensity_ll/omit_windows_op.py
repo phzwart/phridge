@@ -29,6 +29,7 @@ _OMIT_INPUTS = {
     "epsilon": "array",
     "centric": "array",
     "nu": "array",
+    "beta_residual": "array",
     "k_scale": "array",
     "omit": "json",
     "residue_ids": "json",
@@ -60,6 +61,7 @@ def ml_i_omit_windows(
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
     nu: Optional[Any] = None,
+    beta_residual: Optional[Any] = None,
     k_scale: Optional[Any] = None,
     omit: Optional[dict] = None,
     residue_ids: Optional[Any] = None,
@@ -106,7 +108,10 @@ def ml_i_omit_windows(
             shift=opts.shift,
         )
 
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
+    obs = _observations(
+        f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu,
+        beta_residual=beta_residual,
+    )
     store = run_omit_windows_core(
         eng=eng,
         f_model=fm,

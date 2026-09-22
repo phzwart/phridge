@@ -33,8 +33,17 @@ def cell_volume(unit_cell) -> float:
 
 def reciprocal_cartesian(unit_cell, hkl: np.ndarray) -> np.ndarray:
     """Cartesian reciprocal vectors d* for integer hkl, shape (N, 3)."""
-    o_inv_t = np.linalg.inv(orthogonalization_matrix(unit_cell)).T
-    return np.asarray(hkl, dtype=np.float64) @ o_inv_t.T
+    # LAPACK's inverse can leave the FPU error flags set even on a well-conditioned
+    # matrix, and numpy attributes them to whichever operation checks them next -- here
+    # the matmul, which reports a "divide by zero" that did not happen (a 1.4-condition
+    # cell triggers it). Suppress the flags and check the result instead, so the answer
+    # is validated rather than the bookkeeping believed.
+    with np.errstate(all="ignore"):
+        o_inv_t = np.linalg.inv(orthogonalization_matrix(unit_cell)).T
+        out = np.asarray(hkl, dtype=np.float64) @ o_inv_t.T
+    if not np.all(np.isfinite(out)):
+        raise ValueError(f"non-finite reciprocal vectors for unit cell {tuple(unit_cell)}")
+    return out
 
 
 def u_star_to_cart(unit_cell, u_star6: np.ndarray) -> np.ndarray:

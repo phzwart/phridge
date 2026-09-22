@@ -26,6 +26,10 @@ class Observations:
     alpha: Optional[Any] = None
     beta: Optional[Any] = None
     nu: Optional[Any] = None
+    # Residual variance in *normalized* units, in (0, 1), when it is fitted independently
+    # of alpha rather than tied to 1 - alpha^2. Deliberately not called ``beta``: for
+    # ``ml_i`` that slot already carries the Wilson scale Sigma.
+    beta_residual: Optional[Any] = None
 
     @classmethod
     def from_numpy(cls, device: str = "cpu", dtype: Any = None, **arrays: Optional[np.ndarray]) -> "Observations":

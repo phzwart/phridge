@@ -89,6 +89,16 @@ Options:
     --omit-box-size Å   Omit box edge length in Å (default: 10).
     --omit-mode MODE    boxes (default) or residue_blocks.
     --omit-prefix PATH  Output prefix → {prefix}_omit_windows.mtz (stitched omit coeffs).
+    --interleaved       Run each macro cycle's inner machinery on a per-reflection Rice
+                        surrogate fitted to the exact score and curvature at a checkpoint,
+                        spending the exact target only to adjudicate the block. Every block
+                        is accepted or rejected on the exact NLL and the final macro cycle
+                        is always fully exact. Default is --exact.
+    --exact             Evaluate the exact quadrature at every target call (default).
+    --interleaved-tol T Accept a block when NLL_1 <= NLL_0 + T (per-reflection-mean, default 0).
+    --interleaved-max-halvings N  Rejected-block retries with halved budget before the
+                        macro cycle falls back to fully exact (default 1).
+    --interleaved-refresh MODE  full (default) or visible_fraction.
     --keep-services     Keep Redis and worker running after refine (only with --redis).
     -h, --help          Show this help message.
 
@@ -111,8 +121,26 @@ Environment Overrides:
     PHRIDGE_PRECONDITION Enable XYZ/occ/ADP Gauss-Newton preconditioning ('1' or 'true')
     PHRIDGE_STATS_REPORT Print I/σ + σ_A bins after scale updates (default on; '0' to disable)
     PHRIDGE_STATS_BIN_SIZE  Reflections per stats bin (default 500)
+    PHRIDGE_BETA_MODE       Stage-2 β: free (default) or constrained. Free fits β per
+                            shell as the intercept of Z_o vs E_C², so a Wilson
+                            normalization error cannot be laundered into σ_A.
+                            Constrained restores β = Σ_W(1-σ_A²).
+    PHRIDGE_SIGMA_A_SHAPE   σ_A profile: free (default, smoothed) or monotone.
+    PHRIDGE_SMOOTH_SIGMA_A  Smoothness on the σ_A logits (default 1.0). Choose on the
+    PHRIDGE_SMOOTH_BETA     tune set only; these are regularization, not results.
+    PHRIDGE_WILSON_MODEL    Wilson Σ_W form: anisotropic (default) or isotropic.
+                            anisotropic fits a 3x3 B tensor and constrains the overall
+                            k_anisotropic to isotropic (the two are degenerate); it
+                            falls back to a scalar if the reflections cannot determine
+                            six components. Set 'isotropic' to force the scalar.
+    PHRIDGE_CC_SHELLS       Resolution shells in the CC_I table (default 8, range 1-40)
+    PHRIDGE_CC_ISIG_EDGES   Fixed I/σ bin edges for the CC_I table (default 0,1,2,3,5,9)
     PHRIDGE_VERBOSE_TARGET  Print per-eval mli_quad banners ('1' to enable; default off)
     PHRIDGE_WEIGHT_METRIC   Weight-trial ranking: nll (default) or rfree
+    PHRIDGE_TARGET_MODE     exact (default) or interleaved; mirrors refinement.target_mode
+    PHRIDGE_INTERLEAVED_TOL Block acceptance tolerance on the exact NLL (default 0)
+    PHRIDGE_INTERLEAVED_MAX_HALVINGS  Rejected-block retries before exact fallback (default 1)
+    PHRIDGE_INTERLEAVED_REFRESH  Surrogate refresh: full (default) or visible_fraction
     PHRIDGE_SIGMA_A_BINS    Number of σ_A / ν resolution shells (bins mode)
     PHRIDGE_SIGMA_A_TV_NORM Total-variation penalty λ_TV on adjacent σ_A and ν bins
     PHRIDGE_FIT_SIGMA_WILSON  Intensity-only ML Wilson Σ₀/B_W then σ_A (default on; 0 = moment plot only)
@@ -378,6 +406,38 @@ while [[ $# -gt 0 ]]; do
             ;;
         --weight-metric=*)
             export PHRIDGE_WEIGHT_METRIC="${1#*=}"
+            shift
+            ;;
+        --interleaved)
+            export PHRIDGE_TARGET_MODE="interleaved"
+            shift
+            ;;
+        --exact)
+            export PHRIDGE_TARGET_MODE="exact"
+            shift
+            ;;
+        --interleaved-tol)
+            export PHRIDGE_INTERLEAVED_TOL="$2"
+            shift 2
+            ;;
+        --interleaved-tol=*)
+            export PHRIDGE_INTERLEAVED_TOL="${1#*=}"
+            shift
+            ;;
+        --interleaved-max-halvings)
+            export PHRIDGE_INTERLEAVED_MAX_HALVINGS="$2"
+            shift 2
+            ;;
+        --interleaved-max-halvings=*)
+            export PHRIDGE_INTERLEAVED_MAX_HALVINGS="${1#*=}"
+            shift
+            ;;
+        --interleaved-refresh)
+            export PHRIDGE_INTERLEAVED_REFRESH="$2"
+            shift 2
+            ;;
+        --interleaved-refresh=*)
+            export PHRIDGE_INTERLEAVED_REFRESH="${1#*=}"
             shift
             ;;
         --sigma-a-bins)

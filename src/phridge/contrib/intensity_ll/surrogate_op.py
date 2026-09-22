@@ -40,6 +40,7 @@ _SURROGATE_INPUTS = {
     "epsilon": "array",
     "centric": "array",
     "nu": "array",
+    "beta_residual": "array",
     "shell_index": "array",
     "surrogate": "json",
 }
@@ -74,6 +75,7 @@ def ml_i_surrogate_fit(
     epsilon: Optional[Any] = None,
     centric: Optional[Any] = None,
     nu: Optional[Any] = None,
+    beta_residual: Optional[Any] = None,
     shell_index: Optional[Any] = None,
     surrogate: Optional[dict] = None,
 ) -> dict[str, Any]:
@@ -98,7 +100,10 @@ def ml_i_surrogate_fit(
         raise ValueError(f"ml_i_surrogate_fit needs the ml_i target, got {spec.get('name')!r}")
     spec["name"] = "ml_i"
     tgt = build_target(spec)
-    obs = _observations(f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu)
+    obs = _observations(
+        f_obs, weights, r_free, alpha, beta, epsilon, centric, nu=nu,
+        beta_residual=beta_residual,
+    )
 
     dev = _DEVICE["device"]
     is_mps = dev.startswith("mps")
