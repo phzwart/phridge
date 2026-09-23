@@ -419,11 +419,16 @@ class InterleavedController:
         *,
         log: Any = None,
         mode: TargetMode = TargetMode.interleaved,
+        journal: Any = None,
     ) -> None:
         self.host = host
         self.options = options or InterleavedOptions()
         self.log = log
         self.mode = mode
+        # The run's NLL journal, if one is active. The ladder measures NLL_0 and NLL_1
+        # exactly in order to adjudicate each block, so the journal is handed those
+        # values rather than being left to re-measure the same two points.
+        self.journal = journal
         self.telemetry = InterleavedTelemetry()
         self._last: Optional[CheckpointResult] = None
         self._block_index = 0
@@ -436,13 +441,14 @@ class InterleavedController:
     def _emit(self, text: str) -> None:
         if not self.options.verbose:
             return
-        for out in (self.log,):
-            if out is not None and hasattr(out, "write"):
-                try:
-                    print(text, file=out)
-                except Exception:
-                    pass
-        print(text, flush=True)
+        from phridge.client.intensity.heartbeat import output_streams
+
+        log = self.log if self.log is not None and hasattr(self.log, "write") else None
+        for out in output_streams(log):
+            try:
+                print(text, file=out, flush=True)
+            except Exception:
+                pass
 
     def _checkpoint(self) -> CheckpointResult:
         cp = self.host.exact_checkpoint()
@@ -466,6 +472,51 @@ class InterleavedController:
     def _record(self, record: BlockRecord) -> None:
         self.telemetry.blocks.append(record)
         self._emit(record.line())
+        self._journal_block(record)
+
+    def _journal_block(self, record: BlockRecord) -> None:
+        """Mirror the block into the run-wide NLL journal, free of charge."""
+        if self.journal is None:
+            return
+        from phridge.client.intensity.nll_log import NllPoint, StageKind
+
+        try:
+            # The ladder's NLL is -log p(Z). Σ_W does not move inside a block, so adding
+            # the same log(εΣ) to both ends puts the line in -log p(I) units — the units
+            # every other stage uses — without changing the delta the block is judged on.
+            off_w = None
+            getter = getattr(self.host, "_normalization_offset", None)
+            if callable(getter):
+                off_w = getter()[0]
+
+            def _shift(value: Optional[float]) -> Optional[float]:
+                if value is None or off_w is None:
+                    return value
+                return float(value) + float(off_w)
+
+            self.journal.set_prefix(record.site.when())
+            self.journal.record_stage(
+                f"{record.site.where()} | block {record.index}",
+                StageKind.model,
+                NllPoint(work=_shift(record.nll_0)),
+                NllPoint(work=_shift(record.nll_1)),
+                detail=record.outcome.value,
+            )
+        except Exception:
+            pass  # telemetry must never cost a block
+
+    def _journal_entry_nll(self) -> Optional[float]:
+        """Entry NLL for the fully-exact branch, which the ladder does not otherwise need.
+
+        Only spent when a journal is active: without it the branch has no use for a
+        before-value, and an exact evaluation is the single most expensive thing here.
+        """
+        if self.journal is None or not getattr(self.journal, "enabled", False):
+            return None
+        try:
+            return self._exact_nll()
+        except Exception:
+            return None
 
     # -- the ladder -------------------------------------------------------------
     def run_macro_cycle(
@@ -495,15 +546,16 @@ class InterleavedController:
             )
             self.host.use_surrogate(False)
             before = self.telemetry.n_surrogate_evals
+            nll_before = self._journal_entry_nll()
             runner.run(full)
             nll = self._exact_nll()
             self._record(
                 BlockRecord(
                     index=self._block_index,
                     outcome=BlockOutcome.exact,
-                    nll_0=None,
+                    nll_0=nll_before,
                     nll_1=nll,
-                    exact_delta=None,
+                    exact_delta=(nll - nll_before) if nll_before is not None else None,
                     predicted_delta=None,
                     n_exact_evals=1,
                     n_inner_evals=self.telemetry.n_surrogate_evals - before,

@@ -14,12 +14,18 @@ axes is already a factor ~4 difference in expected intensity between directions
 where ``s_cart = O^-T h`` is the metric-correct Cartesian reciprocal vector
 (``|s_cart| = 1/d``) and ``B`` is a positive semi-definite 3x3 tensor in A^2.
 
-**The tensor is the default.** Real data are anisotropic, so normalizing them with a
-scalar is a modelling error, not a conservative choice; ``wilson_model="isotropic"`` is
-available but must be asked for. The one situation where the tensor is *not* fitted is a
-reflection set whose directions cannot determine six components -- see
-:func:`tensor_identifiability` -- where the fit falls back to isotropic and says so in
-``sigma_wilson_params["wilson_fallback"]`` rather than reporting an unconstrained tensor.
+**The default is binned** (``wilson_model="binned"``):
+
+    Sigma_W(h) = S_k * exp(-0.5 * s_cart^T B s_cart),   tr(B) = 0
+
+``S_k`` is the mean of ``I/(epsilon A)`` over resolution bin ``k``, recomputed for every
+trial ``B``, so each bin keeps its observed mean intensity exactly and the only thing
+fitted is the global direction dependence. A single smooth curve (``"anisotropic"``,
+``"isotropic"``) cannot follow structure between shells, and because stage 2 freezes
+``Sigma_W`` that misfit is paid for in sigma_A and beta. Both curve forms remain
+available but must be asked for. Where the reflection directions cannot determine a
+tensor -- see :func:`tensor_identifiability` -- it is dropped and the fit says so in
+``sigma_wilson_params["wilson_fallback"]`` rather than reporting an unconstrained one.
 
 
 Why exactly one anisotropy carrier is free
@@ -90,7 +96,10 @@ ANISO_NEGLIGIBLE_DELTA_B = 0.5
 # separates "usable" from "cannot be determined" by a factor of 400 either way.
 MIN_TENSOR_IDENTIFIABILITY = 1e-3
 
-WilsonModel = Literal["isotropic", "anisotropic"]
+WilsonModel = Literal["binned", "isotropic", "anisotropic"]
+
+# Models whose Sigma_W carries directional falloff, so k_anisotropic must be held isotropic.
+_ANISOTROPIC_MODELS = ("binned", "anisotropic")
 
 
 class WilsonOptions(BaseModel):
@@ -99,14 +108,15 @@ class WilsonOptions(BaseModel):
     model_config = {"extra": "forbid"}
 
     wilson_model: WilsonModel = Field(
-        default="anisotropic",
+        default="binned",
         description=(
-            "'anisotropic' (default) fits Sigma_0 and a positive semi-definite 3x3 B tensor "
-            "(6 parameters) via its Cholesky factor, starting from the isotropic solution; "
-            "'isotropic' fits Sigma_0 and a scalar B_W. Real data are anisotropic, so the "
-            "tensor is the default. It requires the model-side k_anisotropic to be "
-            "constrained to isotropic, since the two are degenerate; the fit falls back to "
-            "isotropic on reflection sets that cannot determine six components."
+            "'binned' (default): Sigma_W(h) = S_k * exp(-0.5 s^T B s) with S_k the mean "
+            "of I/(eps A) in resolution bin k and B a global traceless tensor, so every "
+            "bin keeps its observed mean intensity and only the direction dependence is "
+            "fitted. 'anisotropic' fits Sigma_0 and a PSD 3x3 B tensor (one smooth curve); "
+            "'isotropic' fits Sigma_0 and a scalar B_W. Both anisotropic forms require the "
+            "model-side k_anisotropic to be constrained to isotropic, since the two are "
+            "degenerate; the tensor is dropped on reflection sets that cannot determine it."
         ),
     )
     max_iter: int = Field(
@@ -117,22 +127,86 @@ class WilsonOptions(BaseModel):
     def anisotropic(self) -> bool:
         return self.wilson_model == "anisotropic"
 
+    @property
+    def binned(self) -> bool:
+        return self.wilson_model == "binned"
+
+    @property
+    def carries_anisotropy(self) -> bool:
+        return wilson_carries_anisotropy(self.wilson_model)
+
+
+def wilson_carries_anisotropy(model: Any) -> bool:
+    """Whether this Sigma_W form owns the data anisotropy (so k_anisotropic may not)."""
+    return str(model) in _ANISOTROPIC_MODELS
+
 
 def normalize_wilson_model(value: Any) -> WilsonModel:
-    """Coerce op JSON into a valid ``wilson_model``. Unset or unrecognized -> anisotropic.
+    """Coerce op JSON into a valid ``wilson_model``. Unset or unrecognized -> binned.
 
-    The fallback points at the anisotropic tensor because that is now the default and the
-    physically right model: real data are anisotropic, and silently normalizing them with
-    a scalar is the error that matters. Selecting the isotropic model has to be explicit.
-
-    Anisotropic carries a hard constraint on the scaling method with it, but that is
-    enforced by measurement (``_assert_single_anisotropy_carrier``) rather than by being
-    coy about the default here.
+    A single smooth curve cannot follow what real data do between shells (ice rings,
+    detector gaps, the solvent hump), and freezing such a curve before sigma_A and beta
+    are fitted costs more likelihood than the model explains. Per-bin means keep the
+    observed intensity level in every shell; the global tensor adds only the directions.
     """
     text = str(value or "").strip().lower()
     if text in ("iso", "isotropic", "scalar"):
         return "isotropic"
-    return "anisotropic"
+    if text in ("anisotropic", "aniso", "tensor", "curve"):
+        return "anisotropic"
+    return "binned"
+
+
+def traceless(b_cart: np.ndarray) -> np.ndarray:
+    """``B - tr(B)/3 I``: the directional part only, the isotropic falloff removed."""
+    b = 0.5 * (np.asarray(b_cart, dtype=np.float64) + np.asarray(b_cart, dtype=np.float64).T)
+    return b - np.trace(b) / 3.0 * np.eye(3)
+
+
+def binned_sigma_w(
+    *,
+    i_over_eps: np.ndarray,
+    bin_id: np.ndarray,
+    s_cart: Optional[np.ndarray],
+    b_cart: Optional[np.ndarray],
+    valid: Optional[np.ndarray] = None,
+    floor: Optional[float] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """``Sigma_W = S_k A(h)`` with ``S_k`` chosen so each bin's mean ``I/(eps Sigma_W)`` is 1.
+
+    ``A(h) = exp(-0.5 s^T B s)`` with ``B`` made traceless, so the bins own all isotropic
+    falloff and the tensor only redistributes intensity between directions inside a bin.
+    Returns ``(sigma_w, bin_means)``. Numpy twin of the torch fit in the nuisance op.
+    """
+    y = np.asarray(i_over_eps, dtype=np.float64)
+    idx = np.asarray(bin_id, dtype=np.int64)
+    ok = np.isfinite(y) if valid is None else (np.asarray(valid, dtype=bool) & np.isfinite(y))
+    if s_cart is not None and b_cart is not None:
+        s = np.asarray(s_cart, dtype=np.float64)
+        a = np.exp(-0.5 * np.einsum("ni,ij,nj->n", s, traceless(b_cart), s))
+    else:
+        a = np.ones_like(y)
+    n_bins = int(idx.max()) + 1 if idx.size else 0
+    sums = np.bincount(idx[ok], weights=(y / a)[ok], minlength=n_bins)
+    counts = np.bincount(idx[ok], minlength=n_bins)
+    means = sums / np.maximum(counts, 1)
+    if floor is None:
+        pos = means[means > 0]
+        floor = 1e-3 * float(np.median(pos)) if pos.size else 1e-8
+    means = np.maximum(means, float(floor))
+    return np.maximum(means[idx] * a, 1e-12), means
+
+
+def equal_count_bins(s_sq: np.ndarray, per_bin: int = 500, min_bins: int = 6, max_bins: int = 60) -> np.ndarray:
+    """Resolution bins with equal reflection counts, used when the caller supplies none."""
+    s = np.asarray(s_sq, dtype=np.float64)
+    n = s.size
+    n_bins = int(min(max_bins, max(min_bins, n // max(int(per_bin), 1))))
+    n_bins = max(1, min(n_bins, n))
+    order = np.argsort(s, kind="stable")
+    ids = np.empty(n, dtype=np.int64)
+    ids[order] = (np.arange(n) * n_bins) // max(n, 1)
+    return ids
 
 
 @dataclass
@@ -331,7 +405,7 @@ def describe_wilson_tensor(
         delta_b_aniso=float(eigvals[-1] - eigvals[0]),
         model=model,
         nll_per_refl=float(nll_per_refl),
-        n_params=int(n_params if n_params is not None else (7 if model == "anisotropic" else 2)),
+        n_params=int(n_params if n_params is not None else (2 if model == "isotropic" else 7)),
     )
 
 

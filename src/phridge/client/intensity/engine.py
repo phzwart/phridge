@@ -222,12 +222,16 @@ def amplitude_scaffold_from_intensities(i_obs: Any) -> Any:
 from phridge.client.api import Bridge
 from phridge.client.convert import crystal_from_cctbx, miller_from_cctbx, miller_to_cctbx
 from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+from phridge.contrib.intensity_ll.bulk_solvent_op import BULK_SOLVENT_OP_NAME
 from phridge.contrib.intensity_ll.client import RemoteIntensityMapResult
 from phridge.contrib.intensity_ll.ops import (
     MAPS_OP_NAME,
     NUISANCE_FIT_OP_NAME,
     TARGET_AND_GRADIENTS_OP_NAME,
     register_ops,
+)
+from phridge.contrib.intensity_ll.wilson import (
+    wilson_carries_anisotropy as _wilson_carries_anisotropy,
 )
 from phridge.models import SfEngineParams
 from phridge.sfcalc.client import RemoteGradients, RemoteTargetResult
@@ -248,6 +252,78 @@ def _env_float(name: str, default: float) -> float:
     except ValueError:
         return float(default)
     return value if value >= 0.0 and value == value else float(default)
+
+
+def _env_int(name: str) -> Optional[int]:
+    """Positive int from the environment, or None if unset / unparseable."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _nuisance_detail(
+    tune_label: str,
+    before: tuple[Optional[float], Optional[float]],
+    after: tuple[Optional[float], Optional[float]],
+) -> str:
+    """Stage detail: which reflections were fitted, and how log(εΣ) moved.
+
+    The NLL on the stage line is already -log p(I). Showing the normalization term
+    beside it is what makes a remaining jump readable: the part that is just Σ_W
+    changing units is written out, and whatever is left is the fit.
+    """
+    detail = f"tune={tune_label}"
+    if before[0] is not None and after[0] is not None:
+        detail += f", log(εΣ) work {before[0]:.3f} -> {after[0]:.3f}"
+        if before[1] is not None and after[1] is not None:
+            detail += f", free {before[1]:.3f} -> {after[1]:.3f}"
+    return detail
+
+
+def _fmt_k_triple(values: Any) -> str:
+    return "/".join(f"{float(x):.2f}" for x in values)
+
+
+def _bulk_solvent_detail(raw: dict, k_sol_in: Optional[float], b_sol_in: Optional[float]) -> str:
+    """Stage detail for the NLL binned k_mask fit, and what it bought.
+
+    Both NLLs are profiled over per-shell σ_A and β, so they compare the solvent curves
+    alone; the reference is mmtbx's least-squares k_mask. ``k_sol`` / ``B_sol`` are a
+    two-parameter caption of the fitted curve, not the model.
+    """
+    stats = raw.get("stats") or {}
+    n_bins = stats.get("n_bins") or stats.get("n_shells")
+    parts: list[str] = []
+    if n_bins is not None:
+        parts.append(f"k_mask bins={int(n_bins)}")
+    k_ls, k_new = stats.get("k_ls"), stats.get("k_new")
+    if k_ls is not None and k_new is not None:
+        parts.append(f"k(low/mid/high) {_fmt_k_triple(k_ls)} -> {_fmt_k_triple(k_new)}")
+    ks, bs = raw.get("k_sol"), raw.get("b_sol")
+    if ks is not None and bs is not None:
+        start = (
+            f"{k_sol_in:.3f}/{b_sol_in:.1f} -> "
+            if k_sol_in is not None and b_sol_in is not None
+            else ""
+        )
+        parts.append(f"equiv k_sol/B_sol {start}{float(ks):.3f}/{float(bs):.1f}")
+    detail = ", ".join(parts) if parts else "k_mask"
+    ref, new = stats.get("nll_fit_ref"), stats.get("nll_fit_new")
+    if ref is not None and new is not None:
+        detail += f", profiled −log p(Z) vs LS k_mask: work {float(new) - float(ref):+.5f}"
+    ref_r, new_r = stats.get("nll_rest_ref"), stats.get("nll_rest_new")
+    if ref_r is not None and new_r is not None:
+        detail += f", free {float(new_r) - float(ref_r):+.5f}"
+    detail += ", installed" if raw.get("accepted") else ", kept LS k_mask"
+    failures = stats.get("lbfgs_failures")
+    if failures:
+        detail += ", LBFGS failed: " + "; ".join(str(item) for item in failures)
+    return detail
 
 
 # Smallest test set worth fitting σ_A on: the worker defaults to ``n_tune // 250``
@@ -1853,6 +1929,136 @@ class IntensityScaleMixin:
         n = self._i_obs.size()
         return flex.double(n, 1.0)
 
+    def _model_scale_array(self) -> Optional[np.ndarray]:
+        """Per-reflection scale that :meth:`f_model` applies to ``F_calc + F_bulk``.
+
+        mmtbx's core forms ``k_isotropic_exp * k_isotropic * k_anisotropic * (F_calc +
+        F_bulk)``; the fallback path of :meth:`f_model` uses ``k_isotropic *
+        k_anisotropic``. None when the arrays are unavailable or malformed.
+        """
+        try:
+            n = self._i_obs.size()
+            k = np.asarray(self.k_isotropic(), dtype=np.float64) * np.asarray(
+                self.k_anisotropic(), dtype=np.float64
+            )
+            core = getattr(getattr(self, "arrays", None), "core", None)
+            k_exp = getattr(core, "k_isotropic_exp", None) if core is not None else None
+            if k_exp is not None:
+                k = k * np.asarray(k_exp, dtype=np.float64)
+        except Exception:
+            return None
+        if k.shape != (n,) or not np.all(np.isfinite(k)):
+            return None
+        return k
+
+    def _resync_after_mmtbx_scaling(self, log: Any = None) -> None:
+        """Bring this object back in line after ``f_model_all_scales.run``.
+
+        That class copies our ``__dict__``, runs ``mmtbx.f_model.manager`` methods on the
+        copy (none of our overrides), and copies the dict back. So our F caches come back
+        holding pre-scaling values, and with ``apply_back_trace`` the overall B has been
+        moved into a *new* ``xray_structure`` that our ``_xray_structure`` -- the one the
+        target op computes F_calc from -- never saw. A stale cached F_model makes the
+        residual-scale fold compute k1 from the wrong F, which alternates cycle to cycle.
+        """
+        self._f_model = None
+        self._last_maps = None
+        self._r_values = None
+        self._f_post = None
+        self._f_mode = None
+        self._last_gradients = None
+        new_xrs = self.__dict__.get("xray_structure")
+        if new_xrs is not None and new_xrs is not self._xray_structure:
+            # Recompute F_calc with our own engine and put it in the core, so f_model()
+            # and the target op share one F_calc rather than cctbx's and ours.
+            self.update_xray_structure(new_xrs, update_f_calc=True)
+            print(
+                "[mli_quad] scaling replaced the model (overall B moved into the atoms); "
+                "F_calc recomputed from the updated structure",
+                file=log if log is not None else sys.stdout,
+            )
+        else:
+            self._f_calc = None
+
+    def _model_scale_mismatch(self, f_model: Any) -> Optional[float]:
+        """Relative RMS of ``|k (F_calc + F_bulk)| - |f_model|``, or None if unmeasurable."""
+        k = self._model_scale_array()
+        if k is None or f_model is None or self._f_calc is None:
+            return None
+        base = np.asarray(self._f_calc.data(), dtype=np.complex128)
+        fb = self.f_bulk()
+        if fb is not None:
+            base = base + np.asarray(fb.data(), dtype=np.complex128)
+        ref = np.abs(np.asarray(f_model.data(), dtype=np.complex128))
+        diff = np.abs(k * base) - ref
+        den = float(np.sqrt(np.mean(ref**2)))
+        if not np.isfinite(den) or den <= 0.0:
+            return None
+        return float(np.sqrt(np.mean(diff**2)) / den)
+
+    def _fit_bulk_solvent_nll(self, log: Any = None) -> Optional[str]:
+        """Refit the binned k_mask to the intensity NLL; install it if it beats mmtbx's.
+
+        Same protocol as mmtbx's fast scaler (one value per resolution bin, interpolated)
+        scored on −log p(Z) with σ_A / β profiled. Fitted on the work set with the
+        current per-reflection scale held. Returns the journal detail, or None when the
+        fit did not run (``PHRIDGE_BULK_SOLVENT_NLL=0``, no single solvent mask, or no
+        core to install into).
+        """
+        if not _env_flag_enabled("PHRIDGE_BULK_SOLVENT_NLL", "1"):
+            return None
+        if not (hasattr(self, "update_core") and getattr(self, "arrays", None) is not None):
+            return None
+        f_masks, k_masks = self.f_masks(), self.k_masks()
+        if not f_masks or not k_masks or len(f_masks) != 1 or len(k_masks) != 1:
+            return None
+        k_model = self._model_scale_array()
+        if k_model is None or self.sigma_wilson is None:
+            return None
+        n = self._i_obs.size()
+        d = np.asarray(self._i_obs.d_spacings().data(), dtype=np.float64)
+        ss = 1.0 / (4.0 * np.maximum(d, 1e-6) ** 2)
+        if self._r_free_flags is not None:
+            work = ~np.asarray(self._r_free_flags.data(), dtype=bool)
+        else:
+            work = np.ones(n, dtype=bool)
+        k_sol_in, b_sol_in = self.k_sol_b_sol()
+        raw = self.bridge.call(
+            BULK_SOLVENT_OP_NAME,
+            f_calc=self.f_calc(),
+            f_obs=self._i_obs,
+            f_mask=f_masks[0].data(),
+            k_model=flex.double(np.ascontiguousarray(k_model)),
+            k_mask=k_masks[0],
+            fit_mask=flex.bool(work.tolist()),
+            ss=flex.double(np.ascontiguousarray(ss)),
+            epsilon=self._i_obs.epsilons().data().as_double(),
+            centric=self._i_obs.centric_flags().data(),
+            sigma_wilson=self.sigma_wilson,
+            nu=getattr(self, "nu_per_refl", None),
+            k_sol=k_sol_in,
+            b_sol=b_sol_in,
+            n_shells=_env_int("PHRIDGE_BULK_SOLVENT_BINS"),
+            smooth=_env_float("PHRIDGE_SMOOTH_SIGMA_A", 1.0),
+        )
+        if raw.get("accepted"):
+            k_mask_new = np.asarray(raw["k_mask"], dtype=np.float64)
+            if k_mask_new.shape == (n,) and np.all(np.isfinite(k_mask_new)):
+                self.update_core(k_mask=[flex.double(np.ascontiguousarray(k_mask_new))])
+                self.k_sol = float(raw["k_sol"])
+                self.b_sol = float(raw["b_sol"])
+                self._f_model = None
+                self._last_maps = None
+                self._r_values = None
+                self._f_post = None
+                self._f_mode = None
+                self._last_gradients = None
+                # The solvent contribution moved, so the least-squares residual did too.
+                self._fold_residual_scale_into_k_isotropic()
+            else:
+                raw = dict(raw, accepted=False)
+        return _bulk_solvent_detail(raw, k_sol_in, b_sol_in)
+
     def _estimate_initial_scale(self) -> None:
         """Estimate analytical least-squares scale relating F_calc to I_obs."""
         if self._f_calc is None or self._i_obs is None:
@@ -2346,6 +2552,9 @@ class IntensityFModel(
         self._use_surrogate: bool = False
         self._interleaved: Optional[Any] = None
         self._surrogate_eval_count: int = 0
+        # Run-scoped NLL journal (PHRIDGE_NLL_LOG). Created on first use so a run that
+        # never reaches a stage boundary never pays for a probe.
+        self._nll_journal: Optional[Any] = None
         # The final macro cycle always runs fully exact, so deposited statistics never
         # touch the surrogate. total_macro_cycles is filled in from the Phenix params.
         self.macro_cycle_index: int = 0
@@ -2375,6 +2584,27 @@ class IntensityFModel(
                 m = float(flex.mean(i_sel / eps_sel))
                 sw.set_selected(sel, max(m, 1e-4))
         return sw
+
+    def _wilson_bin_ids(self) -> Optional[Any]:
+        """Per-reflection index of the binner bin, for the binned Σ_W.
+
+        The same bins as :meth:`_setup_sigma_wilson`, so the binned model with no tensor
+        is exactly the starting Σ. None if the binner does not cover every reflection;
+        the op then builds its own bins.
+        """
+        binner = getattr(self, "binner", None)
+        if binner is None:
+            return None
+        try:
+            ids = np.full(self._i_obs.size(), -1.0, dtype=np.float64)
+            for k, i_bin in enumerate(binner.range_used()):
+                sel = np.asarray(binner.selection(i_bin), dtype=bool)
+                ids[sel] = float(k)
+        except Exception:
+            return None
+        if np.any(ids < 0):
+            return None
+        return flex.double(ids)
 
     def _setup_sigma_a(self, user_sa: Optional[Any]) -> Any:
         if user_sa is not None:
@@ -2487,12 +2717,14 @@ class IntensityFModel(
                 f"[interleaved] {when}: interleaving enabled -- inner blocks in this cycle "
                 "run on the surrogate and each is adjudicated by an exact evaluation"
             )
-        if log is not None and hasattr(log, "write"):
+        from phridge.client.intensity.heartbeat import output_streams
+
+        sink = log if log is not None and hasattr(log, "write") else None
+        for out in output_streams(sink):
             try:
-                print(text, file=log)
+                print(text, file=out, flush=True)
             except Exception:
                 pass
-        print(text, flush=True)
 
     def _surrogate_eval_kwargs(self) -> Dict[str, Any]:
         """``target_eval`` kwargs for the stock ``ml_f`` path.
@@ -2656,6 +2888,7 @@ class IntensityFModel(
                 interleaved_options_from_env(),
                 log=log,
                 mode=TargetMode.interleaved,
+                journal=self.nll_journal(log=log),
             )
         return self._interleaved
 
@@ -2694,7 +2927,21 @@ class IntensityFModel(
         if not precondition:
             precondition = _precondition_enabled()
 
-        k_scale = float(scale_factor) if scale_factor is not None else self.scale_factor
+        # The target must see the same F_model as the functor, the maps and the nuisance
+        # fit: f_model·k1, with mmtbx's per-reflection scales inside f_model. A scalar
+        # mean of those scales gives a differently shaped F_model whenever k_isotropic
+        # has a resolution slope.
+        k_model = self._model_scale_array() if scale_factor is None else None
+        residual_k1: Any = False
+        if k_model is not None:
+            # scale_k1() before the first scaling is the stored scale, not an LS fit.
+            if getattr(self, "_scale_fitted", False):
+                residual_k1 = True
+            else:
+                k_model = k_model * float(self.scale_factor)
+            k_scale = float(np.mean(k_model))
+        else:
+            k_scale = float(scale_factor) if scale_factor is not None else self.scale_factor
         px, table = _packed_xray(self._xray_structure, self.table)
         kw = self._common_eval_kwargs()
         kw.update({
@@ -2704,8 +2951,11 @@ class IntensityFModel(
             "target": self.target_spec,
             "precondition": bool(precondition),
             "damping": float(damping),
-            "scale_factor": k_scale,
+            "scale_factor": 1.0 if k_model is not None else k_scale,
         })
+        if k_model is not None:
+            kw["k_model"] = flex.double(np.ascontiguousarray(k_model))
+            kw["residual_k1"] = bool(residual_k1)
         fb = self.f_bulk()
         if fb is not None:
             kw["f_bulk"] = fb.data()
@@ -2800,6 +3050,66 @@ class IntensityFModel(
         if res.target_test() is not None:
             self._target_value_test = res.target_test()
         return self._target_value_test
+
+    def nll_point(self) -> Any:
+        """Work and free NLL from a **single** exact evaluation, with their counts.
+
+        ``target_w()`` followed by ``target_t()`` is two full quadratures for two numbers
+        the same functor call already produced, which matters here because the weight
+        scans ask for this pair once per trial.
+        """
+        from phridge.client.intensity.nll_log import NllPoint
+
+        res = self.target_functor()(compute_gradients=False)
+        work = float(res.target_work())
+        test = res.target_test()
+        # Cache the quadrature's own number. The minimizer's progress line diffs against
+        # it, and that number is -log p(Z); mixing in the normalization offset here would
+        # show up as a phantom jump on the next gradient evaluation.
+        self._target_value = work
+        if test is not None:
+            self._target_value_test = float(test)
+        # The journal reports -log p(I) = -log p(Z) + log(εΣ), which is what stays
+        # comparable when the nuisance fit replaces Σ_W. While Σ is fixed the two differ
+        # by a constant, so every delta is the same number either way.
+        off_w, off_f = self._normalization_offset()
+        if off_w is not None and np.isfinite(work):
+            work += off_w
+        if test is not None and off_f is not None:
+            test = float(test) + off_f
+        n_free = 0
+        if self._r_free_flags is not None:
+            try:
+                n_free = int(self._r_free_flags.data().count(True))
+            except Exception:
+                n_free = 0
+        n_total = int(self._i_obs.size()) if self._i_obs is not None else None
+        return NllPoint(
+            work=work,
+            free=float(test) if test is not None else None,
+            n_work=(n_total - n_free) if n_total is not None else None,
+            n_free=n_free or None,
+        )
+
+    def _normalization_offset(self) -> tuple[Optional[float], Optional[float]]:
+        """``(mean log(εΣ) on work, mean log(εΣ) on free)``. ``(None, None)`` if unavailable."""
+        from phridge.client.intensity.nll_log import normalization_offset
+
+        try:
+            eps = self._i_obs.epsilons().data().as_double()
+            free = self._r_free_flags.data() if self._r_free_flags is not None else None
+            return normalization_offset(eps, self.sigma_wilson, free)
+        except Exception:
+            return None, None
+
+    def nll_journal(self, log: Any = None) -> Any:
+        """The run's NLL journal, created on first use and kept for the whole run."""
+        from phridge.client.intensity.nll_log import NllJournal
+
+        if self._nll_journal is None:
+            self._nll_journal = NllJournal(self.nll_point, log=log)
+        self._nll_journal.set_log(log)
+        return self._nll_journal
 
     def one_time_gradients_wrt_atomic_parameters(self, **kwargs: Any) -> Any:
         """Component-wise gradients (matching mmtbx.f_model.manager)."""
@@ -2899,6 +3209,22 @@ class IntensityFModel(
             if env_fit_nu is not None and env_fit_nu.strip().lower() in ("1", "true", "yes", "on"):
                 fit_nu = True
 
+        # The NLL journal: this is the run's first chance to measure the target, and the
+        # two stages below are the only ones that refit nuisances rather than move atoms.
+        from phridge.client.intensity.nll_log import StageKind
+
+        journal = self.nll_journal(log=log)
+        cycle_label = (
+            f"macro cycle {self.macro_cycle_index}/{self.total_macro_cycles}"
+            if self.total_macro_cycles
+            else f"macro cycle {self.macro_cycle_index}"
+        )
+        journal.set_prefix(cycle_label)
+        # One probe serves as both the run's first NLL and this stage's entry value.
+        scale_start = journal.measure()
+        journal.mark_start(scale_start)
+        scale_t0 = time.monotonic()
+
         # 1. Run CCTBX bulk solvent and scaling if enabled
         from phridge.client.intensity.heartbeat import mli_heartbeat
 
@@ -2918,15 +3244,18 @@ class IntensityFModel(
                 self.__dict__["target_name"] = "mli_quad"
                 params = self._constrain_scaling_to_isotropic(params, log=log)
                 with mli_heartbeat("bulk_solvent_and_scaling", log=log, announce=True):
-                    f_model_all_scales.run(
-                        fmodel=self,
-                        apply_back_trace=apply_back_trace,
-                        remove_outliers=False,
-                        fast=fast,
-                        params=params,
-                        refine_hd_scattering=refine_hd_scattering,
-                        log=log,
-                    )
+                    try:
+                        f_model_all_scales.run(
+                            fmodel=self,
+                            apply_back_trace=apply_back_trace,
+                            remove_outliers=False,
+                            fast=fast,
+                            params=params,
+                            refine_hd_scattering=refine_hd_scattering,
+                            log=log,
+                        )
+                    finally:
+                        self._resync_after_mmtbx_scaling(log=log)
                 if optimize_mask and hasattr(self, "optimize_mask"):
                     self.optimize_mask(out=log)
                 try:
@@ -2936,8 +3265,14 @@ class IntensityFModel(
                         self.b_sol = float(bs)
                 except Exception:
                     pass
-            except Exception:
-                pass
+            except Exception as exc:
+                # Scaling is allowed to fail without stopping refinement, but not silently:
+                # a failed run leaves whatever scales were there before.
+                print(
+                    f"[mli_quad] WARNING: bulk-solvent scaling failed ({type(exc).__name__}: "
+                    f"{exc}); keeping the previous scales.",
+                    file=log if log is not None else sys.stdout,
+                )
 
         # 2. Fold residual LS scale into k_isotropic so f_model() is on I_obs counts
         # scale (Phenix apply_back_trace=True otherwise leaves residual_k1≈overall k).
@@ -2957,6 +3292,58 @@ class IntensityFModel(
 
         # 3. Model structure factors with bulk solvent (now on observation scale)
         f_model = self.f_model()
+        try:
+            mismatch = self._model_scale_mismatch(f_model)
+            if mismatch is not None and mismatch > 1e-6:
+                print(
+                    f"[mli_quad] WARNING: per-reflection k·(F_calc+F_bulk) differs from "
+                    f"f_model() by relative RMS {mismatch:.3g}; the target and the nuisance "
+                    f"fit are not seeing the same F_model.",
+                    file=log if log is not None else sys.stdout,
+                )
+        except Exception:
+            pass  # a diagnostic must never cost a macro cycle
+
+        # Measured here rather than immediately after the scaling call: the residual fold
+        # above invalidates the cached f_model, so this is the first point at which the
+        # scales and the model structure factors are consistent again. The same point is
+        # the entry value of the next stage.
+        after_scaling = journal.measure()
+        journal.record_stage(
+            "bulk solvent + scaling",
+            StageKind.target,
+            scale_start,
+            after_scaling,
+            seconds=time.monotonic() - scale_t0,
+            detail="" if bulk_solvent_and_scaling else "scaling disabled; residual fold only",
+        )
+        nuisance_start = after_scaling
+        if bulk_solvent_and_scaling:
+            bulk_t0 = time.monotonic()
+            bulk_detail: Optional[str] = None
+            try:
+                with mli_heartbeat("ml_i_bulk_solvent_fit", log=log, announce=True):
+                    bulk_detail = self._fit_bulk_solvent_nll(log=log)
+            except Exception as exc:
+                print(
+                    f"[mli_quad] WARNING: NLL bulk-solvent fit failed ({type(exc).__name__}: "
+                    f"{exc}); keeping the least-squares k_mask.",
+                    file=log if log is not None else sys.stdout,
+                )
+            if bulk_detail is not None:
+                nuisance_start = journal.measure()
+                journal.record_stage(
+                    "bulk solvent (NLL k_mask)",
+                    StageKind.target,
+                    after_scaling,
+                    nuisance_start,
+                    seconds=time.monotonic() - bulk_t0,
+                    detail=bulk_detail,
+                )
+        nuisance_t0 = time.monotonic()
+        # Σ_W is about to be replaced. Record log(εΣ) now so the stage line can show how
+        # much of the NLL movement is the change of normalization rather than the fit.
+        norm_before = self._normalization_offset()
 
         # 4. Refine sigma_A(s), Sigma_W(s), and nu on worker.
         # σ_A is estimated on the test set, as cctbx does for α/β: on the work set the
@@ -2981,6 +3368,11 @@ class IntensityFModel(
         # the scale must not still be carrying it too. Raising here, after scaling and
         # before the tensor is fitted, is the last point where the two are separable.
         self._assert_single_anisotropy_carrier(log=log)
+        # Fit σ_A and β to the F the target will be evaluated on. The functor, the maps
+        # and the checkpoints all use f_model·k1; fitting to bare f_model while k1 ≠ 1
+        # fits one amplitude scale and scores another.
+        residual_k1 = float(self.scale_k1())
+        f_model = self._checkpoint_f_model()
         nu_mode = os.environ.get("PHRIDGE_NU_MODE", "bins").strip().lower() or "bins"
         raw = None
         with mli_heartbeat(
@@ -3008,11 +3400,14 @@ class IntensityFModel(
                 tv_norm=tv_norm,
                 fit_sigma_wilson=fit_sigma_wilson,
                 wilson_model=self.wilson_model,
+                wilson_bins=self._wilson_bin_ids(),
                 beta_mode=self.beta_mode,
                 sigma_a_shape=self.sigma_a_shape,
                 smooth_sigma_a=_env_float("PHRIDGE_SMOOTH_SIGMA_A", 1.0),
                 smooth_beta=_env_float("PHRIDGE_SMOOTH_BETA", 1.0),
                 beta_consistency_prior=_env_float("PHRIDGE_BETA_CONSISTENCY_PRIOR", 0.0),
+                sigma_a_tensor=_env_flag_enabled("PHRIDGE_SIGMA_A_TENSOR", "1"),
+                sphericity=_env_float("PHRIDGE_SPHERICITY", 1.0),
             )
         self.sigma_a = flex.double(np.asarray(raw["sigma_a"], dtype=np.float64))
         self.sigma_wilson = flex.double(np.asarray(raw["sigma_wilson"], dtype=np.float64))
@@ -3054,6 +3449,29 @@ class IntensityFModel(
         # keeps the count at exactly one exact evaluation per block.
         self._surrogate = None
         self._use_surrogate = False
+        norm_after = self._normalization_offset()
+        detail = _nuisance_detail(tune_label, norm_before, norm_after)
+        detail += f", residual k1={residual_k1:.4f}"
+        # tune_nll is the objective stage 2 minimized: mean −log p(Z) on the tune
+        # set. The stage line is −log p(I). They differ by mean log(εΣ), so printing
+        # both is what shows whether the installed model is the one that was fit.
+        tune_nll = raw.get("tune_nll") if isinstance(raw, dict) else None
+        if tune_nll is not None:
+            try:
+                detail += f", tune −log p(Z)={float(tune_nll):.4f}"
+            except (TypeError, ValueError):
+                pass
+        failures = raw.get("lbfgs_failures") if isinstance(raw, dict) else None
+        if failures:
+            detail += ", LBFGS failed: " + "; ".join(str(item) for item in failures)
+        journal.record_stage(
+            "nuisance fit (σ_A, Σ_W, β, ν)",
+            StageKind.target,
+            nuisance_start,
+            journal.measure(),
+            seconds=time.monotonic() - nuisance_t0,
+            detail=detail,
+        )
         # The anisotropic scale was just refitted, so the cached tensor is stale. Report
         # it here, in the scaling method, next to the k_sol / b_sol it belongs with.
         try:
@@ -3065,7 +3483,11 @@ class IntensityFModel(
         except Exception:
             pass  # a log line must never cost a macro cycle
         self._print_stats_report(log=log, label="after update_all_scales")
-        if show:
+        # Phenix's fmodels.update_all_scales passes show=True together with its
+        # log, then calls fmodel.show() itself. Showing here too prints the
+        # engine summary twice. A caller that asks to show and does not hand us
+        # that log still gets the summary.
+        if show and log is None:
             self.show(log=log)
         # Optional windowed omit coefficients (read-only; never fails refinement)
         try:
@@ -3091,7 +3513,6 @@ class IntensityFModel(
         """Print resolution-binned I/σ + σ_A(s) + S_post/S_prior report (PHRIDGE_STATS_REPORT, default on)."""
         from phridge.client.intensity.stats_report import (
             merge_sstat_bins_into_report,
-            print_intensity_stats_report,
             report_from_fmodel,
             stats_report_enabled,
         )
@@ -3151,10 +3572,19 @@ class IntensityFModel(
             self._merge_agreement_stats_into_report(report)
             self._attach_cc_isig_table(report)
             self._last_stats_report = report
-            extras = []
-            if log is not None and hasattr(log, "write"):
-                extras.append(log)
-            print_intensity_stats_report(report, extra_streams=extras)
+            # Phenix's log already writes to the terminal. Printing to stdout and
+            # handing that log in as an extra stream emits the whole table twice.
+            from phridge.client.intensity.heartbeat import output_streams
+            from phridge.client.intensity.stats_report import format_intensity_stats_report
+
+            text = format_intensity_stats_report(report)
+            for stream in output_streams(log):
+                try:
+                    print(text, file=stream)
+                    if hasattr(stream, "flush"):
+                        stream.flush()
+                except Exception:
+                    pass
             return report
         except Exception as exc:
             try:
@@ -3198,10 +3628,11 @@ class IntensityFModel(
 
     @property
     def wilson_model(self) -> str:
-        """``"anisotropic"`` (default) or ``"isotropic"`` — which Σ_W form the fit uses.
+        """``"binned"`` (default), ``"anisotropic"`` or ``"isotropic"`` — the Σ_W form.
 
-        Read from ``PHRIDGE_WILSON_MODEL``. Real data are anisotropic, so the tensor is the
-        default and ``isotropic`` must be asked for explicitly. This is the switch that
+        Read from ``PHRIDGE_WILSON_MODEL``. Binned keeps each resolution bin's mean
+        intensity and fits a global traceless anisotropic B on top; the two single-curve
+        forms must be asked for explicitly. This is the switch that
         decides which of the two degenerate anisotropy carriers is free, so it is resolved
         in one place and every consumer reads it from here.
         """
@@ -3280,7 +3711,7 @@ class IntensityFModel(
         :meth:`_assert_single_anisotropy_carrier` measures what was actually applied
         afterwards, which is what a flag cannot tell us.
         """
-        if self.wilson_model != "anisotropic":
+        if not _wilson_carries_anisotropy(self.wilson_model):
             return params
         out = log if log is not None else sys.stdout
         # The real phenix.refine scope is bulk_solvent_and_scale, which carries both
@@ -3325,7 +3756,7 @@ class IntensityFModel(
         carriers live is the one error mode that produces a well-fitting, uninterpretable
         pair of anisotropy parameters, so it raises instead of warning.
         """
-        if self.wilson_model != "anisotropic":
+        if not _wilson_carries_anisotropy(self.wilson_model):
             return
         from phridge.contrib.intensity_ll.wilson import ANISO_NEGLIGIBLE_DELTA_B
 
@@ -3336,7 +3767,7 @@ class IntensityFModel(
             return
         raise ValueError(
             "Wilson Σ_W and the overall scale both carry anisotropy: wilson_model="
-            f"'anisotropic' (the default) but the applied k_anisotropic still spans "
+            f"'{self.wilson_model}' but the applied k_anisotropic still spans "
             f"{applied.anisotropy:.3f} A**2 between principal values (limit "
             f"{ANISO_NEGLIGIBLE_DELTA_B} A**2). These two are degenerate — fitting both "
             "gives a good fit and two individually meaningless tensors.\n"
@@ -3356,7 +3787,22 @@ class IntensityFModel(
         if aniso is None:
             return
         out = log if log is not None else sys.stdout
-        print(f"[mli_quad] global scaling: {format_aniso_scale_summary(aniso)}", file=out)
+        carried = _wilson_carries_anisotropy(self.wilson_model)
+        label = "F_calc scale, held isotropic" if carried else "global scaling"
+        print(f"[mli_quad] {label}: {format_aniso_scale_summary(aniso)}", file=out)
+        if carried:
+            # Zeros on the line above are the constraint, not a failed fit. Print the
+            # tensor that does carry the anisotropy right beside it.
+            p = getattr(self, "_sigma_wilson_params", None) or {}
+            eig = p.get("b_eigenvalues") or []
+            d_b = p.get("delta_b_aniso")
+            if len(eig) == 3 and d_b is not None:
+                print(
+                    f"[mli_quad] data anisotropy is in Σ_W [{p.get('wilson_model', '?')}]: "
+                    f"B eigenvalues {float(eig[0]):.2f}/{float(eig[1]):.2f}/"
+                    f"{float(eig[2]):.2f} Å², ΔB_aniso={float(d_b):.3f} Å²",
+                    file=out,
+                )
         mismatch = self._aniso_scale_disagreement()
         if mismatch:
             print(

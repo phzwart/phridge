@@ -82,6 +82,8 @@ Options:
     --no-stats-report   Disable the resolution stats report.
     --stats-bin-size N  Reflections per stats bin (default: 500).
     --sigma-a-bins N    Number of σ_A / ν resolution shells (default: auto).
+    --no-sigma-a-tensor Disable the Laue-class M_A / M_β modulation (default on).
+    --sphericity L      Sphericity prior λ on ‖A‖_F² (default: 1.0).
     --tv-norm LAMBDA    Total-variation regularization on σ_A and ν bins (e.g. 0.04; default: 0).
     --fit-sigma-wilson  Intensity-only ML Wilson Σ₀/B_W (default; no model). Then fit σ_A.
     --no-fit-sigma-wilson  Keep moment-plot Σ₀/B_W (skip intensity ML Wilson).
@@ -142,6 +144,8 @@ Environment Overrides:
     PHRIDGE_INTERLEAVED_MAX_HALVINGS  Rejected-block retries before exact fallback (default 1)
     PHRIDGE_INTERLEAVED_REFRESH  Surrogate refresh: full (default) or visible_fraction
     PHRIDGE_SIGMA_A_BINS    Number of σ_A / ν resolution shells (bins mode)
+    PHRIDGE_SIGMA_A_TENSOR  Laue-class M_A / M_β on free σ_A / β (default on; 0 to disable)
+    PHRIDGE_SPHERICITY      Sphericity prior λ on ‖A‖_F² (default 1.0)
     PHRIDGE_SIGMA_A_TV_NORM Total-variation penalty λ_TV on adjacent σ_A and ν bins
     PHRIDGE_FIT_SIGMA_WILSON  Intensity-only ML Wilson Σ₀/B_W then σ_A (default on; 0 = moment plot only)
     PHRIDGE_OMIT_WINDOWS    Write windowed omit coefficients after scale updates ('1')
@@ -446,6 +450,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --sigma-a-bins=*)
             export PHRIDGE_SIGMA_A_BINS="${1#*=}"
+            shift
+            ;;
+        --no-sigma-a-tensor)
+            export PHRIDGE_SIGMA_A_TENSOR="0"
+            shift
+            ;;
+        --sphericity)
+            export PHRIDGE_SPHERICITY="$2"
+            shift 2
+            ;;
+        --sphericity=*)
+            export PHRIDGE_SPHERICITY="${1#*=}"
             shift
             ;;
         --tv-norm)

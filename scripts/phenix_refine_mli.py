@@ -80,6 +80,13 @@ def run(args: list[str]) -> int:
         elif lower in ("--no-fit-nu", "fit_nu=false", "fit_nu=0"):
             os.environ["PHRIDGE_FIT_NU"] = "0"
             print("✓ Student-t nu refinement disabled (fit_nu=False)")
+        elif lower in ("--no-sigma-a-tensor", "sigma_a_tensor=false", "sigma_a_tensor=0"):
+            os.environ["PHRIDGE_SIGMA_A_TENSOR"] = "0"
+            print("✓ σ_A/β Laue-class tensors disabled")
+        elif lower.startswith("--sphericity=") or lower.startswith("sphericity="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_SPHERICITY"] = val
+            print(f"✓ σ_A/β sphericity prior λ={val}")
         elif lower.startswith("--nu-mode=") or lower.startswith("nu_mode="):
             val = arg.split("=", 1)[1].strip().lower()
             os.environ["PHRIDGE_NU_MODE"] = val

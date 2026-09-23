@@ -48,6 +48,25 @@ def heartbeat_every_n_evals(default: int = 25) -> int:
         return int(default)
 
 
+def output_streams(log: Any = None) -> list[TextIO]:
+    """Where one log line should go so it is printed exactly once.
+
+    Phenix hands the refinement a ``libtbx.utils.multi_out`` that already writes to
+    the terminal. Sending the same line to ``sys.stdout`` as well prints every line
+    twice, which is what a log full of identical pairs means.
+    """
+    if log is None or log is sys.stdout:
+        return [sys.stdout]
+    files = getattr(log, "file_objects", None)
+    if files:
+        for handle in files:
+            if handle is sys.stdout or handle is sys.stderr:
+                return [log]
+            if getattr(handle, "name", None) in ("<stdout>", "<stderr>"):
+                return [log]
+    return [sys.stdout, log]
+
+
 def _emit(msg: str, streams: Optional[list[TextIO]] = None) -> None:
     outs = streams or [sys.stdout]
     for out in outs:
@@ -84,9 +103,7 @@ def mli_heartbeat(
     stop = threading.Event()
     t0 = time.monotonic()
     beats = {"n": 0}
-    streams: list[TextIO] = [sys.stdout]
-    if log is not None and hasattr(log, "write") and log not in streams:
-        streams.append(log)
+    streams = output_streams(log if log is not None and hasattr(log, "write") else None)
 
     def _loop() -> None:
         while not stop.wait(period):
@@ -131,9 +148,8 @@ def maybe_progress_eval(
     if eval_idx <= 0 or (eval_idx % every) != 0:
         return
     grad = "grad" if compute_gradients else "noll"
-    extras = [log] if log is not None and hasattr(log, "write") else []
     _emit(
         f">>> [mli_quad progress] eval #{eval_idx}  target_work={target_work:.6f}  "
         f"last={elapsed_ms:.0f}ms  ({grad})",
-        [sys.stdout] + extras,
+        output_streams(log if log is not None and hasattr(log, "write") else None),
     )

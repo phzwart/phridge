@@ -49,18 +49,47 @@ def _weight_metric_is_nll() -> bool:
     return env not in ("0", "false", "no", "off", "rfree", "r_free", "r")
 
 
-def _nll_pair(fmodel: Any) -> Tuple[float, float]:
-    """Return (nll_work, nll_free) from an fmodel / IntensityFModel."""
-    nll_w = float(fmodel.target_w())
-    nll_f = nll_w
-    if hasattr(fmodel, "target_t"):
+def _nll_point(fmodel: Any) -> Any:
+    """One exact evaluation as an :class:`~phridge.client.intensity.nll_log.NllPoint`.
+
+    Prefers the engine's ``nll_point``, which produces the work and free means from a
+    single functor call. ``target_w()`` followed by ``target_t()`` is two full
+    quadratures for two numbers one call already computed, and a weight scan asks for
+    the pair once per trial, so the difference is a scan's worth of evaluations.
+    """
+    from phridge.client.intensity.nll_log import NllPoint
+
+    probe = getattr(fmodel, "nll_point", None)
+    if callable(probe):
         try:
-            val = fmodel.target_t()
+            point = probe()
+            if point is not None and getattr(point, "ok", False):
+                return point
+        except Exception:
+            pass
+    try:
+        nll_w = float(fmodel.target_w())
+    except Exception:
+        return NllPoint()
+    nll_f = None
+    getter = getattr(fmodel, "target_t", None)
+    if callable(getter):
+        try:
+            val = getter()
             if val is not None and val == val:  # not NaN
                 nll_f = float(val)
         except Exception:
-            pass
-    return nll_w, nll_f
+            nll_f = None
+    return NllPoint(work=nll_w, free=nll_f)
+
+
+def _nll_pair(fmodel: Any) -> Tuple[float, float]:
+    """``(nll_work, nll_free)``; free falls back to work when there is no free set."""
+    point = _nll_point(fmodel)
+    if not point.ok:
+        raise ValueError("no NLL available from this fmodel")
+    work = float(point.work)
+    return work, float(point.free) if point.free is not None else work
 
 
 def _fmodel_is_mli(fmodel: Any) -> bool:
@@ -75,8 +104,131 @@ def _fmodels_is_mli(fmodels: Any) -> bool:
         return False
 
 
+# Sentinel the scorer arrays carry for a trial whose NLL could not be had. It has to be
+# a large finite number rather than NaN because the selection takes flex.min over the
+# array, and a NaN there would poison the comparison instead of losing it.
+_NLL_SENTINEL = 99999.0
+
+
+def _unsentinel(value: Any) -> Optional[float]:
+    try:
+        val = float(value)
+    except Exception:
+        return None
+    return None if (val >= _NLL_SENTINEL or not (val == val)) else val
+
+
+def _journal_from_fmodels(fmodels: Any, log: Any = None) -> Optional[Any]:
+    """The run's NLL journal, or ``None`` when it is off or this is not an mli fmodel."""
+    engine = _resolve_intensity_engine_from_fmodels(fmodels)
+    if engine is None:
+        return None
+    try:
+        journal = engine.nll_journal(log=log)
+    except Exception:
+        return None
+    return journal if getattr(journal, "enabled", False) else None
+
+
+def _xyz_trial_group(scorer: Any) -> Optional[Any]:
+    """Snapshot the scorer's per-trial arrays into a scan, before selection prunes them.
+
+    ``finalize`` selects in place, so after it runs the arrays hold only the winner and
+    the scan is gone. This has to be taken on the way in.
+    """
+    from phridge.client.intensity.nll_log import NllPoint
+
+    journal = getattr(scorer, "_phridge_journal", None)
+    if journal is None or not getattr(scorer, "_phridge_nll", False):
+        return None
+    try:
+        n = scorer.w.size()
+        if n < 1 or scorer.nll_f.size() != n or scorer.nll_w.size() != n:
+            return None
+        group = journal.new_group(
+            "XYZ target weight scan",
+            "weight",
+            extra_columns=("r_work", "r_free", "bonds", "angles"),
+        )
+        for i in range(n):
+            group.add(
+                float(scorer.w[i]),
+                NllPoint(
+                    work=_unsentinel(scorer.nll_w[i]), free=_unsentinel(scorer.nll_f[i])
+                ),
+                {
+                    "r_work": float(scorer.rw[i]),
+                    "r_free": float(scorer.rf[i]),
+                    "bonds": float(scorer.b[i]),
+                    "angles": float(scorer.a[i]),
+                },
+            )
+        return group
+    except Exception:
+        return None
+
+
+def _adp_trial_line(result: Any) -> str:
+    """The NLL behind one ADP trial, at a precision that can separate two trials.
+
+    Upstream prints ``xray_target`` at three decimals and the free value not at all,
+    which is the one number the selection is made on.
+    """
+    from phridge.client.intensity.nll_log import fmt_value
+
+    weight = getattr(result, "weight", None)
+    return (
+        f"  [nll] ADP trial weight={fmt_value(weight, '.4f')}: "
+        f"work {fmt_value(getattr(result, 'nll_work', None), '.6f')} "
+        f"free {fmt_value(getattr(result, 'nll_free', None), '.6f')}"
+    )
+
+
+def _log_adp_trial(refiner: Any, result: Any) -> None:
+    """Print one ADP trial's NLL and record it in the scan, if a scan is open."""
+    from phridge.client.intensity.nll_log import NllPoint
+
+    try:
+        if not getattr(result, "_phridge_printed", False):
+            result._phridge_printed = True
+            log = getattr(refiner, "log", None)
+            if log is not None:
+                print(_adp_trial_line(result), file=log)
+        group = getattr(refiner, "_phridge_group", None)
+        if group is None or getattr(refiner, "_phridge_trial_weight", None) is None:
+            return
+        group.add(
+            float(result.weight),
+            NllPoint(work=float(result.nll_work), free=float(result.nll_free)),
+            {
+                "r_work": float(result.r_work_rfactor),
+                "r_free": float(result.r_free_rfactor),
+                "delta_b": float(result.delta_b),
+            },
+        )
+    except Exception:
+        pass  # telemetry must never cost a trial
+
+
+def _close_adp_scan(refiner: Any) -> None:
+    """Emit the ADP scan, marking the weight Phenix ended up installing."""
+    group = getattr(refiner, "_phridge_group", None)
+    journal = getattr(refiner, "_phridge_journal", None)
+    refiner._phridge_group = None
+    if group is None or journal is None:
+        return
+    try:
+        weights = getattr(refiner, "target_weights", None)
+        chosen = getattr(getattr(weights, "adp_weights_result", None), "wx", None)
+        if chosen is not None:
+            group.selected_value = float(chosen)
+        journal.add_group(group)
+    except Exception:
+        pass
+
+
 def patch_weight_selection() -> bool:
-    """Rank Phenix XYZ/ADP weight trials by free-set NLL for mli_quad.
+    """Rank Phenix XYZ/ADP weight trials by free-set NLL for mli_quad, and log the scan.
 
     XYZ (``phenix.refinement.xyz_reciprocal_space``):
       - Keep real R-factors in the scorer (Phenix asserts on them).
@@ -87,6 +239,11 @@ def patch_weight_selection() -> bool:
       - Inject NLL into the trial ``r_work``/``r_free`` fields used for ranking
         (R-gap thresholds become no-ops for typical NLL scales; final sort is
         by free NLL). Soften the post-select R assert that would otherwise fail.
+
+    Both scans also record every trial's NLL into the run's journal. Upstream prints an
+    R-factor table per trial, which under an NLL metric shows everything except the
+    number the choice was made on; the scan tables make the decision auditable and, more
+    to the point, show how far ahead the winner actually was.
     """
     patched_any = False
 
@@ -106,11 +263,15 @@ def patch_weight_selection() -> bool:
                 orig_summary_init(self, fmodels, model, weight)
                 self.nll_w = float("nan")
                 self.nll_f = float("nan")
+                # The scorer is built from ``log`` alone and never sees an fmodel, so the
+                # journal is carried to it on the summaries it accumulates.
+                self._phridge_journal = None
                 if _weight_metric_is_nll() and _fmodels_is_mli(fmodels):
                     try:
                         self.nll_w, self.nll_f = _nll_pair(fmodels.fmodel_xray())
                     except Exception:
                         pass
+                    self._phridge_journal = _journal_from_fmodels(fmodels)
 
             xyz_rs.summary.__init__ = patched_summary_init
             patched_any = True
@@ -124,6 +285,7 @@ def patch_weight_selection() -> bool:
                 self.nll_w = flex.double()
                 self.nll_f = flex.double()
                 self._phridge_nll = False
+                self._phridge_journal = None
 
             xyz_rs.xyz_refinement_scorer.__init__ = patched_scorer_init
             patched_any = True
@@ -140,8 +302,10 @@ def patch_weight_selection() -> bool:
                 nll_f = getattr(s, "nll_f", float("nan"))
                 if nll_w == nll_w and nll_f == nll_f:
                     self._phridge_nll = True
-                self.nll_w.append(float(nll_w) if nll_w == nll_w else 99999.0)
-                self.nll_f.append(float(nll_f) if nll_f == nll_f else 99999.0)
+                self.nll_w.append(float(nll_w) if nll_w == nll_w else _NLL_SENTINEL)
+                self.nll_f.append(float(nll_f) if nll_f == nll_f else _NLL_SENTINEL)
+                if getattr(self, "_phridge_journal", None) is None:
+                    self._phridge_journal = getattr(s, "_phridge_journal", None)
 
             xyz_rs.xyz_refinement_scorer.add = patched_add
             patched_any = True
@@ -214,6 +378,27 @@ def patch_weight_selection() -> bool:
             xyz_rs.xyz_refinement_scorer._select_best = patched_select_best
             patched_any = True
 
+        if "xyz.scorer.finalize" not in _ORIGINALS:
+            orig_xyz_finalize = xyz_rs.xyz_refinement_scorer.finalize
+            _ORIGINALS["xyz.scorer.finalize"] = orig_xyz_finalize
+
+            def patched_xyz_finalize(self: Any, *a: Any, **kw: Any) -> Any:
+                group = _xyz_trial_group(self)
+                result = orig_xyz_finalize(self, *a, **kw)
+                journal = getattr(self, "_phridge_journal", None)
+                if group is not None and journal is not None:
+                    try:
+                        # finalize selects in place, so w[0] is now the winner.
+                        if self.w.size() > 0:
+                            group.selected_value = float(self.w[0])
+                        journal.add_group(group)
+                    except Exception:
+                        pass
+                return result
+
+            xyz_rs.xyz_refinement_scorer.finalize = patched_xyz_finalize
+            patched_any = True
+
         if "xyz.run_all._optimize_xyz_weight" not in _ORIGINALS and hasattr(xyz_rs, "run_all"):
             # Bound method on class
             orig_opt = xyz_rs.run_all._optimize_xyz_weight
@@ -267,9 +452,51 @@ def patch_weight_selection() -> bool:
                 result.r_gap = float(nll_f) - float(nll_w)
                 result.nll_work = float(nll_w)
                 result.nll_free = float(nll_f)
+                _log_adp_trial(self, result)
                 return result
 
             adp_ref.refine_adp.show = patched_adp_show
+            patched_any = True
+
+        if "adp.refine_adp.try_weight" not in _ORIGINALS:
+            orig_try_weight = adp_ref.refine_adp.try_weight
+            _ORIGINALS["adp.refine_adp.try_weight"] = orig_try_weight
+
+            def patched_try_weight(self: Any, weight: Any, print_stats: bool = False) -> Any:
+                # ``show`` is also called for the pre-scan model and again for the winner,
+                # so the scan only records what came from inside a trial.
+                self._phridge_trial_weight = weight
+                try:
+                    return orig_try_weight(self, weight, print_stats=print_stats)
+                finally:
+                    self._phridge_trial_weight = None
+
+            adp_ref.refine_adp.try_weight = patched_try_weight
+            patched_any = True
+
+        if "adp.weight_result.show" not in _ORIGINALS and hasattr(adp_ref, "weight_result"):
+            orig_wr_show = adp_ref.weight_result.show
+            _ORIGINALS["adp.weight_result.show"] = orig_wr_show
+
+            def patched_wr_show(self: Any, out: Any, prefix: str = "") -> Any:
+                """Carry the NLL onto the trial row printed by the parallel scan.
+
+                With ``nproc>1`` the trials run in subprocesses whose stdout is discarded
+                and the parent prints the pickled results, so the NLL attached in the child
+                would otherwise never be seen.
+                """
+                result = orig_wr_show(self, out, prefix=prefix)
+                if out is not None and not getattr(self, "_phridge_printed", False):
+                    nll_w = getattr(self, "nll_work", None)
+                    if nll_w is not None:
+                        self._phridge_printed = True
+                        try:
+                            print(_adp_trial_line(self), file=out)
+                        except Exception:
+                            pass
+                return result
+
+            adp_ref.weight_result.show = patched_wr_show
             patched_any = True
 
         if "adp.refine_adp.__init__" not in _ORIGINALS:
@@ -298,6 +525,18 @@ def patch_weight_selection() -> bool:
                     return real_ae(a, b, eps=eps, **kw)
 
                 adp_ref.approx_equal = guarded_ae
+                journal = _journal_from_fmodels(fmodels, log=kwargs.get("log"))
+                self._phridge_trial_weight = None
+                self._phridge_journal = journal
+                self._phridge_group = (
+                    journal.new_group(
+                        "ADP target weight scan",
+                        "weight",
+                        extra_columns=("r_work", "r_free", "delta_b"),
+                    )
+                    if journal is not None
+                    else None
+                )
                 try:
                     orig_adp_init(self, *args, **kwargs)
                     if getattr(self, "log", None) is not None and getattr(
@@ -313,6 +552,7 @@ def patch_weight_selection() -> bool:
                             pass
                 finally:
                     adp_ref.approx_equal = real_ae
+                    _close_adp_scan(self)
 
             adp_ref.refine_adp.__init__ = patched_adp_init
             patched_any = True
@@ -518,11 +758,13 @@ class PhenixLbfgsBlockRunner:
 
 
 def patch_minimization_blocks() -> bool:
-    """Drive Phenix's LBFGS through the interleaved accept/reject/halve ladder.
+    """Wrap Phenix's LBFGS: interleaved ladder when asked for, NLL journal always.
 
-    Only active when ``refinement.target_mode=interleaved`` (or
-    ``PHRIDGE_TARGET_MODE=interleaved``) and the fmodel is an intensity fmodel; in
-    every other case the original constructor runs untouched.
+    Under ``refinement.target_mode=interleaved`` (or ``PHRIDGE_TARGET_MODE=interleaved``)
+    the block runs through the accept/reject/halve ladder. In the default exact mode the
+    constructor runs untouched but is bracketed by an NLL measurement, so the log says
+    what each minimization stage bought on the target being minimized rather than only
+    what it did to the R-factors. A non-intensity fmodel is left entirely alone.
     """
     try:
         import mmtbx.refinement.minimization as mini
@@ -546,7 +788,9 @@ def patch_minimization_blocks() -> bool:
             except Exception:
                 controller = None
         if controller is None:
-            return orig_init(self, *args, **kwargs)
+            if engine is None:
+                return orig_init(self, *args, **kwargs)
+            return _journalled_block(engine, orig_init, self, args, kwargs)
 
         runner = PhenixLbfgsBlockRunner(
             orig_init,
@@ -571,6 +815,31 @@ def patch_minimization_blocks() -> bool:
 
     mini.lbfgs.__init__ = patched_lbfgs_init
     return True
+
+
+def _journalled_block(
+    engine: Any,
+    orig_init: Callable[..., Any],
+    instance: Any,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+) -> None:
+    """Run an exact-mode minimization stage inside an NLL journal stage.
+
+    The stage label comes from the same ``refine_xyz`` / ``refine_adp`` flags the
+    interleaved telemetry uses, so the two modes name the stages identically and their
+    logs can be compared line for line. A journal failure must never cost the block.
+    """
+    from phridge.client.intensity.nll_log import StageKind
+
+    try:
+        site = _block_site(engine, orig_init, instance, args, kwargs)
+        journal = engine.nll_journal(log=kwargs.get("log"))
+        journal.set_prefix(site.when())
+    except Exception:
+        return orig_init(instance, *args, **kwargs)
+    with journal.stage(site.where(), StageKind.model):
+        return orig_init(instance, *args, **kwargs)
 
 
 def _call_arguments(
@@ -1148,6 +1417,8 @@ def disable_intensity_in_phenix() -> None:
             xyz_rs.xyz_refinement_scorer._select = _ORIGINALS.pop("xyz.scorer._select")
         if "xyz.scorer._select_best" in _ORIGINALS:
             xyz_rs.xyz_refinement_scorer._select_best = _ORIGINALS.pop("xyz.scorer._select_best")
+        if "xyz.scorer.finalize" in _ORIGINALS:
+            xyz_rs.xyz_refinement_scorer.finalize = _ORIGINALS.pop("xyz.scorer.finalize")
         if "xyz.run_all._optimize_xyz_weight" in _ORIGINALS:
             xyz_rs.run_all._optimize_xyz_weight = _ORIGINALS.pop("xyz.run_all._optimize_xyz_weight")
     except ImportError:
@@ -1157,6 +1428,10 @@ def disable_intensity_in_phenix() -> None:
         import mmtbx.refinement.adp_refinement as adp_ref
         if "adp.refine_adp.show" in _ORIGINALS:
             adp_ref.refine_adp.show = _ORIGINALS.pop("adp.refine_adp.show")
+        if "adp.refine_adp.try_weight" in _ORIGINALS:
+            adp_ref.refine_adp.try_weight = _ORIGINALS.pop("adp.refine_adp.try_weight")
+        if "adp.weight_result.show" in _ORIGINALS:
+            adp_ref.weight_result.show = _ORIGINALS.pop("adp.weight_result.show")
         if "adp.refine_adp.__init__" in _ORIGINALS:
             adp_ref.refine_adp.__init__ = _ORIGINALS.pop("adp.refine_adp.__init__")
     except ImportError:

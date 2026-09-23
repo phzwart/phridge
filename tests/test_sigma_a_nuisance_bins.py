@@ -219,6 +219,8 @@ def test_intensity_only_wilson_ml_positive_sigma0():
         fit_scale=False,
         sigma_a_mode="bins",
         n_sigma_a_bins=8,
+        # this test is about the single-curve Σ₀ / B_W fit, not the binned default
+        wilson_model="isotropic",
     )
     moment = ml_i_nuisance_fit(**common, fit_sigma_wilson=False)
     ml_w = ml_i_nuisance_fit(**common, fit_sigma_wilson=True)
@@ -245,3 +247,30 @@ def test_intensity_only_wilson_ml_positive_sigma0():
     sw_t = np.asarray(tied["sigma_wilson"], dtype=np.float64)
     np.testing.assert_allclose(beta_t, sw_t * (1.0 - sa_t**2), rtol=1e-6)
     assert sa.max() < 0.995
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("torch") is None,
+    reason="torch required for ml_i_nuisance_fit",
+)
+def test_one_dimensional_hkl_falls_back_and_does_not_grow_a_tensor():
+    """The historical generator only varies h; directions do not determine M."""
+    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+
+    f_calc, f_obs, tune, s2, _ = _packed_arrays()
+    out = ml_i_nuisance_fit(
+        f_calc,
+        f_obs,
+        tune_mask=tune,
+        s_sq=s2,
+        epsilon=np.ones(len(s2)),
+        centric=np.zeros(len(s2), dtype=bool),
+        fit_nu=False,
+        fit_scale=False,
+        sigma_a_mode="bins",
+        n_sigma_a_bins=8,
+        fit_sigma_wilson=True,
+        sigma_a_tensor=True,
+    )
+    assert out["sigma_a_params"]["n_tensor_params"] == 0
+    assert "identifiability" in out["sigma_a_params"].get("sigma_a_tensor_fallback", "")

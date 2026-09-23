@@ -9,6 +9,7 @@ The impl imports torch lazily so a Phenix client can import this module.
 from __future__ import annotations
 
 import math
+import time
 from typing import Any, Optional
 
 import numpy as np
@@ -68,11 +69,14 @@ _NUISANCE_INPUTS = {
     "fit_sigma_wilson": "json",
     "wilson_model": "json",
     "wilson_max_iter": "json",
+    "wilson_bins": "array",
     "beta_mode": "json",
     "sigma_a_shape": "json",
     "smooth_sigma_a": "json",
     "smooth_beta": "json",
     "beta_consistency_prior": "json",
+    "sigma_a_tensor": "json",
+    "sphericity": "json",
 }
 _NUISANCE_OUTPUTS = {
     "sigma_a": "array",
@@ -602,6 +606,139 @@ def _data_frac_spread_by_shell(
     return {"shells": rows, "mean_spread": pooled}
 
 
+def _wilson_bin_ids(wilson_bins: Any, s_sq: np.ndarray, wilson_mod: Any) -> np.ndarray:
+    """Per-reflection bin index for the binned Σ_W, compact and zero-based.
+
+    The caller's bins are used when they cover every reflection, so that the binned
+    model with no tensor reproduces the caller's own per-bin-mean Σ exactly. Otherwise
+    equal-count bins in s² are built here.
+    """
+    from phridge.sfcalc.ops import _np
+
+    n = int(np.asarray(s_sq).size)
+    if wilson_bins is not None:
+        raw = _np(wilson_bins, np.float64).ravel()
+        if raw.shape == (n,) and np.all(np.isfinite(raw)) and np.all(raw >= 0):
+            _, compact = np.unique(raw.astype(np.int64), return_inverse=True)
+            return compact.astype(np.int64)
+    return wilson_mod.equal_count_bins(s_sq)
+
+
+def _fit_binned_wilson(
+    *,
+    torch: Any,
+    normalize: Any,
+    log_likelihood_normal: Any,
+    io: np.ndarray,
+    sig: np.ndarray,
+    eps: np.ndarray,
+    centric: np.ndarray,
+    bin_id: np.ndarray,
+    s_cart: Optional[np.ndarray],
+    report_mask: np.ndarray,
+    max_iter: int,
+    dtype: Any,
+    device: Any,
+    failures: list[str],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Σ_W = S_k exp(-0.5 sᵀBs), tr B = 0, with S_k profiled so every bin's mean Z is 1.
+
+    For each trial B the bin scale is the mean of I/(εA) over the bin, so the observed
+    mean intensity of every bin is held fixed and the likelihood only decides how that
+    intensity is shared between directions. B = 0 is the plain per-bin mean.
+
+    Fitted on every reflection: this stage sees only I_obs and σ_I, never F_calc, so
+    using the free set here does not leak the model into it. Returns
+    ``(sigma_w, bin_means, b_cart, nll_per_refl_on_report_mask)`` with the NLL being
+    −log p(I) under the pure Wilson prior (σ_A → 0).
+    """
+    n = io.size
+    valid = (sig > 0) & (eps > 0) & np.isfinite(io) & np.isfinite(sig)
+    n_bins = int(bin_id.max()) + 1
+    y_np = io / np.maximum(eps, 1e-12)
+    # Floor from the B = 0 means, fixed for the whole fit so it cannot move with B.
+    _, means0 = _wilson_binned_means_np(y_np, bin_id, valid, n_bins)
+    pos = means0[means0 > 0]
+    floor = 1e-3 * float(np.median(pos)) if pos.size else 1e-8
+
+    io_t = torch.as_tensor(io, dtype=dtype, device=device)
+    si_t = torch.as_tensor(np.where(valid, sig, 1.0), dtype=dtype, device=device)
+    eps_t = torch.as_tensor(np.where(eps > 0, eps, 1.0), dtype=dtype, device=device)
+    cen_t = torch.as_tensor(centric, device=device)
+    y_t = torch.as_tensor(np.where(valid, y_np, 0.0), dtype=dtype, device=device)
+    w_t = torch.as_tensor(valid.astype(np.float64), dtype=dtype, device=device)
+    bin_t = torch.as_tensor(bin_id, dtype=torch.long, device=device)
+    counts = torch.zeros(n_bins, dtype=dtype, device=device).index_add_(0, bin_t, w_t)
+    counts = counts.clamp(min=1.0)
+    ones = torch.ones(n, dtype=dtype, device=device)
+    sa_w = torch.full((n,), 1e-4, dtype=dtype, device=device)
+    fit_tensor = s_cart is not None
+    s_t = torch.as_tensor(s_cart, dtype=dtype, device=device) if fit_tensor else None
+    p = torch.zeros(6, dtype=dtype, device=device, requires_grad=fit_tensor)
+    eye = torch.eye(3, dtype=dtype, device=device)
+
+    def _b() -> Any:
+        b = torch.stack(
+            [
+                torch.stack([p[0], p[3], p[4]]),
+                torch.stack([p[3], p[1], p[5]]),
+                torch.stack([p[4], p[5], p[2]]),
+            ]
+        )
+        return b - torch.trace(b) / 3.0 * eye
+
+    def _sigma_w() -> tuple[Any, Any]:
+        if fit_tensor:
+            a = torch.exp(-0.5 * torch.einsum("ni,ij,nj->n", s_t, _b(), s_t))
+        else:
+            a = ones
+        sums = torch.zeros(n_bins, dtype=dtype, device=device).index_add_(0, bin_t, w_t * y_t / a)
+        means = (sums / counts).clamp(min=floor)
+        return (means[bin_t] * a).clamp(min=1e-12), means
+
+    def _nll_i() -> Any:
+        sw, _ = _sigma_w()
+        ec, sa_n, zo, sz = normalize(ones, io_t, si_t, eps_t, sw, sa_w)
+        ll = log_likelihood_normal(ec, sa_n, zo, sz, cen_t) - torch.log(eps_t * sw)
+        return -ll
+
+    n_valid = max(float(valid.sum()), 1.0)
+    if fit_tensor:
+        opt = torch.optim.LBFGS([p], max_iter=int(max_iter), line_search_fn="strong_wolfe")
+
+        def closure():
+            opt.zero_grad()
+            loss = (_nll_i() * w_t).sum() / n_valid
+            loss.backward()
+            return loss
+
+        try:
+            opt.step(closure)
+        except Exception as exc:
+            failures.append(f"wilson (binned tensor): {type(exc).__name__}: {exc}")
+
+    with torch.no_grad():
+        sw, means = _sigma_w()
+        per = _nll_i()
+        rep = torch.as_tensor(report_mask & valid, device=device)
+        nll = float(per[rep].mean().item()) if bool(rep.any()) else float("nan")
+        b_np = _b().detach().cpu().numpy().astype(np.float64) if fit_tensor else np.zeros((3, 3))
+        return (
+            sw.detach().cpu().numpy().astype(np.float64),
+            means.detach().cpu().numpy().astype(np.float64),
+            b_np,
+            nll,
+        )
+
+
+def _wilson_binned_means_np(
+    y: np.ndarray, bin_id: np.ndarray, valid: np.ndarray, n_bins: int
+) -> tuple[np.ndarray, np.ndarray]:
+    sums = np.bincount(bin_id[valid], weights=y[valid], minlength=n_bins)
+    counts = np.bincount(bin_id[valid], minlength=n_bins)
+    return counts, sums / np.maximum(counts, 1)
+
+
 def ml_i_nuisance_fit(
     f_calc: PackedMiller,
     f_obs: PackedMiller,
@@ -618,23 +755,29 @@ def ml_i_nuisance_fit(
     n_sigma_a_bins: Optional[Any] = None,
     tv_norm: Optional[Any] = 0.0,
     fit_sigma_wilson: Optional[Any] = True,
-    wilson_model: Optional[Any] = "anisotropic",
+    wilson_model: Optional[Any] = "binned",
     wilson_max_iter: Optional[Any] = 60,
+    wilson_bins: Optional[Any] = None,
     beta_mode: Optional[Any] = "free",
     sigma_a_shape: Optional[Any] = "free",
     smooth_sigma_a: Optional[Any] = 1.0,
     smooth_beta: Optional[Any] = 1.0,
     beta_consistency_prior: Optional[Any] = 0.0,
+    sigma_a_tensor: Optional[Any] = True,
+    sphericity: Optional[Any] = 1.0,
 ) -> dict[str, Any]:
     """Worker implementation for held-out nuisance parameter fitting (theta).
 
     Two-stage fit on the tune set (no joint Σ₀–σ_A free scale):
 
-      1. **Wilson Σ from intensities alone** (no atomic model): by default the tensor
-         form ``Σ(h) = Σ₀ exp(-0.5 s_cartᵀ B s_cart)``, or with
-         ``wilson_model="isotropic"`` the scalar ``Σ(s) = Σ₀ exp(-0.5 B_W s²)``,
-         ``Σ₀ > 0`` (see :mod:`phridge.contrib.intensity_ll.wilson`).
-         Initialized by a moment Wilson plot, then (by default) refined by
+      1. **Wilson Σ from intensities alone** (no atomic model): by default binned,
+         ``Σ(h) = S_k exp(-0.5 s_cartᵀ B s_cart)`` with ``tr B = 0`` and ``S_k`` the
+         mean of ``I/(εA)`` in resolution bin ``k`` (the caller's ``wilson_bins``, or
+         equal-count bins), so every bin keeps its observed mean intensity and only
+         ``B`` is fitted, on all reflections. ``wilson_model="anisotropic"`` is the
+         single-curve tensor ``Σ₀ exp(-0.5 s_cartᵀ B s_cart)`` and ``"isotropic"`` the
+         scalar ``Σ₀ exp(-0.5 B_W s²)`` (see :mod:`phridge.contrib.intensity_ll.wilson`).
+         The curve forms are initialized by a moment Wilson plot, then refined by
          maximizing the intensity likelihood under a pure Wilson prior
          (``σ_A → 0``) times Gaussian measurement noise — so noisy / negative
          ``I_obs`` are handled properly. No ``F_calc`` enters this stage.
@@ -664,12 +807,17 @@ def ml_i_nuisance_fit(
          ``σ_A²k²`` enters the slope), so ``fit_scale`` must be off; the op
          raises rather than reporting an arbitrary split.
 
+         On the free+free path a pair of Laue-class tensors ``M_A``, ``M_β``
+         modulates the shell scalars by direction (``ŝᵀ M ŝ``), with a
+         sphericity prior. Constrained+monotone does not grow those parameters.
+
     The returned ``β`` array is in absolute units, ``Σ_W β_shell`` — the
     unexplained intensity variance, the companion to σ_A's correlation.
     """
     import torch
     from scipy.optimize import minimize_scalar
 
+    from phridge.contrib.intensity_ll import aniso_rice as _ar
     from phridge.contrib.intensity_ll import free_beta as _fb
     from phridge.contrib.intensity_ll import wilson as _wilson
     from phridge.contrib.intensity_ll.maps import posterior_moments
@@ -725,7 +873,7 @@ def ml_i_nuisance_fit(
         wilson_model=_wilson.normalize_wilson_model(wilson_model),
         max_iter=int(wilson_max_iter) if wilson_max_iter else 60,
     )
-    want_aniso = wilson_opts.anisotropic
+    want_aniso = wilson_opts.carries_anisotropy
     wilson_max_iter = wilson_opts.max_iter
 
     shell_opts = _fb.ShellFitOptions(
@@ -828,43 +976,73 @@ def ml_i_nuisance_fit(
             return x
         return float(math.log(math.expm1(x)))
 
-    # Anisotropic Σ_W needs the Cartesian reciprocal vectors, so it needs the cell. If
-    # the cell is unreachable, fall back to isotropic and say so rather than guessing a
+    # Cartesian reciprocal vectors: Wilson anisotropy and the Rice modulation tensors
+    # both need them. If the cell is unreachable, fall back rather than guessing a
     # metric from raw integer indices, which would fit a tensor in the wrong basis.
     s_cart_np: Optional[np.ndarray] = None
     wilson_fallback: Optional[str] = None
-    if want_aniso:
-        try:
-            uc_aniso = (
-                f_obs.meta.crystal.unit_cell if hasattr(f_obs, "meta") else f_obs.crystal.unit_cell
-            )
-            s_cart_np = _wilson.reciprocal_cartesian(uc_aniso, _np(f_obs.hkl))
-            if s_cart_np.shape != (n, 3) or not np.all(np.isfinite(s_cart_np)):
-                raise ValueError(f"reciprocal vectors have shape {s_cart_np.shape}")
-        except Exception as exc:
+    try:
+        uc_aniso = (
+            f_obs.meta.crystal.unit_cell if hasattr(f_obs, "meta") else f_obs.crystal.unit_cell
+        )
+        s_cart_np = _wilson.reciprocal_cartesian(uc_aniso, _np(f_obs.hkl))
+        if s_cart_np.shape != (n, 3) or not np.all(np.isfinite(s_cart_np)):
+            raise ValueError(f"reciprocal vectors have shape {s_cart_np.shape}")
+    except Exception as exc:
+        if want_aniso:
             wilson_fallback = f"no usable unit cell for the anisotropic fit ({exc})"
-            s_cart_np, want_aniso = None, False
+            want_aniso = False
+        s_cart_np = None
 
     if want_aniso and s_cart_np is not None:
         # Six components need directions that span the sphere. A line, a plane or a
         # narrow cone leaves the tensor unconstrained in some direction, and an
         # unconstrained tensor reports a confident number that means nothing -- so fall
-        # back to the scalar rather than fit something unidentifiable. Judged on the tune
-        # set, which is what stage 1 actually sees.
-        ident = _wilson.tensor_identifiability(s_cart_np[tune])
+        # back rather than fit something unidentifiable. Judged on the reflections the
+        # tensor is fitted on: all of them for the binned model, the tune set otherwise.
+        ident = _wilson.tensor_identifiability(
+            s_cart_np if wilson_opts.binned else s_cart_np[tune]
+        )
         if ident < _wilson.MIN_TENSOR_IDENTIFIABILITY:
             wilson_fallback = (
                 f"reflection directions cannot determine a tensor "
                 f"(identifiability {ident:.2e} < {_wilson.MIN_TENSOR_IDENTIFIABILITY:g}); "
-                f"fitted isotropic instead"
+                + ("bins only, no tensor" if wilson_opts.binned else "fitted isotropic instead")
             )
             want_aniso = False
 
-    do_aniso = bool(want_aniso and do_fit_sw and s_cart_np is not None)
+    do_binned = wilson_opts.binned
+    do_aniso = bool(want_aniso and do_fit_sw and s_cart_np is not None and not do_binned)
     wilson_nll_final: Optional[float] = None
+    lbfgs_failures: list[str] = []
     b_cart_final = np.eye(3, dtype=np.float64) * b_wilson_init
+    wilson_bin_means: Optional[np.ndarray] = None
+    wilson_bin_id: Optional[np.ndarray] = None
 
-    if do_fit_sw:
+    if do_binned:
+        wilson_bin_id = _wilson_bin_ids(wilson_bins, s_sq_np, _wilson)
+        fit_tensor = bool(want_aniso and do_fit_sw and s_cart_np is not None)
+        t_w0 = time.monotonic()
+        sigma_w_full, wilson_bin_means, b_cart_final, wilson_nll_final = _fit_binned_wilson(
+            torch=torch,
+            normalize=normalize,
+            log_likelihood_normal=log_likelihood_normal,
+            io=io,
+            sig=sig,
+            eps=eps_np,
+            centric=cen_np,
+            bin_id=wilson_bin_id,
+            s_cart=s_cart_np if fit_tensor else None,
+            report_mask=tune,
+            max_iter=int(wilson_max_iter),
+            dtype=dtype,
+            device=dev,
+            failures=lbfgs_failures,
+        )
+        wilson_seconds = time.monotonic() - t_w0
+        sigma_0 = float(np.median(wilson_bin_means))
+        b_wilson = 0.0
+    elif do_fit_sw:
         log_s0 = torch.tensor(math.log(sigma_0_init), dtype=dtype, device=dev, requires_grad=True)
         params_w = [log_s0]
         if do_aniso:
@@ -926,8 +1104,10 @@ def ml_i_nuisance_fit(
 
         try:
             opt_w.step(_wilson_closure)
-        except Exception:
-            pass
+        except Exception as exc:
+            # A failed line search used to vanish here and leave the moment start
+            # in place, which the report then printed as if it were the optimum.
+            lbfgs_failures.append(f"wilson: {type(exc).__name__}: {exc}")
 
         with torch.no_grad():
             sigma_0 = float(torch.exp(log_s0).clamp(min=1e-12).item())
@@ -943,7 +1123,9 @@ def ml_i_nuisance_fit(
     else:
         b_cart_final = np.eye(3, dtype=np.float64) * b_wilson
 
-    if do_aniso:
+    if do_binned:
+        pass  # sigma_w_full already set by the binned fit
+    elif do_aniso:
         sigma_w_full = _wilson.sigma_w_from_b(
             s_cart=s_cart_np, sigma_0=sigma_0, b_cart=b_cart_final
         )
@@ -1086,6 +1268,59 @@ def ml_i_nuisance_fit(
         def _beta_tune_from_params():
             return 1.0 - _sa_tune_from_params() ** 2
 
+    # Laue-class M_A / M_β: only on the free+free binned path. Constrained+monotone
+    # does not grow these parameters (bit-identical). Cubic / unidentifiable → skip.
+    crystal = None
+    try:
+        crystal = f_obs.meta.crystal if hasattr(f_obs, "meta") else f_obs.crystal
+    except Exception:
+        crystal = None
+    laue = _ar.laue_from_crystal(crystal) if crystal is not None else _ar.LAUE_TRICLINIC
+    tensor_enabled = True if sigma_a_tensor is None else bool(sigma_a_tensor)
+    lam_sph = 0.0 if sphericity is None else max(0.0, float(sphericity))
+    ident_rice = (
+        float(_wilson.tensor_identifiability(s_cart_np[tune]))
+        if s_cart_np is not None
+        else 0.0
+    )
+    do_rice_tensor, rice_tensor_fallback = _ar.modulation_wanted(
+        enabled=tensor_enabled,
+        beta_free=do_free_beta,
+        sigma_a_free=not do_monotone,
+        bins_mode=mode == "bins",
+        laue=laue,
+        s_cart=s_cart_np[tune] if s_cart_np is not None else None,
+        identifiability=ident_rice,
+    )
+    u_m_a = None
+    u_m_b = None
+    s_hat_tune_t: Optional[Any] = None
+    s_hat_np: Optional[np.ndarray] = None
+    if do_rice_tensor and s_cart_np is not None and laue.n_free > 0:
+        s_hat_np = _ar.unit_directions(s_cart_np)
+        s_hat_tune_t = torch.as_tensor(s_hat_np[tune], dtype=dtype, device=dev)
+        u_m_a = torch.zeros(laue.n_free, dtype=dtype, device=dev, requires_grad=True)
+        u_m_b = torch.zeros(laue.n_free, dtype=dtype, device=dev, requires_grad=True)
+        sa_params = list(sa_params) + [u_m_a, u_m_b]
+        _sa_shell = _sa_tune_from_params
+        _beta_shell = _beta_tune_from_params
+
+        def _quad_from(u_m: Any) -> Any:
+            a = _ar.a_from_params_torch(u_m, laue)
+            m = torch.eye(3, dtype=dtype, device=dev) + a
+            q = _ar.quadratic_form_torch(s_hat_tune_t, m)
+            return torch.clamp(q, 1e-6, 1e6)
+
+        def _sa_tune_from_params():
+            return torch.clamp(_sa_shell() * torch.sqrt(_quad_from(u_m_a)), 1e-4, 0.9999)
+
+        def _beta_tune_from_params():
+            return torch.clamp(
+                _beta_shell() * _quad_from(u_m_b),
+                _fb.BETA_LO,
+                _fb.BETA_LO + _fb.BETA_SPAN,
+            )
+
     do_fit_nu_bins = bool(do_fit_nu and n_mode == "bins" and mode == "bins" and shell_idx_t is not None)
     do_fit_nu_global = bool(do_fit_nu and not do_fit_nu_bins)
     current_nu: Optional[float] = nu_init if nu_init is not None else (7.0 if do_fit_nu else None)
@@ -1164,6 +1399,12 @@ def ml_i_nuisance_fit(
             gap = _beta_bins_from_params() - (1.0 - sa_bins**2)
             term = shell_opts.lambda_consistency * (gap**2).sum()
             pen = term if pen is None else pen + term
+        if do_rice_tensor and lam_sph > 0.0 and u_m_a is not None and u_m_b is not None:
+            term = lam_sph * (
+                _ar.frobenius_sq(_ar.a_from_params_torch(u_m_a, laue))
+                + _ar.frobenius_sq(_ar.a_from_params_torch(u_m_b, laue))
+            )
+            pen = term if pen is None else pen + term
         return pen
 
     def closure():
@@ -1177,8 +1418,8 @@ def ml_i_nuisance_fit(
 
     try:
         opt.step(closure)
-    except Exception:
-        pass
+    except Exception as exc:
+        lbfgs_failures.append(f"sigma_a: {type(exc).__name__}: {exc}")
 
     best_nu: Optional[float] = current_nu
     nu_se: Optional[float] = None
@@ -1231,8 +1472,8 @@ def ml_i_nuisance_fit(
 
         try:
             opt.step(closure)
-        except Exception:
-            pass
+        except Exception as exc:
+            lbfgs_failures.append(f"sigma_a (after nu): {type(exc).__name__}: {exc}")
 
         with torch.no_grad():
             sa_t = _sa_tune_from_params()
@@ -1410,6 +1651,18 @@ def ml_i_nuisance_fit(
         beta_norm_full = 1.0 - np.clip(sigma_a_full, 0.0, 0.9999) ** 2
         beta_full = sigma_w_full * beta_norm_full
 
+    # Directional modulation is applied to the interpolated shell curves so the
+    # target and the maps see σ_A(h), β(h), not just σ_A_k, β_k.
+    if do_rice_tensor and u_m_a is not None and u_m_b is not None and s_hat_np is not None:
+        with torch.no_grad():
+            a_np = _ar.a_from_params(_np(u_m_a), laue)
+            b_np = _ar.a_from_params(_np(u_m_b), laue)
+        q_a = np.clip(_ar.quadratic_form(s_hat_np, np.eye(3) + a_np), 1e-6, 1e6)
+        q_b = np.clip(_ar.quadratic_form(s_hat_np, np.eye(3) + b_np), 1e-6, 1e6)
+        sigma_a_full = np.clip(sigma_a_full * np.sqrt(q_a), 1e-4, 0.9999)
+        beta_norm_full = np.clip(beta_norm_full * q_b, _fb.BETA_MIN, _fb.BETA_MAX)
+        beta_full = sigma_w_full * beta_norm_full
+
     if mode == "bins" and sa_bin_values is not None and sa_bin_centers is not None:
         shell_table = _fb.describe_shells(
             centers_s_sq=sa_bin_centers,
@@ -1429,15 +1682,43 @@ def ml_i_nuisance_fit(
     if beta_fallback:
         sigma_a_params["beta_fallback"] = beta_fallback
 
+    n_rice_params = 0
+    sigma_a_params["sigma_a_tensor"] = bool(do_rice_tensor)
+    sigma_a_params["lambda_sphericity"] = float(lam_sph)
+    sigma_a_params["laue"] = laue.name
+    if rice_tensor_fallback:
+        sigma_a_params["sigma_a_tensor_fallback"] = rice_tensor_fallback
+    if do_rice_tensor and u_m_a is not None and u_m_b is not None:
+        n_rice_params = 2 * int(laue.n_free)
+        with torch.no_grad():
+            a_rep = _ar.a_from_params(_np(u_m_a), laue)
+            b_rep = _ar.a_from_params(_np(u_m_b), laue)
+        sigma_a_params["M_A"] = _ar.describe_modulation(
+            a_rep, unit_cell=uc_for_report, laue=laue
+        ).as_json()
+        sigma_a_params["M_beta"] = _ar.describe_modulation(
+            b_rep, unit_cell=uc_for_report, laue=laue
+        ).as_json()
+        sigma_a_params["tensor_identifiability"] = float(ident_rice)
+        sigma_a_params["n_tensor_params"] = n_rice_params
+    else:
+        sigma_a_params["n_tensor_params"] = 0
+
     n_nu_params = 0
     if best_nu is not None:
         n_nu_params = int(n_sa) if nu_params.get("mode") == "bins" else 1
     # Two parameters per shell once β is free, and the report has to say so: p_theta is
     # what the held-out statistics are corrected by.
     n_shell_params = (int(n_sa) * (2 if do_free_beta else 1)) if mode == "bins" else 2
-    p_theta = n_shell_params + n_nu_params + (1 if do_fit_scale else 0)
-    # Wilson: Σ₀ + either the scalar B_W or the 6 tensor components.
-    n_wilson_params = 7 if do_aniso else 2
+    p_theta = n_shell_params + n_nu_params + n_rice_params + (1 if do_fit_scale else 0)
+    # Wilson: Σ₀ + either the scalar B_W or the 6 tensor components; binned is one mean
+    # per bin plus the 5 components of a traceless tensor.
+    binned_tensor = bool(do_binned and np.any(b_cart_final != 0.0))
+    if do_binned:
+        assert wilson_bin_means is not None
+        n_wilson_params = int(wilson_bin_means.size) + (5 if binned_tensor else 0)
+    else:
+        n_wilson_params = 7 if do_aniso else 2
     p_theta += n_wilson_params
 
     # Report the normalization in its inspectable eigen-form. Raw B components are
@@ -1448,24 +1729,33 @@ def ml_i_nuisance_fit(
         sigma_0=sigma_0,
         b_cart=b_cart_final,
         unit_cell=uc_for_report,
-        model="anisotropic" if do_aniso else "isotropic",
+        model="binned" if do_binned else ("anisotropic" if do_aniso else "isotropic"),
         nll_per_refl=float("nan") if wilson_nll_final is None else wilson_nll_final,
         n_params=n_wilson_params,
     )
+    if do_binned:
+        method = "bin_means+tensor_ml" if binned_tensor else "bin_means"
+    else:
+        method = "intensity_ml" if do_fit_sw else "moment_plot"
     wilson_params: dict[str, Any] = {
         "sigma_0": float(sigma_0),
         "b_wilson": float(b_wilson),
         "sigma_0_init": sigma_0_init,
         "b_wilson_init": b_wilson_init,
         "fitted": bool(do_fit_sw),
-        "method": "intensity_ml" if do_fit_sw else "moment_plot",
+        "method": method,
         "wilson_nll": wilson_nll_final,
     }
     wilson_params.update(wilson_tensor.as_json())
     wilson_params["wilson_model_requested"] = wilson_opts.wilson_model
+    if do_binned:
+        assert wilson_bin_means is not None and wilson_bin_id is not None
+        wilson_params["n_bins"] = int(wilson_bin_means.size)
+        wilson_params["bin_means"] = [float(x) for x in wilson_bin_means]
+        wilson_params["seconds"] = float(wilson_seconds)
     if s_cart_np is not None:
         wilson_params["tensor_identifiability"] = float(
-            _wilson.tensor_identifiability(s_cart_np[tune])
+            _wilson.tensor_identifiability(s_cart_np if do_binned else s_cart_np[tune])
         )
     if wilson_fallback:
         wilson_params["wilson_fallback"] = wilson_fallback
@@ -1490,6 +1780,7 @@ def ml_i_nuisance_fit(
         "scale_k": scale_final,
         "p_theta": int(p_theta),
         "tune_nll": final_tune_nll,
+        "lbfgs_failures": lbfgs_failures,
         "sigma_a_params": sigma_a_params,
         "sigma_wilson_params": wilson_params,
     }
@@ -1518,6 +1809,8 @@ _TARGET_AND_GRADIENTS_INPUTS = {
     "damping": "json",
     "scale_factor": "json",
     "f_bulk": "array",
+    "k_model": "array",
+    "residual_k1": "json",
 }
 
 _TARGET_AND_GRADIENTS_OUTPUTS = {
@@ -1567,8 +1860,16 @@ def ml_i_target_and_gradients(
     damping: Optional[Any] = 0.05,
     scale_factor: Optional[Any] = 1.0,
     f_bulk: Optional[Any] = None,
+    k_model: Optional[Any] = None,
+    residual_k1: Optional[Any] = False,
 ) -> dict[str, Any]:
     """Whole chain for intensity likelihood: F_calc -> ml_i target -> dQ/dF -> dQ/d(scatterer params).
+
+    ``F_model = k (F_calc + F_bulk)`` with ``k = scale_factor * k_model``, times the
+    least-squares residual scale ``k1`` of ``sqrt|I|`` on ``|F_model|`` when
+    ``residual_k1`` is set. That is the client's ``f_model_scaled_with_k1()``: ``k_model``
+    is mmtbx's ``k_isotropic_exp * k_isotropic * k_anisotropic``. Without both, the
+    target would see a different F_model from the one the nuisance fit and the maps saw.
 
     Optionally computes exact Gauss-Newton diagonal preconditioners for Cartesian
     sites, occupancy, isotropic U, and anisotropic U* in a single server pass.
@@ -1603,17 +1904,40 @@ def ml_i_target_and_gradients(
 
     p = eng.tensors(requires_grad=True)
     fc = eng.f_calc(*p)
+    # k as a host array (for the curvature scaling) and as a device tensor
+    k_np = np.full(fc.shape[0], k_scale, dtype=np.float64)
+    if k_model is not None:
+        km = _np(k_model, np.float64).ravel()
+        if km.shape != k_np.shape or not np.all(np.isfinite(km)):
+            raise ValueError(
+                f"k_model must be {k_np.shape[0]} finite values, got shape {km.shape}"
+            )
+        k_np = k_np * km
+    # dtype at construction: MPS has no float64, so a float64 tensor cannot even land there
+    k_t = torch.as_tensor(k_np, dtype=fc.real.dtype, device=fc.device)
     if f_bulk is not None:
         fb_np = _np(f_bulk, np.complex128)
         fb_t = torch.as_tensor(fb_np, dtype=fc.dtype, device=fc.device)
-        f_model = k_scale * (fc + fb_t)
+        f_model = k_t * (fc + fb_t)
     else:
-        f_model = k_scale * fc
+        f_model = k_t * fc
+    if bool(residual_k1):
+        # The client's scale_k1: LS scale of sqrt|I| on |F_model|, held fixed for the
+        # gradient exactly as the functor path holds it.
+        with torch.no_grad():
+            fo_t = torch.sqrt(torch.abs(obs.data)).to(fc.real.dtype)
+            fm_abs = f_model.detach().abs()
+            den = float((fm_abs * fm_abs).sum().item())
+            k1 = float((fo_t * fm_abs).sum().item()) / den if den > 0 else 1.0
+        if np.isfinite(k1) and k1 > 0:
+            k_np = k_np * k1
+            k_t = k_t * k1
+            f_model = f_model * k1
 
     ev = tgt.evaluate(f_model.detach(), obs, compute_curvature=do_precond)
     g = torch.as_tensor(ev.d_target_d_f_calc, dtype=fc.dtype, device=fc.device)
-    # Scale derivative w.r.t fc: dQ/dfc = k_scale * dQ/df_model
-    q = (k_scale * fc * g.conj()).real.sum()
+    # Scale derivative w.r.t fc: dQ/dfc = k * dQ/df_model
+    q = (k_t * fc * g.conj()).real.sum()
     grads = torch.autograd.grad(q, p, allow_unused=True)
     arrays = [
         (torch.zeros_like(t) if gr is None else gr).detach().cpu().numpy().astype(np.float64)
@@ -1632,9 +1956,9 @@ def ml_i_target_and_gradients(
 
     n_sc = len(xray.meta.scatterers)
     if do_precond:
-        # Scale radial/tangential curvatures by k_scale^2
-        curv_r = _np(ev.curv_radial) * (k_scale**2)
-        curv_t = _np(ev.curv_tangential) * (k_scale**2)
+        # Scale radial/tangential curvatures by k^2
+        curv_r = _np(ev.curv_radial) * (k_np**2)
+        curv_t = _np(ev.curv_tangential) * (k_np**2)
         blocks = eng.gauss_newton_blocks(curv_r, curv_t)
         curvatures = PackedSfCurvatures(
             site_frac=blocks["site_frac"],
@@ -1709,7 +2033,7 @@ ml_i_target_and_gradients.compute_dtype = "float64"  # type: ignore[attr-defined
 
 
 def register_ops() -> None:
-    """Register ``ml_i_maps``, ``ml_i_nuisance_fit``, ``ml_i_omit_windows``, ``ml_i_surrogate_fit``, and target_and_gradients."""
+    """Register ``ml_i_maps``, ``ml_i_nuisance_fit``, ``ml_i_omit_windows``, ``ml_i_bulk_solvent_fit``, ``ml_i_surrogate_fit``, and target_and_gradients."""
     register_op(OP_NAME, ml_i_maps, inputs=dict(_INPUTS), outputs=dict(_OUTPUTS))
     register_op(NUISANCE_FIT_OP_NAME, ml_i_nuisance_fit, inputs=dict(_NUISANCE_INPUTS), outputs=dict(_NUISANCE_OUTPUTS))
     register_op(
@@ -1726,6 +2050,20 @@ def register_ops() -> None:
     )
 
     register_op(OMIT_OP_NAME, ml_i_omit_windows, inputs=dict(_OMIT_INPUTS), outputs=dict(_OMIT_OUTPUTS))
+
+    from phridge.contrib.intensity_ll.bulk_solvent_op import (
+        _BULK_SOLVENT_INPUTS,
+        _BULK_SOLVENT_OUTPUTS,
+        BULK_SOLVENT_OP_NAME,
+        ml_i_bulk_solvent_fit,
+    )
+
+    register_op(
+        BULK_SOLVENT_OP_NAME,
+        ml_i_bulk_solvent_fit,
+        inputs=dict(_BULK_SOLVENT_INPUTS),
+        outputs=dict(_BULK_SOLVENT_OUTPUTS),
+    )
 
     from phridge.contrib.intensity_ll.surrogate_op import (
         _SURROGATE_INPUTS,

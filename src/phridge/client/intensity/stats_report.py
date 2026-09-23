@@ -714,9 +714,13 @@ def format_wilson_normalization(sw_params: Optional[dict[str, Any]]) -> list[str
     d_b = p.get("delta_b_aniso")
     b_iso = p.get("b_iso", p.get("b_wilson"))
     out = []
-    head = f"  Σ_W [{model}]: Σ₀={float(s0):.4g}"
-    if b_iso is not None and np.isfinite(float(b_iso)):
-        head += f"  B_iso={float(b_iso):.3f}"
+    if model == "binned":
+        # The bins carry the isotropic falloff, so there is no Σ₀ or B_iso to print.
+        head = f"  Σ_W [binned]: {int(p.get('n_bins', 0))} bins (mean I/ε fixed per bin)"
+    else:
+        head = f"  Σ_W [{model}]: Σ₀={float(s0):.4g}"
+        if b_iso is not None and np.isfinite(float(b_iso)):
+            head += f"  B_iso={float(b_iso):.3f}"
     if d_b is not None and np.isfinite(float(d_b)):
         head += f"  ΔB_aniso={float(d_b):.3f} Å²"
     if p.get("wilson_nll") is not None and np.isfinite(float(p["wilson_nll"])):
@@ -734,8 +738,9 @@ def format_wilson_normalization(sw_params: Optional[dict[str, Any]]) -> list[str
                 j = int(np.argmax([abs(float(c)) for c in cos[i]]))
                 axis = f"≈{names[j]}({abs(float(cos[i][j])):.2f})"
             parts.append(f"{float(e):.2f}{axis}")
-        out.append("    eigenvalues (Å²) = " + ", ".join(parts))
-    if model == "anisotropic":
+        label = "traceless B eigenvalues" if model == "binned" else "eigenvalues"
+        out.append(f"    {label} (Å²) = " + ", ".join(parts))
+    if model in ("anisotropic", "binned"):
         # The constraint is part of the result: an anisotropic Σ_W is only interpretable
         # because the model-side k_aniso was held isotropic. Say so where the number is.
         out.append(
@@ -802,6 +807,27 @@ def format_shell_nuisance(sa_params: Optional[dict[str, Any]]) -> list[str]:
     out = [head]
     if p.get("beta_fallback"):
         out.append(f"    NOTE: β not fitted — {p['beta_fallback']}")
+    if p.get("sigma_a_tensor_fallback"):
+        out.append(f"    NOTE: σ_A/β tensor — {p['sigma_a_tensor_fallback']}")
+    m_a, m_b = p.get("M_A"), p.get("M_beta")
+    if isinstance(m_a, dict) or isinstance(m_b, dict):
+        def _eig(block: Any) -> str:
+            if not isinstance(block, dict):
+                return "."
+            ev = block.get("eigenvalues") or []
+            dlt = block.get("delta_aniso")
+            if not ev:
+                return "."
+            evs = "/".join(f"{float(x):.3f}" for x in ev)
+            extra = f"  Δ={float(dlt):.3f}" if dlt is not None else ""
+            return f"{evs}{extra}"
+
+        out.append(
+            f"    M_A [{p.get('laue', '?')}]: {_eig(m_a)}"
+            f"   M_β: {_eig(m_b)}"
+            f"   λ_sph={float(p.get('lambda_sphericity', 0.0)):.3g}"
+            f"   n={int(p.get('n_tensor_params', 0))}"
+        )
 
     def _num(seq: Any, i: int, width: int, dec: int) -> str:
         try:

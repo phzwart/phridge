@@ -306,9 +306,14 @@ def test_guard_raises_when_both_anisotropy_carriers_are_free():
     )
     probe._assert_single_anisotropy_carrier()
 
+    # the binned model carries the anisotropy in its tensor too
+    probe._wilson_model = "binned"
+    probe._aniso_scale = live
+    with pytest.raises(ValueError, match="both carry anisotropy"):
+        probe._assert_single_anisotropy_carrier()
+
     # and an isotropic Wilson model never constrains the scale
     probe._wilson_model = "isotropic"
-    probe._aniso_scale = live
     probe._assert_single_anisotropy_carrier()
 
 
@@ -321,29 +326,34 @@ def test_wilson_options_reject_unknown_keys_and_models():
     assert not W.WilsonOptions(wilson_model="isotropic").anisotropic
 
 
-def test_anisotropic_is_the_default_everywhere():
-    """Real data are anisotropic, so the scalar model has to be asked for explicitly."""
+def test_binned_is_the_default_everywhere():
+    """Per-bin means plus a global tensor; the single-curve forms must be asked for."""
     import inspect
 
     from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
 
-    assert W.WilsonOptions().wilson_model == "anisotropic"
-    # unset / unrecognized resolves to the tensor; only an explicit spelling opts out
-    for value in (None, "", "  ", "nonsense", "tensor", "aniso", "ANISOTROPIC"):
+    assert W.WilsonOptions().wilson_model == "binned"
+    assert W.WilsonOptions().carries_anisotropy
+    for value in (None, "", "  ", "nonsense", "binned", "BINS"):
+        assert W.normalize_wilson_model(value) == "binned", value
+    for value in ("tensor", "aniso", "ANISOTROPIC", "curve"):
         assert W.normalize_wilson_model(value) == "anisotropic", value
     for value in ("isotropic", "ISO", " scalar "):
         assert W.normalize_wilson_model(value) == "isotropic", value
     assert (
         inspect.signature(ml_i_nuisance_fit).parameters["wilson_model"].default
-        == "anisotropic"
+        == "binned"
     )
+    assert W.wilson_carries_anisotropy("binned")
+    assert W.wilson_carries_anisotropy("anisotropic")
+    assert not W.wilson_carries_anisotropy("isotropic")
 
 
-def test_engine_wilson_model_defaults_to_anisotropic(monkeypatch):
+def test_engine_wilson_model_defaults_to_binned(monkeypatch):
     engine = pytest.importorskip("phridge.client.intensity.engine")
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)
     monkeypatch.delenv("PHRIDGE_WILSON_MODEL", raising=False)
-    assert probe.wilson_model == "anisotropic"
+    assert probe.wilson_model == "binned"
 
     probe2 = engine.IntensityFModel.__new__(engine.IntensityFModel)
     monkeypatch.setenv("PHRIDGE_WILSON_MODEL", "isotropic")
@@ -464,3 +474,115 @@ def test_reciprocal_vectors_match_the_isotropic_s_sq_metric():
         # B = B_W*I in this frame reproduces the isotropic exponent exactly
         iso = W.sigma_w_from_b(s_cart=s_cart, sigma_0=10.0, b_cart=np.eye(3) * 19.0)
         assert np.allclose(iso, 10.0 * np.exp(-0.5 * 19.0 * _compute_s_sq(cell, hkl)), rtol=1e-12)
+
+
+# ------------------------------------------------------------ binned Σ_W (default)
+def _bins_for(problem, per_bin=400):
+    return W.equal_count_bins(np.sum(problem["s_cart"] ** 2, axis=1), per_bin=per_bin)
+
+
+def _bin_mean_z(problem, sigma_w, bins):
+    z = np.asarray(problem["f_obs"].data) / np.asarray(sigma_w)
+    return np.bincount(bins, weights=z) / np.bincount(bins)
+
+
+@requires_torch
+def test_binned_keeps_every_bin_mean_intensity_fixed():
+    """For any fitted B, each bin's mean I/(εΣ_W) is exactly 1."""
+    b_true = np.diag([12.0, 27.0, 19.0])
+    p = _synthetic(b_true, seed=6)
+    bins = _bins_for(p)
+    out = _fit(p, "binned", wilson_bins=bins.astype(np.float64))
+    params = out["sigma_wilson_params"]
+
+    assert params["wilson_model"] == "binned"
+    assert params["n_bins"] == int(bins.max()) + 1
+    np.testing.assert_allclose(_bin_mean_z(p, out["sigma_wilson"], bins), 1.0, atol=1e-9)
+    # the tensor is traceless: the bins own all isotropic falloff
+    assert abs(float(np.trace(_b_from(out)))) < 1e-9
+    assert params["n_wilson_params"] == params["n_bins"] + 5
+
+
+@requires_torch
+def test_binned_tensor_recovers_the_directional_part_of_the_planted_b():
+    """Only B - tr(B)/3 is identifiable once the bins carry the isotropic falloff."""
+    b_true = np.diag([12.0, 27.0, 19.0])
+    p = _synthetic(b_true, seed=7)
+    out = _fit(p, "binned", wilson_bins=_bins_for(p).astype(np.float64))
+    fitted = np.asarray(out["sigma_wilson_params"]["b_eigenvalues"], dtype=np.float64)
+    truth = np.sort(np.linalg.eigvalsh(W.traceless(b_true)))  # -7.33, -0.33, 7.67
+    assert np.all(np.abs(fitted - truth) < 1.5), (fitted, truth)
+    assert out["sigma_wilson_params"]["delta_b_aniso"] == pytest.approx(15.0, rel=0.15)
+
+
+@requires_torch
+def test_binned_without_a_tensor_is_exactly_the_per_bin_mean():
+    """fit_sigma_wilson=False keeps B = 0: Σ_W is the caller's own per-bin mean I/ε."""
+    p = _synthetic(np.diag([12.0, 27.0, 19.0]), seed=8)
+    bins = _bins_for(p)
+    out = _fit(p, "binned", wilson_bins=bins.astype(np.float64), fit_sigma_wilson=False)
+    i_obs = np.asarray(p["f_obs"].data)
+    means = np.bincount(bins, weights=i_obs) / np.bincount(bins)
+    np.testing.assert_allclose(out["sigma_wilson"], means[bins], rtol=1e-12)
+    assert out["sigma_wilson_params"]["method"] == "bin_means"
+    assert out["sigma_wilson_params"]["n_wilson_params"] == out["sigma_wilson_params"]["n_bins"]
+
+
+@requires_torch
+def test_binned_tensor_improves_on_bins_alone_and_on_the_single_curve():
+    """The tensor starts at B = 0 (bins alone), so it cannot lose to that start; and the
+    bins must do at least as well as one smooth curve on data drawn from that curve."""
+    b_true = np.diag([12.0, 27.0, 19.0])
+    p = _synthetic(b_true, seed=9)
+    bins = _bins_for(p).astype(np.float64)
+    bins_only = _fit(p, "binned", wilson_bins=bins, fit_sigma_wilson=False)
+    binned = _fit(p, "binned", wilson_bins=bins)
+    nll_bins = float(bins_only["sigma_wilson_params"]["wilson_nll"])
+    nll_binned = float(binned["sigma_wilson_params"]["wilson_nll"])
+    assert nll_binned < nll_bins - 0.01, (nll_bins, nll_binned)
+    curve = float(_fit(p, "anisotropic")["sigma_wilson_params"]["wilson_nll"])
+    # bins spend more parameters, so allow them a small per-reflection deficit only
+    assert nll_binned < curve + 0.01, (curve, nll_binned)
+
+
+def test_wilson_bins_accept_a_device_tensor():
+    """The worker hands array inputs over as device tensors (MPS on a Mac), which
+    np.asarray cannot read; the bins must go through the host copy like every input."""
+    from phridge.contrib.intensity_ll.ops import _wilson_bin_ids
+
+    class _DeviceTensor:
+        def __init__(self, values):
+            self._values = np.asarray(values)
+
+        def __array__(self, *args, **kwargs):
+            raise TypeError("can't convert mps:0 device type tensor to numpy")
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self._values
+
+    s_sq = np.linspace(0.01, 0.3, 12)
+    ids = _wilson_bin_ids(_DeviceTensor([0, 0, 0, 2, 2, 2, 5, 5, 5, 7, 7, 7]), s_sq, W)
+    assert ids.tolist() == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+
+
+def test_binned_sigma_w_numpy_twin_and_bins():
+    rng = np.random.default_rng(0)
+    s = rng.normal(size=(600, 3)) * 0.3
+    s_sq = np.sum(s**2, axis=1)
+    bins = W.equal_count_bins(s_sq, per_bin=100)
+    assert bins.max() + 1 == 6
+    counts = np.bincount(bins)
+    assert counts.max() - counts.min() <= 1
+    assert np.all(np.diff([s_sq[bins == k].max() for k in range(6)]) > 0)
+    y = rng.exponential(50.0, 600)
+    sw, means = W.binned_sigma_w(
+        i_over_eps=y, bin_id=bins, s_cart=s, b_cart=np.diag([30.0, 0.0, 0.0])
+    )
+    np.testing.assert_allclose(np.bincount(bins, weights=y / sw) / counts, 1.0, rtol=1e-12)
+    assert means.shape == (6,)

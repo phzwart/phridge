@@ -329,7 +329,9 @@ def test_constrained_monotone_path_keeps_its_exact_legacy_invariants():
     assert out["p_theta"] == prob["n_bins"] + n_wilson
 
     free = _fit(prob, beta_mode="free")
-    assert free["p_theta"] == 2 * prob["n_bins"] + n_wilson
+    n_tensor = int(free["sigma_a_params"].get("n_tensor_params") or 0)
+    assert free["p_theta"] == 2 * prob["n_bins"] + n_wilson + n_tensor
+    assert n_tensor == 10  # P 1: two traceless triclinic tensors
 
 
 @requires_torch
@@ -705,6 +707,19 @@ def test_report_shows_beta_and_the_normalization_consistency_column():
     assert "β not fitted" in "\n".join(
         format_shell_nuisance({**params, "beta_fallback": "no resolution shells"})
     )
+    tensor_line = "\n".join(
+        format_shell_nuisance(
+            {
+                **params,
+                "laue": "-1",
+                "lambda_sphericity": 1.0,
+                "n_tensor_params": 10,
+                "M_A": {"eigenvalues": [0.9, 1.0, 1.1], "delta_aniso": 0.2},
+                "M_beta": {"eigenvalues": [0.95, 1.0, 1.05], "delta_aniso": 0.1},
+            }
+        )
+    )
+    assert "M_A [-1]" in tensor_line and "M_β" in tensor_line and "λ_sph=1" in tensor_line
     assert format_shell_nuisance({}) == []
     assert format_shell_nuisance({"mode": "read", "k": 0.5}) == []
 
