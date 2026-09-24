@@ -245,6 +245,34 @@ def test_nuisance_fit_nu_grid_bins_picks_per_shell():
     __import__("importlib").util.find_spec("torch") is None,
     reason="torch required for ml_i_nuisance_fit",
 )
+def test_nuisance_fit_held_nu_survives_torch_payload():
+    """Worker may lift a numpy ``nu`` array onto the compute device (MPS)."""
+    import torch
+
+    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+
+    f_calc, f_obs, tune, s2, _ = _packed_arrays(n=400, seed=3)
+    nu = torch.linspace(5.0, 50.0, 400)
+    out = ml_i_nuisance_fit(
+        f_calc,
+        f_obs,
+        tune_mask=tune,
+        s_sq=s2,
+        fit_nu=False,
+        nu=nu,
+        fit_scale=False,
+        sigma_a_mode="bins",
+        n_sigma_a_bins=4,
+    )
+    held = np.asarray(out["nu_per_refl"], dtype=np.float64)
+    np.testing.assert_allclose(held, nu.detach().cpu().numpy(), atol=1e-6)
+    assert out["nu_params"].get("held_per_refl") is True
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("torch") is None,
+    reason="torch required for ml_i_nuisance_fit",
+)
 def test_nuisance_fit_read_mode_still_works():
     from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
 

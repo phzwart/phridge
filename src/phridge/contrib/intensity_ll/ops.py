@@ -984,11 +984,18 @@ def ml_i_nuisance_fit(
         beta_fallback = f"sigma_a_mode={mode!r} has no resolution shells to fit β in"
         shell_opts = shell_opts.model_copy(update={"beta_mode": "constrained"})
 
-    def _nu_init_scalar(nu_in: Any) -> Optional[float]:
+    def _nu_as_numpy(nu_in: Any) -> Optional[np.ndarray]:
+        """Host copy of ``nu``. The worker may have lifted a numpy payload to MPS."""
         if nu_in is None:
             return None
-        arr = np.asarray(nu_in, dtype=np.float64).ravel()
-        if arr.size == 0:
+        arr = _np(nu_in, np.float64)
+        if arr is None:
+            return None
+        return np.asarray(arr, dtype=np.float64).ravel()
+
+    def _nu_init_scalar(nu_in: Any) -> Optional[float]:
+        arr = _nu_as_numpy(nu_in)
+        if arr is None or arr.size == 0:
             return None
         val = float(np.nanmean(arr))
         if not np.isfinite(val) or val >= 199.0:
@@ -1228,10 +1235,9 @@ def ml_i_nuisance_fit(
         u_spatial = torch.zeros((), dtype=dtype, device=dev, requires_grad=True)
     bounds = [2.5, 200.0] if nu_bounds is None else [float(nu_bounds[0]), float(nu_bounds[1])]
     nu_held_full: Optional[np.ndarray] = None
-    if nu is not None:
-        _nu_arr = np.asarray(nu, dtype=np.float64).ravel()
-        if _nu_arr.size == n and np.any(np.isfinite(_nu_arr)):
-            nu_held_full = _nu_arr
+    _nu_arr = _nu_as_numpy(nu)
+    if _nu_arr is not None and _nu_arr.size == n and np.any(np.isfinite(_nu_arr)):
+        nu_held_full = _nu_arr
     nu_init = _nu_init_scalar(nu)
     do_fit_nu = bool(fit_nu) and (nu_init is None or nu_init < 199.0)
     do_fit_scale = bool(fit_scale)

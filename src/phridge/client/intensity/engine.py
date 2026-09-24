@@ -3811,7 +3811,7 @@ class IntensityFModel(
                 ),
                 nu_bounds=list(nu_bounds),
                 nu=(
-                    np.asarray(self.nu_per_refl, dtype=np.float64)
+                    np.asarray(self.nu_per_refl, dtype=np.float64).tolist()
                     if getattr(self, "nu_per_refl", None) is not None
                     else self.nu
                 ),
