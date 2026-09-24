@@ -33,6 +33,43 @@ def _np(value: Any, dtype=None) -> Optional[np.ndarray]:
     return arr if dtype is None else arr.astype(dtype)
 
 
+def _to_like(value: Any, like: Any) -> Any:
+    """Host or tensor → ``like``'s dtype, then ``like``'s device (never fused).
+
+    MPS has no float64: fusing a dtype change with a device move in one
+    ``.to(...)`` either raises or returns uninitialized memory. Widen on
+    CPU first; never land float64 on MPS.
+    """
+    import torch
+
+    if torch.is_tensor(value):
+        value_is_complex = bool(value.is_complex())
+    else:
+        value_is_complex = bool(np.iscomplexobj(np.asarray(value)))
+    if like.is_complex() and not value_is_complex:
+        target = like.real.dtype
+    else:
+        target = like.dtype
+    if str(like.device).startswith("mps") and target in (torch.float64, torch.complex128):
+        target = torch.float32 if target == torch.float64 else torch.complex64
+    if torch.is_tensor(value):
+        t = value
+        if t.device.type == "mps" and target in (torch.float64, torch.complex128):
+            t = t.detach().cpu()
+        if t.dtype != target:
+            t = t.to(dtype=target)
+        if t.device != like.device:
+            t = t.to(device=like.device)
+        return t
+    arr = _np(value)
+    if arr is None:
+        raise TypeError("cannot lift None to a tensor")
+    t = torch.as_tensor(np.ascontiguousarray(arr), dtype=target)
+    if t.device != like.device:
+        t = t.to(device=like.device)
+    return t
+
+
 def _engine_params(params: Any) -> EngineParams:
     if isinstance(params, SfEngineParams):
         p = params

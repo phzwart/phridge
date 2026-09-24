@@ -353,6 +353,21 @@ def test_french_wilson_and_f2_disabled():
         disable_intensity_in_phenix()
 
 
+def test_adp_r_percent_vs_nll_guard():
+    """Journal −log p(I) ≈ 6.5 must skip the R% assert; target_w must not."""
+    from phridge.client.intensity.phenix_hook import _adp_r_percent_vs_nll
+
+    # The crash: r_work()*100 vs rw_best after the journal-scale NLL overwrite.
+    assert _adp_r_percent_vs_nll(24.25917909030311, 6.468631019437067, eps=0.001)
+    assert _adp_r_percent_vs_nll(6.468631019437067, 24.25917909030311, eps=0.001)
+    # Old −log p(Z) scale still skips.
+    assert _adp_r_percent_vs_nll(24.26, 0.83, eps=0.001)
+    # target_w vs target_work uses the default eps and must still be checked.
+    assert _adp_r_percent_vs_nll(0.827, 0.827, eps=1.0e-6) is False
+    assert _adp_r_percent_vs_nll(6.45, 6.47, eps=1.0e-6) is False
+    assert _adp_r_percent_vs_nll("x", 6.5, eps=0.001) is False
+
+
 def test_weight_metric_helpers_and_patches():
     """NLL weight-metric helpers + scorer/ADP patches install cleanly."""
     from phridge.client.intensity.phenix_hook import (

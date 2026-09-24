@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional
@@ -317,6 +318,12 @@ def run_intensity_pipeline(
     print(f"  Fitted scale: k_total = {scales['k_total']:.4e}")
     if use_bulk_solvent:
         print(f"  Fitted solvent: k_sol = {scales['k_sol']:.3f}, B_sol = {scales['b_sol']:.1f} Å²")
+        dt = getattr(model, "dt_mask", None)
+        if dt is not None and dt.enabled:
+            print(
+                f"  DT-mask: mode={dt.mode} φ={dt.phi} α={dt.alpha:g} "
+                f"λ={dt.length_scale:g} Å"
+            )
 
     info_details = []
     if overlap_bins > 0:
@@ -507,8 +514,73 @@ def main(args: Optional[List[str]] = None) -> int:
     parser.add_argument("--reset-b", action="store_true", default=True, help="Reset B-factors to mean B before applying fractional shake (default: True)")
     parser.add_argument("--no-reset-b", action="store_false", dest="reset_b", help="Shake existing B-factors without resetting to mean B")
     parser.add_argument("--reset-b-value", type=float, default=None, help="Explicit base B-factor in Å² to reset to before shaking (default: mean B)")
+    parser.add_argument(
+        "--spatial-sigmaA-v2",
+        "--spatial-sigma-a-v2",
+        action="store_true",
+        default=False,
+        dest="spatial_sigma_a_v2",
+        help="Enable the per-atom error model (spatial σ_A v2). Off by default.",
+    )
+    parser.add_argument(
+        "--spatial-sigmaA-v2-fisher",
+        "--spatial-sigma-a-v2-fisher",
+        action="store_true",
+        default=False,
+        dest="spatial_sigma_a_v2_fisher",
+        help="Fisher-closure U_j (implies --spatial-sigmaA-v2). Off by default.",
+    )
+    parser.add_argument(
+        "--dt-mask",
+        action="store_true",
+        default=False,
+        dest="dt_mask",
+        help="Standalone IntensityModel only. Phenix refine ignores this and uses the flat F_mask.",
+    )
+    parser.add_argument(
+        "--dt-mask-alpha",
+        type=float,
+        default=None,
+        dest="dt_mask_alpha",
+        help="DT-mask modulation amplitude α (default 0.35).",
+    )
+    parser.add_argument(
+        "--dt-mask-length",
+        type=float,
+        default=None,
+        dest="dt_mask_length",
+        help="DT-mask decay length λ in Å for φ(d)=exp(−d/λ) (default 2.0).",
+    )
+    parser.add_argument(
+        "--dt-mask-phi",
+        default=None,
+        choices=["exp", "shell", "logistic"],
+        dest="dt_mask_phi",
+        help="DT-mask φ(d): exp, shell, or logistic (default exp).",
+    )
+    parser.add_argument(
+        "--dt-mask-mode",
+        default=None,
+        choices=["baked", "two_component"],
+        dest="dt_mask_mode",
+        help="baked = one FFT(M(1+αφ)); two_component = FFT(M) plus FFT(M φ).",
+    )
 
     opts = parser.parse_args(args)
+    if opts.spatial_sigma_a_v2 or opts.spatial_sigma_a_v2_fisher:
+        os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2"] = "1"
+    if opts.spatial_sigma_a_v2_fisher:
+        os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER"] = "1"
+    if opts.dt_mask:
+        os.environ["PHRIDGE_DT_MASK"] = "1"
+    if opts.dt_mask_alpha is not None:
+        os.environ["PHRIDGE_DT_MASK_ALPHA"] = str(opts.dt_mask_alpha)
+    if opts.dt_mask_length is not None:
+        os.environ["PHRIDGE_DT_MASK_LENGTH"] = str(opts.dt_mask_length)
+    if opts.dt_mask_phi is not None:
+        os.environ["PHRIDGE_DT_MASK_PHI"] = opts.dt_mask_phi
+    if opts.dt_mask_mode is not None:
+        os.environ["PHRIDGE_DT_MASK_MODE"] = opts.dt_mask_mode
 
     try:
         run_intensity_pipeline(

@@ -391,6 +391,33 @@ class TargetResult(_Strict):
     has_curvature: bool
 
 
+class SpatialSigmaAV2(_Strict):
+    """Optional per-atom error-model block. Absent when --spatial-sigmaA-v2 is off.
+
+    npz: lambda_c, kappa_c, coeff_hkl, D0, Sigma_miss, shell_s2_edges, v_k.
+    """
+
+    enabled: bool
+    field_cutoff: float
+    n_coeff: int
+    n_shells: int
+    entropy_weight: float = 0.0
+    spectral_taper_scale: float = 1.0
+    fisher: bool = False
+    n_scatterers: Optional[int] = None
+
+
+class SpatialSigmaAV2Result(_Strict):
+    """Field-coefficient gradients and per-atom w_j / U_j diagnostics.
+
+    npz: d_lambda_c, d_kappa_c, d_D0, d_Sigma_miss, w, u_err_star, tr_U.
+    """
+
+    n_scatterers: int
+    n_coeff: int
+    n_shells: int
+
+
 class ModelGeometry(_Strict):
     n_sites: int
     has_hierarchy: bool = False
@@ -420,6 +447,8 @@ CCTBX_TYPES = {
     "SfGradients": SfGradients,
     "SfCurvatures": SfCurvatures,
     "TargetResult": TargetResult,
+    "SpatialSigmaAV2": SpatialSigmaAV2,
+    "SpatialSigmaAV2Result": SpatialSigmaAV2Result,
 }
 
 

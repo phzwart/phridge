@@ -325,15 +325,25 @@ class TrialGroup:
             for name in self.extra_columns:
                 row += f" {fmt_value(record.extra.get(name), '9.4f')}"
             lines.append(row)
+        selected = next((r for r in self.records if self._is_selected(r)), None)
         best = self.best()
-        if best is not None:
+        shown = selected if selected is not None else best
+        if shown is not None:
             margin = self.margin()
-            chosen = self.selected_value if self.selected_value is not None else best.value
+            shown_nll = shown.point.free if shown.point.free is not None else shown.point.work
             tail = (
-                f"[nll] {self.name}: selected {self.param_name}={fmt_value(chosen, '.4f')} "
-                f"at free NLL {fmt_value(best.point.free or best.point.work, '.6f')}"
+                f"[nll] {self.name}: selected {self.param_name}="
+                f"{fmt_value(shown.value, '.4f')} at free NLL {fmt_value(shown_nll, '.6f')}"
             )
-            if margin is not None:
+            if selected is not None and best is not None and not self._is_selected(best):
+                best_nll = best.point.free if best.point.free is not None else best.point.work
+                tail += (
+                    f" — free-NLL best was {fmt_value(best.value, '.4f')} "
+                    f"at {fmt_value(best_nll, '.6f')}"
+                )
+                if shown_nll is not None and best_nll is not None:
+                    tail += f" ({float(shown_nll) - float(best_nll):+.6f} vs selected)"
+            elif margin is not None:
                 tail += f", {margin:+.6f} ahead of the runner-up"
                 if margin < 1.0e-4:
                     tail += " -- the scan did not really separate them"

@@ -55,6 +55,12 @@ from phridge.sfcalc.packing import (
     unpack_sf_gradients,
     unpack_target_result,
 )
+from phridge.contrib.spatial_sigmaa_v2.packing import (
+    PackedSpatialSigmaAV2,
+    PackedSpatialSigmaAV2Result,
+    unpack_spatial_sigma_a_v2,
+    unpack_spatial_sigma_a_v2_result,
+)
 from phridge.redis_store import RedisStore
 
 _PACKED_TYPES: list[tuple[type, str]] = [
@@ -74,6 +80,8 @@ _PACKED_TYPES: list[tuple[type, str]] = [
     (PackedSfGradients, "SfGradients"),
     (PackedSfCurvatures, "SfCurvatures"),
     (PackedTargetResult, "TargetResult"),
+    (PackedSpatialSigmaAV2, "SpatialSigmaAV2"),
+    (PackedSpatialSigmaAV2Result, "SpatialSigmaAV2Result"),
 ]
 
 _JSON_ONLY = {
@@ -100,6 +108,8 @@ _UNPACK: dict[str, Callable[[bytes, Any], Any]] = {
     "SfGradients": unpack_sf_gradients,
     "SfCurvatures": unpack_sf_curvatures,
     "TargetResult": unpack_target_result,
+    "SpatialSigmaAV2": unpack_spatial_sigma_a_v2,
+    "SpatialSigmaAV2Result": unpack_spatial_sigma_a_v2_result,
 }
 
 

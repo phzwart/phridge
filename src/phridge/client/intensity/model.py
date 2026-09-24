@@ -46,6 +46,8 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
     use_bulk_solvent : bool, default False
         If True, compute real-space solvent mask via cctbx map gridding and
         refine k_sol, B_sol alongside k_total directly against ml_i NLL.
+        Set ``dt_mask.enabled`` (or ``PHRIDGE_DT_MASK=1``) to modulate that
+        mask by a nonlinear function of its distance transform.
     n_bins : int, default 10
         Number of resolution bins for Wilson normalization and sigmaA estimation.
     d_min : float, optional
@@ -74,6 +76,7 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         target_type: str = "intensity",
         restraints_manager: Optional[Any] = None,
         device: str = "cpu",
+        dt_mask: Optional[Any] = None,
     ) -> None:
         register()
         from phridge.worker.convert import resolve_device
@@ -88,6 +91,14 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         self.complex_dtype = torch.complex64 if self.is_mps else torch.complex128
         self.sf = sf if sf is not None else StructureFactorServer(memory=True, device=resolved_device)
         self.use_bulk_solvent = use_bulk_solvent
+        from phridge.contrib.intensity_ll.dt_mask import DistanceMaskOptions, options_from_env
+
+        if dt_mask is None:
+            self.dt_mask = options_from_env()
+        elif isinstance(dt_mask, DistanceMaskOptions):
+            self.dt_mask = dt_mask
+        else:
+            self.dt_mask = DistanceMaskOptions.model_validate(dt_mask)
         self.n_bins = int(n_bins)
         self.d_min = float(d_min) if d_min is not None else float(i_obs.d_min())
         self.overlap_bins: int = int(overlap_bins)
@@ -164,6 +175,7 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         self.b_sol: float = 45.0
         self.f_calc: Optional[Any] = None
         self.f_mask: Optional[Any] = None
+        self.f_mask_mod: Optional[Any] = None
         self.f_model: Optional[Any] = None
 
         # Sigma_A
@@ -210,12 +222,12 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         return self.f_obs
 
     def compute_mask(self) -> Any:
-        """Compute real-space solvent mask via cctbx map gridding and FFT to reciprocal space."""
-        from mmtbx.masks import manager as mask_manager
+        """Compute F_mask; optionally modulate the real-space mask by its distance transform."""
+        from phridge.contrib.intensity_ll.dt_mask import build_f_masks
 
-        mm = mask_manager(miller_array=self.i_obs, xray_structure=self.xray_structure)
-        f_masks = mm.shell_f_masks()
-        self.f_mask = f_masks[0]
+        built = build_f_masks(self.i_obs, self.xray_structure, self.dt_mask)
+        self.f_mask = built.f_mask
+        self.f_mask_mod = built.f_mask_mod
         return self.f_mask
 
     def compute_f_calc(self) -> Any:
@@ -230,6 +242,9 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
             s2 = np.asarray(self.i_obs.d_star_sq().data(), dtype=np.float64)
             fm_np = np.asarray(self.f_mask.data(), dtype=np.complex128)
             f_sol = ksol * np.exp(-bsol * s2 / 4.0) * fm_np
+            if self.f_mask_mod is not None:
+                alpha = float(self.dt_mask.alpha) if self.dt_mask is not None else 0.0
+                f_sol = f_sol + ksol * alpha * np.asarray(self.f_mask_mod.data(), dtype=np.complex128)
             return k * (fc_np + f_sol)
         return k * fc_np
 
@@ -254,10 +269,23 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
         fc_np = np.asarray(self.f_calc.data(), dtype=np.complex128)
         fc_t = torch.as_tensor(fc_np, dtype=self.complex_dtype, device=self.torch_device)
 
+        fm_mod_t = None
+        dt_alpha_t = None
         if self.use_bulk_solvent and self.f_mask is not None:
             fm_np = np.asarray(self.f_mask.data(), dtype=np.complex128)
             fm_t = torch.as_tensor(fm_np, dtype=self.complex_dtype, device=self.torch_device)
             s2_t = torch.as_tensor(np.asarray(self.i_obs.d_star_sq().data(), dtype=np.float64), dtype=self.float_dtype, device=self.torch_device)
+            if self.f_mask_mod is not None:
+                fm_mod_t = torch.as_tensor(
+                    np.asarray(self.f_mask_mod.data(), dtype=np.complex128),
+                    dtype=self.complex_dtype,
+                    device=self.torch_device,
+                )
+                dt_alpha_t = torch.tensor(
+                    float(self.dt_mask.alpha) if self.dt_mask is not None else 0.0,
+                    dtype=self.float_dtype,
+                    device=self.torch_device,
+                )
 
         log_k = torch.tensor(math.log(max(k0, 1e-4)), dtype=self.float_dtype, device=self.torch_device, requires_grad=True)
         if self.use_bulk_solvent and self.f_mask is not None:
@@ -293,6 +321,8 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
                     ksol = torch.sigmoid(logit_ksol)
                     bsol = 200.0 * torch.sigmoid(logit_bsol)
                     f_sol = ksol * torch.exp(-bsol * s2_t / 4.0) * fm_t
+                    if fm_mod_t is not None and dt_alpha_t is not None:
+                        f_sol = f_sol + ksol * dt_alpha_t * fm_mod_t
                     f_mod = k * (fc_t + f_sol)
                 else:
                     f_mod = k * fc_t
@@ -313,6 +343,8 @@ class IntensityModel(IntensityRefineMixin, IntensityMapMixin):
                     ksol = torch.sigmoid(logit_ksol)
                     bsol = 200.0 * torch.sigmoid(logit_bsol)
                     f_sol = ksol * torch.exp(-bsol * s2_t / 4.0) * fm_t
+                    if fm_mod_t is not None and dt_alpha_t is not None:
+                        f_sol = f_sol + ksol * dt_alpha_t * fm_mod_t
                     f_mod = torch.abs(k * (fc_t + f_sol))
                 else:
                     f_mod = k * torch.abs(fc_t)

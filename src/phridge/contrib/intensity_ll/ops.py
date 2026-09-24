@@ -62,6 +62,7 @@ _NUISANCE_INPUTS = {
     "nu": "json",
     "fit_nu": "json",
     "nu_mode": "json",
+    "nu_grid": "json",
     "fit_scale": "json",
     "sigma_a_mode": "json",
     "n_sigma_a_bins": "json",
@@ -77,6 +78,10 @@ _NUISANCE_INPUTS = {
     "beta_consistency_prior": "json",
     "sigma_a_tensor": "json",
     "sphericity": "json",
+    "f_atoms": "array",
+    "f_bulk": "array",
+    "local_sigma_a": "json",
+    "spatial_sigma_a_v2": "SpatialSigmaAV2",
 }
 _NUISANCE_OUTPUTS = {
     "sigma_a": "array",
@@ -739,6 +744,27 @@ def _wilson_binned_means_np(
     return counts, sums / np.maximum(counts, 1)
 
 
+def parse_nu_grid(raw: Any, default: str = "5:50:5") -> list[float]:
+    """ν values for ``nu_mode=grid``. ``lo:hi:step`` or an explicit list."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        raw = default
+    if isinstance(raw, (list, tuple)):
+        out = [float(x) for x in raw]
+        return [v for v in out if v == v and v > 0.0]
+    text = str(raw).strip()
+    if ":" in text:
+        parts = [p.strip() for p in text.split(":")]
+        lo = float(parts[0])
+        hi = float(parts[1]) if len(parts) > 1 else lo
+        step = float(parts[2]) if len(parts) > 2 else 5.0
+        if step <= 0.0:
+            step = 5.0
+        n = int(math.floor((hi - lo) / step + 1e-9)) + 1
+        return [float(lo + i * step) for i in range(max(n, 1)) if lo + i * step <= hi + 0.5 * step]
+    out = [float(x) for x in text.replace(",", " ").split()]
+    return [v for v in out if v == v and v > 0.0]
+
+
 def ml_i_nuisance_fit(
     f_calc: PackedMiller,
     f_obs: PackedMiller,
@@ -750,6 +776,7 @@ def ml_i_nuisance_fit(
     nu: Optional[Any] = None,
     fit_nu: Optional[Any] = True,
     nu_mode: Optional[Any] = "bins",
+    nu_grid: Optional[Any] = None,
     fit_scale: Optional[Any] = False,
     sigma_a_mode: Optional[Any] = "bins",
     n_sigma_a_bins: Optional[Any] = None,
@@ -765,8 +792,15 @@ def ml_i_nuisance_fit(
     beta_consistency_prior: Optional[Any] = 0.0,
     sigma_a_tensor: Optional[Any] = True,
     sphericity: Optional[Any] = 1.0,
+    f_atoms: Optional[Any] = None,
+    f_bulk: Optional[Any] = None,
+    local_sigma_a: Optional[Any] = None,
+    spatial_sigma_a_v2: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Worker implementation for held-out nuisance parameter fitting (theta).
+
+    ``spatial_sigma_a_v2`` is accepted so the flag-on payload is a valid
+    job; Phase 1 does not consume it (the existing σ_A path is unchanged).
 
     Two-stage fit on the tune set (no joint Σ₀–σ_A free scale):
 
@@ -790,10 +824,14 @@ def ml_i_nuisance_fit(
       2. **σ_A and β (and optional ν) with Σ frozen**: one independent logit per
          resolution shell for each, regularized by a second-difference
          smoothness penalty (``smooth_sigma_a``, ``smooth_beta``) instead of a
-         monotonicity constraint. Student-t ``ν`` defaults to the **same**
-         resolution shells (``nu_mode=bins``); ``nu_mode=global`` keeps a single
-         scalar ``ν``. A Read-style σ_A curve is still available via
-         ``sigma_a_mode="read"``.
+         monotonicity constraint. Student-t ``ν``: ``nu_mode=grid`` (default
+         when the client asks for a scan) holds a scalar ``ν`` and refits
+         σ_A/β at each node of ``nu_grid`` (default 5, 10, …, 50);
+         ``grid_bins`` uses that same scan but picks ν independently per
+         resolution shell from the per-shell NLL, then refits σ_A/β with
+         those values held; ``bins`` puts one ν logit on the same shells as
+         σ_A in one LBFGS; ``global`` is a 1-D scalar search after σ_A. A
+         Read-style σ_A curve is still available via ``sigma_a_mode="read"``.
 
          In normalized units ``E[Z_o|E_C] = σ_A² E_C² + β`` exactly, so within a
          shell σ_A² is the slope and β the intercept. Fitting β frees the
@@ -814,11 +852,13 @@ def ml_i_nuisance_fit(
     The returned ``β`` array is in absolute units, ``Σ_W β_shell`` — the
     unexplained intensity variance, the companion to σ_A's correlation.
     """
+    _ = spatial_sigma_a_v2
     import torch
     from scipy.optimize import minimize_scalar
 
     from phridge.contrib.intensity_ll import aniso_rice as _ar
     from phridge.contrib.intensity_ll import free_beta as _fb
+    from phridge.contrib.intensity_ll import local_sigma_a as _lsa
     from phridge.contrib.intensity_ll import wilson as _wilson
     from phridge.contrib.intensity_ll.maps import posterior_moments
     from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
@@ -835,6 +875,20 @@ def ml_i_nuisance_fit(
     io = _np(f_obs.data, np.float64)
     sig = _np(f_obs.sigmas, np.float64) if f_obs.sigmas is not None else np.ones(n, dtype=np.float64)
     fc_raw = np.abs(_np(f_calc.data, np.complex128))
+    def _complex_split(value: Any, name: str) -> Optional[np.ndarray]:
+        if value is None:
+            return None
+        data = value.data if hasattr(value, "data") else value
+        arr = _np(data, np.complex128)
+        if arr is None:
+            return None
+        arr = np.asarray(arr, dtype=np.complex128).reshape(-1)
+        if arr.shape[0] != n:
+            raise ValueError(f"{name} must have length {n}, got {arr.shape[0]}")
+        return arr
+
+    fa_np = _complex_split(f_atoms, "f_atoms")
+    fb_np = _complex_split(f_bulk, "f_bulk")
     eps_np = _np(epsilon, np.float64) if epsilon is not None else np.ones(n, dtype=np.float64)
     cen_np = _np(centric, bool) if centric is not None else np.zeros(n, dtype=bool)
 
@@ -862,11 +916,17 @@ def ml_i_nuisance_fit(
     n_mode = str(nu_mode or "bins").strip().lower()
     if n_mode in ("bin", "shell", "shells"):
         n_mode = "bins"
-    if n_mode not in ("bins", "global"):
+    if n_mode in ("scan", "grid-scan", "grid_scan"):
+        n_mode = "grid"
+    if n_mode in ("grid-bins", "grid_bins", "per-bin", "per_bin", "bins-grid", "bins_grid"):
+        n_mode = "grid_bins"
+    if n_mode not in ("bins", "global", "grid", "grid_bins"):
         n_mode = "bins"
-    # Read-style σ_A has no shells → scalar ν only
-    if mode != "bins":
+    # Read-style σ_A has no shells → no per-shell ν. A grid scan is still a scalar.
+    if mode != "bins" and n_mode == "bins":
         n_mode = "global"
+    if mode != "bins" and n_mode == "grid_bins":
+        n_mode = "grid"
     tv_lam_val = 0.0 if tv_norm is None else max(0.0, float(tv_norm))
     do_fit_sw = bool(fit_sigma_wilson)
     wilson_opts = _wilson.WilsonOptions(
@@ -896,6 +956,27 @@ def ml_i_nuisance_fit(
             "scale during stage 2 (fit_scale=False, e.g. let bulk-solvent scaling own it) "
             "or use beta_mode='constrained', where β = 1 - σ_A² breaks the degeneracy."
         )
+    spatial_opts = _lsa.resolve_options(local_sigma_a)
+    if spatial_opts.enabled and shell_opts.beta_free and bool(fit_scale):
+        raise ValueError(
+            "spatial σ_A with fit_scale=True and beta_mode='free' is not identifiable: "
+            "u, the overall F_c scale k and σ_A enter the slope together. Freeze the "
+            "scale (fit_scale=False) or use beta_mode='constrained'."
+        )
+    spatial_fallback: Optional[str] = None
+    do_spatial = bool(spatial_opts.enabled)
+    if do_spatial:
+        if fa_np is None or fb_np is None:
+            spatial_fallback = "spatial σ_A needs f_atoms and f_bulk"
+            do_spatial = False
+        elif not (
+            np.all(np.isfinite(fa_np.real))
+            and np.all(np.isfinite(fa_np.imag))
+            and np.all(np.isfinite(fb_np.real))
+            and np.all(np.isfinite(fb_np.imag))
+        ):
+            spatial_fallback = "f_atoms / f_bulk are not finite"
+            do_spatial = False
     # Read-style σ_A is a two-parameter curve with no shells, so there is nowhere to hang
     # an independent per-shell β. Fall back to the constrained form and say so.
     beta_fallback: Optional[str] = None
@@ -1137,7 +1218,20 @@ def ml_i_nuisance_fit(
     # Stage 2: σ_A (+ optional ν, F_c scale) with Σ frozen
     # ------------------------------------------------------------------
     fc_t = torch.as_tensor(fc_raw[tune], dtype=dtype, device=dev)
+    u_spatial = None
+    fa_t: Optional[Any] = None
+    fb_t: Optional[Any] = None
+    if do_spatial and fa_np is not None and fb_np is not None:
+        cdtype = torch.complex64 if str(dev).startswith("mps") else torch.complex128
+        fa_t = torch.as_tensor(fa_np[tune], dtype=cdtype, device=dev)
+        fb_t = torch.as_tensor(fb_np[tune], dtype=cdtype, device=dev)
+        u_spatial = torch.zeros((), dtype=dtype, device=dev, requires_grad=True)
     bounds = [2.5, 200.0] if nu_bounds is None else [float(nu_bounds[0]), float(nu_bounds[1])]
+    nu_held_full: Optional[np.ndarray] = None
+    if nu is not None:
+        _nu_arr = np.asarray(nu, dtype=np.float64).ravel()
+        if _nu_arr.size == n and np.any(np.isfinite(_nu_arr)):
+            nu_held_full = _nu_arr
     nu_init = _nu_init_scalar(nu)
     do_fit_nu = bool(fit_nu) and (nu_init is None or nu_init < 199.0)
     do_fit_scale = bool(fit_scale)
@@ -1322,8 +1416,13 @@ def ml_i_nuisance_fit(
             )
 
     do_fit_nu_bins = bool(do_fit_nu and n_mode == "bins" and mode == "bins" and shell_idx_t is not None)
-    do_fit_nu_global = bool(do_fit_nu and not do_fit_nu_bins)
+    do_fit_nu_grid_bins = bool(
+        do_fit_nu and n_mode == "grid_bins" and mode == "bins" and shell_idx_t is not None
+    )
+    do_fit_nu_grid = bool(do_fit_nu and (n_mode == "grid" or do_fit_nu_grid_bins))
+    do_fit_nu_global = bool(do_fit_nu and n_mode == "global")
     current_nu: Optional[float] = nu_init if nu_init is not None else (7.0 if do_fit_nu else None)
+    held_nu_bins_t: Optional[Any] = None
     u_nu = None
     nu_lo, nu_hi = float(bounds[0]), float(bounds[1])
     if do_fit_nu_bins:
@@ -1346,10 +1445,23 @@ def ml_i_nuisance_fit(
         sa_params = list(sa_params) + [u_nu]
 
     params = list(sa_params)
+    if do_spatial and u_spatial is not None:
+        params = list(params) + [u_spatial]
 
-    def compute_nll(nu_val: Optional[float] = None):
+    def _fc_amp() -> Any:
+        if do_spatial and u_spatial is not None and fa_t is not None and fb_t is not None:
+            w_mol, w_sol = _lsa.channel_weights(u_spatial, spatial_opts.e_bar)
+            sid = shell_idx_t if spatial_opts.rms_gauge == "shell" else None
+            gauge = spatial_opts.rms_gauge if sid is not None else "global"
+            f_eff, _nk = _lsa.mix_f_eff(fa_t, fb_t, w_mol, w_sol, sid, gauge)
+            amp = f_eff.abs()
+        else:
+            amp = fc_t
+        return amp * torch.exp(us) if do_fit_scale else amp
+
+    def nll_per_refl(nu_val: Optional[float] = None):
         sa_t = _sa_tune_from_params()
-        fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
+        fc_scaled = _fc_amp()
         Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
         if do_free_beta:
             # Exact: the integrands use (E_C, σ_A) only through the product σ_A·E_C and
@@ -1361,11 +1473,57 @@ def ml_i_nuisance_fit(
             Ec, sA_n = _fb.rice_inputs(Ec, sa_t, _beta_tune_from_params())
         if do_fit_nu_bins:
             ll = log_likelihood_t(Ec, sA_n, Zo, sZ, cen_t, nu=_nu_tune_from_params(), n_u=10)
+        elif held_nu_bins_t is not None and shell_idx_t is not None:
+            nu_t = held_nu_bins_t[shell_idx_t]
+            gauss = nu_t >= 199.0
+            ll = torch.empty_like(Ec)
+            if bool((~gauss).any()):
+                ll[~gauss] = log_likelihood_t(
+                    Ec[~gauss], sA_n[~gauss], Zo[~gauss], sZ[~gauss], cen_t[~gauss],
+                    nu=nu_t[~gauss], n_u=10,
+                )
+            if bool(gauss.any()):
+                ll[gauss] = log_likelihood_normal(
+                    Ec[gauss], sA_n[gauss], Zo[gauss], sZ[gauss], cen_t[gauss]
+                )
         elif nu_val is not None and float(nu_val) < 199.0:
             ll = log_likelihood_t(Ec, sA_n, Zo, sZ, cen_t, nu=float(nu_val), n_u=10)
         else:
             ll = log_likelihood_normal(Ec, sA_n, Zo, sZ, cen_t)
-        return -ll.sum()
+        return -ll
+
+    def compute_nll(nu_val: Optional[float] = None):
+        return nll_per_refl(nu_val).sum()
+
+    def _grid_node_snapshot(nu_val: Optional[float]) -> dict[str, Any]:
+        """Per-shell NLL and the σ_A/β that produced it, after the node’s LBFGS."""
+        with torch.no_grad():
+            nll_i = nll_per_refl(nu_val)
+            nll_mean = float(nll_i.mean().item())
+            sa: list[float] = []
+            beta: list[float] = []
+            nll_shell: list[float] = []
+            n_shell: list[int] = []
+            if mode == "bins":
+                sa_np = _sa_bins_from_params().detach().cpu().numpy().astype(np.float64)
+                beta_np = _beta_bins_from_params().detach().cpu().numpy().astype(np.float64)
+                sa = [float(x) for x in sa_np]
+                beta = [float(x) for x in beta_np]
+                if shell_idx_t is not None and sa_np.size:
+                    sid = shell_idx_t.detach().cpu().numpy()
+                    nll_np = nll_i.detach().cpu().numpy()
+                    for k in range(int(sa_np.size)):
+                        m = sid == k
+                        n_k = int(m.sum())
+                        n_shell.append(n_k)
+                        nll_shell.append(float(nll_np[m].mean()) if n_k else float("nan"))
+            return {
+                "nll": nll_mean,
+                "sigma_a": sa,
+                "beta": beta,
+                "nll_shell": nll_shell,
+                "n_shell": n_shell,
+            }
 
     opt = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
 
@@ -1405,6 +1563,9 @@ def ml_i_nuisance_fit(
                 + _ar.frobenius_sq(_ar.a_from_params_torch(u_m_b, laue))
             )
             pen = term if pen is None else pen + term
+        if do_spatial and u_spatial is not None and spatial_opts.lambda_u > 0.0:
+            term = spatial_opts.lambda_u * (u_spatial ** 2)
+            pen = term if pen is None else pen + term
         return pen
 
     def closure():
@@ -1416,10 +1577,89 @@ def ml_i_nuisance_fit(
         loss.backward()
         return loss
 
-    try:
-        opt.step(closure)
-    except Exception as exc:
-        lbfgs_failures.append(f"sigma_a: {type(exc).__name__}: {exc}")
+    def _param_data() -> list[Any]:
+        return [p.detach().clone() for p in params]
+
+    def _load_param_data(saved: list[Any]) -> None:
+        with torch.no_grad():
+            for p, src in zip(params, saved):
+                p.copy_(src)
+
+    grid_nll_per_refl: list[float] = []
+    grid_nu_values: list[float] = []
+    grid_nll_gaussian: Optional[float] = None
+    grid_snapshots: list[dict[str, Any]] = []
+    grid_snapshot_gaussian: Optional[dict[str, Any]] = None
+    n_tune = max(float(tune.sum()), 1.0)
+
+    if do_fit_nu_grid:
+        init_state = _param_data()
+        grid_nu_values = parse_nu_grid(nu_grid)
+        if not grid_nu_values:
+            grid_nu_values = parse_nu_grid(None)
+        best_state = init_state
+        best_nll_sum = float("inf")
+        best_nu_grid = float(grid_nu_values[0])
+        for nu_k in grid_nu_values:
+            _load_param_data(init_state)
+            current_nu = float(nu_k)
+            opt_k = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
+            try:
+                opt_k.step(closure)
+            except Exception as exc:
+                lbfgs_failures.append(f"sigma_a(ν={nu_k:g}): {type(exc).__name__}: {exc}")
+            snap = _grid_node_snapshot(current_nu)
+            grid_snapshots.append(snap)
+            grid_nll_per_refl.append(float(snap["nll"]))
+            nll_k = float(snap["nll"]) * n_tune
+            if nll_k < best_nll_sum:
+                best_nll_sum = nll_k
+                best_nu_grid = float(nu_k)
+                best_state = _param_data()
+        _load_param_data(init_state)
+        current_nu = 200.0
+        opt_g = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
+        try:
+            opt_g.step(closure)
+        except Exception as exc:
+            lbfgs_failures.append(f"sigma_a(Gaussian): {type(exc).__name__}: {exc}")
+        grid_snapshot_gaussian = _grid_node_snapshot(None)
+        grid_nll_gaussian = float(grid_snapshot_gaussian["nll"])
+        _load_param_data(best_state)
+        current_nu = best_nu_grid
+        if do_fit_nu_grid_bins and grid_snapshots:
+            n_sh = 0
+            for snap in grid_snapshots:
+                n_sh = max(n_sh, len(snap.get("nll_shell") or []))
+            g_shell = list((grid_snapshot_gaussian or {}).get("nll_shell") or [])
+            picked: list[float] = []
+            for k in range(n_sh):
+                scores: list[tuple[float, float]] = []
+                for nu_i, snap in zip(grid_nu_values, grid_snapshots):
+                    row = snap.get("nll_shell") or []
+                    if k < len(row) and np.isfinite(float(row[k])):
+                        scores.append((float(row[k]), float(nu_i)))
+                if k < len(g_shell) and np.isfinite(float(g_shell[k])):
+                    scores.append((float(g_shell[k]), 200.0))
+                if scores:
+                    picked.append(min(scores, key=lambda t: t[0])[1])
+                else:
+                    picked.append(float(best_nu_grid))
+            held_nu_bins_t = torch.as_tensor(picked, dtype=dtype, device=dev)
+            _load_param_data(init_state)
+            current_nu = None
+            opt_mix = torch.optim.LBFGS(params, max_iter=40, line_search_fn="strong_wolfe")
+            try:
+                opt_mix.step(closure)
+            except Exception as exc:
+                lbfgs_failures.append(f"sigma_a(ν per shell): {type(exc).__name__}: {exc}")
+            finite = [v for v in picked if v < 199.0]
+            current_nu = float(np.mean(finite)) if finite else 200.0
+    else:
+        try:
+            opt.step(closure)
+        except Exception as exc:
+            lbfgs_failures.append(f"sigma_a: {type(exc).__name__}: {exc}")
 
     best_nu: Optional[float] = current_nu
     nu_se: Optional[float] = None
@@ -1453,7 +1693,7 @@ def ml_i_nuisance_fit(
         try:
             with torch.no_grad():
                 sa_t = _sa_tune_from_params()
-                fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
+                fc_scaled = _fc_amp()
                 Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
                 post = posterior_moments(Ec, sA_n, Zo, sZ, cen_t, nu=best_nu, n_u=10)
                 if post.d_loglik_d_nu is not None:
@@ -1461,6 +1701,55 @@ def ml_i_nuisance_fit(
                     nu_se = float(1.0 / np.sqrt(max(fisher_info, 1e-6)))
         except Exception:
             nu_se = None
+    elif do_fit_nu_grid:
+        if do_fit_nu_grid_bins and held_nu_bins_t is not None:
+            nu_bin_values = held_nu_bins_t.detach().cpu().numpy().astype(np.float64)
+            finite = nu_bin_values[np.isfinite(nu_bin_values) & (nu_bin_values < 199.0)]
+            best_nu = float(np.mean(finite)) if finite.size else 200.0
+            if n_sa == 1:
+                nu_full[:] = float(nu_bin_values[0])
+            else:
+                assert edges is not None
+                shell_all = np.clip(np.digitize(s_sq_np, edges[1:-1], right=False), 0, n_sa - 1)
+                nu_full = nu_bin_values[shell_all]
+            nu_full = np.where(np.isfinite(nu_full), nu_full, float(best_nu))
+            nu_params = {
+                "mode": "grid_bins",
+                "nu": best_nu,
+                "n_bins": int(n_sa),
+                "bin_nu": [float(x) for x in nu_bin_values],
+                "grid": [float(v) for v in grid_nu_values],
+                "grid_nll": [float(v) for v in grid_nll_per_refl],
+                "grid_nll_gaussian": grid_nll_gaussian,
+                "grid_sigma_a": [list(s.get("sigma_a") or []) for s in grid_snapshots],
+                "grid_beta": [list(s.get("beta") or []) for s in grid_snapshots],
+                "grid_nll_shell": [list(s.get("nll_shell") or []) for s in grid_snapshots],
+                "grid_n_shell": list((grid_snapshots[0].get("n_shell") or []) if grid_snapshots else []),
+                "gaussian_sigma_a": list((grid_snapshot_gaussian or {}).get("sigma_a") or []),
+                "gaussian_beta": list((grid_snapshot_gaussian or {}).get("beta") or []),
+                "gaussian_nll_shell": list((grid_snapshot_gaussian or {}).get("nll_shell") or []),
+                "bin_centers_s2": sa_bin_centers.tolist() if sa_bin_centers is not None else [],
+                "bounds": [nu_lo, nu_hi],
+            }
+        else:
+            best_nu = float(current_nu) if current_nu is not None else float(grid_nu_values[0])
+            nu_full[:] = best_nu
+            nu_params = {
+                "mode": "grid",
+                "nu": best_nu,
+                "grid": [float(v) for v in grid_nu_values],
+                "grid_nll": [float(v) for v in grid_nll_per_refl],
+                "grid_nll_gaussian": grid_nll_gaussian,
+                "grid_sigma_a": [list(s.get("sigma_a") or []) for s in grid_snapshots],
+                "grid_beta": [list(s.get("beta") or []) for s in grid_snapshots],
+                "grid_nll_shell": [list(s.get("nll_shell") or []) for s in grid_snapshots],
+                "grid_n_shell": list((grid_snapshots[0].get("n_shell") or []) if grid_snapshots else []),
+                "gaussian_sigma_a": list((grid_snapshot_gaussian or {}).get("sigma_a") or []),
+                "gaussian_beta": list((grid_snapshot_gaussian or {}).get("beta") or []),
+                "gaussian_nll_shell": list((grid_snapshot_gaussian or {}).get("nll_shell") or []),
+                "bin_centers_s2": sa_bin_centers.tolist() if sa_bin_centers is not None else [],
+                "bounds": [nu_lo, nu_hi],
+            }
     elif do_fit_nu_global:
         def nu_obj(nu_candidate: float) -> float:
             with torch.no_grad():
@@ -1477,7 +1766,7 @@ def ml_i_nuisance_fit(
 
         with torch.no_grad():
             sa_t = _sa_tune_from_params()
-            fc_scaled = fc_t * torch.exp(us) if do_fit_scale else fc_t
+            fc_scaled = _fc_amp()
             Ec, sA_n, Zo, sZ = normalize(fc_scaled, io_t, si_t, eps_t, sw_t, sa_t)
             post = posterior_moments(Ec, sA_n, Zo, sZ, cen_t, nu=best_nu, n_u=10)
             if post.d_loglik_d_nu is not None:
@@ -1499,6 +1788,12 @@ def ml_i_nuisance_fit(
                 nu_se = None
         nu_full[:] = float(best_nu)
         nu_params = {"mode": "global", "nu": float(best_nu), "bounds": [nu_lo, nu_hi]}
+    elif nu_held_full is not None:
+        t_vals = nu_held_full[np.isfinite(nu_held_full) & (nu_held_full < 199.0)]
+        best_nu = float(np.mean(t_vals)) if t_vals.size else float(np.nanmean(nu_held_full))
+        nu_se = None
+        nu_full = np.where(np.isfinite(nu_held_full), nu_held_full, best_nu)
+        nu_params = {"mode": "fixed", "nu": best_nu, "held_per_refl": True}
     elif nu_init is not None:
         best_nu = float(nu_init)
         nu_se = None
@@ -1514,28 +1809,35 @@ def ml_i_nuisance_fit(
     # value means ν is not identified by the data, so the reported ν is set by the
     # bounds rather than by the likelihood.
     if do_fit_nu:
-        try:
-            with torch.no_grad():
-                sa_prof = _sa_tune_from_params()
-                fc_prof = fc_t * torch.exp(us) if do_fit_scale else fc_t
-                Ec_p, sA_p, Zo_p, sZ_p = normalize(fc_prof, io_t, si_t, eps_t, sw_t, sa_prof)
-                n_p = max(int(Ec_p.numel()), 1)
-                grid = np.unique(np.geomspace(max(nu_lo, 2.05), nu_hi, 10))
-                nu_params["profile_nu"] = [round(float(g), 3) for g in grid]
-                nu_params["profile_nll"] = [
-                    float(
-                        -log_likelihood_t(
-                            Ec_p, sA_p, Zo_p, sZ_p, cen_t, nu=float(g), n_u=10
-                        ).sum().item()
+        if do_fit_nu_grid and grid_nu_values and grid_nll_per_refl:
+            # Joint (σ_A, β) refit at each node — the number that chose ν.
+            nu_params["profile_nu"] = [round(float(g), 3) for g in grid_nu_values]
+            nu_params["profile_nll"] = [float(v) for v in grid_nll_per_refl]
+            if grid_nll_gaussian is not None:
+                nu_params["profile_nll_gaussian"] = float(grid_nll_gaussian)
+        else:
+            try:
+                with torch.no_grad():
+                    sa_prof = _sa_tune_from_params()
+                    fc_prof = _fc_amp()
+                    Ec_p, sA_p, Zo_p, sZ_p = normalize(fc_prof, io_t, si_t, eps_t, sw_t, sa_prof)
+                    n_p = max(int(Ec_p.numel()), 1)
+                    grid = np.unique(np.geomspace(max(nu_lo, 2.05), nu_hi, 10))
+                    nu_params["profile_nu"] = [round(float(g), 3) for g in grid]
+                    nu_params["profile_nll"] = [
+                        float(
+                            -log_likelihood_t(
+                                Ec_p, sA_p, Zo_p, sZ_p, cen_t, nu=float(g), n_u=10
+                            ).sum().item()
+                        )
+                        / n_p
+                        for g in grid
+                    ]
+                    nu_params["profile_nll_gaussian"] = (
+                        float(-log_likelihood_normal(Ec_p, sA_p, Zo_p, sZ_p, cen_t).sum().item()) / n_p
                     )
-                    / n_p
-                    for g in grid
-                ]
-                nu_params["profile_nll_gaussian"] = (
-                    float(-log_likelihood_normal(Ec_p, sA_p, Zo_p, sZ_p, cen_t).sum().item()) / n_p
-                )
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     scale_final = float(torch.exp(us).item()) if do_fit_scale else 1.0
 
@@ -1613,7 +1915,7 @@ def ml_i_nuisance_fit(
                 ),
                 free_beta=do_free_beta,
                 shell_idx=shell_idx_t,
-                fc_t=fc_t,
+                fc_t=_fc_amp().detach(),
                 io_t=io_t,
                 si_t=si_t,
                 eps_t=eps_t,
@@ -1704,13 +2006,56 @@ def ml_i_nuisance_fit(
     else:
         sigma_a_params["n_tensor_params"] = 0
 
+    u_final: Optional[float] = None
+    w_mol_f: Optional[float] = None
+    w_sol_f: Optional[float] = None
+    n_k_report: Optional[np.ndarray] = None
+    n_env = 0
+    if do_spatial and u_spatial is not None and fa_np is not None and fb_np is not None:
+        u_final = float(u_spatial.detach().cpu().item())
+        w_mol_f, w_sol_f = _lsa.channel_weights(u_final, spatial_opts.e_bar)
+        if mode == "bins" and edges is not None and n_sa > 1:
+            shell_all = np.clip(np.digitize(s_sq_np, edges[1:-1], right=False), 0, n_sa - 1)
+        else:
+            shell_all = np.zeros(n, dtype=np.int64)
+        _fe, n_k_report = _lsa.mix_f_eff(
+            fa_np, fb_np, w_mol_f, w_sol_f, shell_all, spatial_opts.rms_gauge
+        )
+        n_k_report = np.asarray(n_k_report, dtype=np.float64)
+        try:
+            hkl_np = _np(f_obs.hkl)
+            _hk, _c, keep_env = _lsa.envelope_coefficients(
+                hkl_np, fb_np, s_sq_np, spatial_opts.d_min, spatial_opts.blur_b
+            )
+            n_env = int(np.sum(keep_env))
+        except Exception:
+            n_env = 0
+    spatial_json = _lsa.describe_local_sigma_a(
+        enabled=bool(do_spatial),
+        u=u_final,
+        blur_b=spatial_opts.blur_b,
+        d_min=spatial_opts.d_min,
+        e_bar=spatial_opts.e_bar,
+        w_mol=w_mol_f,
+        w_sol=w_sol_f,
+        n_shell_rms=n_k_report,
+        n_envelope_hkl=n_env,
+        lambda_u=spatial_opts.lambda_u,
+        rms_gauge=spatial_opts.rms_gauge,
+        fallback=spatial_fallback,
+    )
+    if mode == "bins" and edges is not None:
+        spatial_json["bin_edges_s2"] = [float(x) for x in edges]
+    sigma_a_params["local_sigma_a"] = spatial_json
+
     n_nu_params = 0
     if best_nu is not None:
-        n_nu_params = int(n_sa) if nu_params.get("mode") == "bins" else 1
+        n_nu_params = int(n_sa) if nu_params.get("mode") in ("bins", "grid_bins") else 1
     # Two parameters per shell once β is free, and the report has to say so: p_theta is
     # what the held-out statistics are corrected by.
     n_shell_params = (int(n_sa) * (2 if do_free_beta else 1)) if mode == "bins" else 2
     p_theta = n_shell_params + n_nu_params + n_rice_params + (1 if do_fit_scale else 0)
+    p_theta += 1 if do_spatial else 0
     # Wilson: Σ₀ + either the scalar B_W or the 6 tensor components; binned is one mean
     # per bin plus the 5 components of a traceless tensor.
     binned_tensor = bool(do_binned and np.any(b_cart_final != 0.0))
@@ -1811,6 +2156,8 @@ _TARGET_AND_GRADIENTS_INPUTS = {
     "f_bulk": "array",
     "k_model": "array",
     "residual_k1": "json",
+    "spatial_sigma_a_v2": "SpatialSigmaAV2",
+    "spatial_sigma_a_v2_result": "SpatialSigmaAV2Result",
 }
 
 _TARGET_AND_GRADIENTS_OUTPUTS = {
@@ -1862,6 +2209,8 @@ def ml_i_target_and_gradients(
     f_bulk: Optional[Any] = None,
     k_model: Optional[Any] = None,
     residual_k1: Optional[Any] = False,
+    spatial_sigma_a_v2: Optional[Any] = None,
+    spatial_sigma_a_v2_result: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Whole chain for intensity likelihood: F_calc -> ml_i target -> dQ/dF -> dQ/d(scatterer params).
 
@@ -1873,6 +2222,11 @@ def ml_i_target_and_gradients(
 
     Optionally computes exact Gauss-Newton diagonal preconditioners for Cartesian
     sites, occupancy, isotropic U, and anisotropic U* in a single server pass.
+
+    When a fitted ``spatial_sigma_a_v2_result`` is present, ``F_calc`` is the
+    modified-model structure factor (eq. 25) times ``D_0(s)``. Occupancy
+    gradients are converted back to the modelled occupancy. Absent the result,
+    the path is unchanged (flag off / unfitted block).
     """
     import torch
 
@@ -1884,6 +2238,7 @@ def ml_i_target_and_gradients(
         _np,
         _observations,
         _target_result,
+        _to_like,
     )
     from phridge.sfcalc.packing import PackedSfCurvatures, PackedSfGradients
     from phridge.sfcalc.targets import build_target
@@ -1891,6 +2246,22 @@ def ml_i_target_and_gradients(
     do_precond = bool(precondition)
     damp_val = float(damping) if damping is not None else 0.05
     k_scale = float(scale_factor) if scale_factor is not None else 1.0
+
+    d0_v2 = None
+    w_v2 = None
+    from phridge.contrib.spatial_sigmaa_v2.apply import (
+        d0_from_block,
+        frozen_from_result,
+        occupancy_grads_to_model,
+        should_apply,
+        xray_with_frozen_errors,
+    )
+
+    if should_apply(spatial_sigma_a_v2, spatial_sigma_a_v2_result):
+        w_v2, _u = frozen_from_result(spatial_sigma_a_v2_result)
+        xray = xray_with_frozen_errors(xray, spatial_sigma_a_v2_result)
+        cell = tuple(float(x) for x in xray.meta.crystal.unit_cell)
+        d0_v2 = d0_from_block(spatial_sigma_a_v2, cell, _np(f_obs.hkl))
 
     eng = _engine(xray, table, _np(f_obs.hkl), params)
     spec = dict(target)
@@ -1904,6 +2275,10 @@ def ml_i_target_and_gradients(
 
     p = eng.tensors(requires_grad=True)
     fc = eng.f_calc(*p)
+    d0_t = None
+    if d0_v2 is not None:
+        d0_t = _to_like(d0_v2, fc.real)
+        fc = fc * d0_t
     # k as a host array (for the curvature scaling) and as a device tensor
     k_np = np.full(fc.shape[0], k_scale, dtype=np.float64)
     if k_model is not None:
@@ -1913,11 +2288,11 @@ def ml_i_target_and_gradients(
                 f"k_model must be {k_np.shape[0]} finite values, got shape {km.shape}"
             )
         k_np = k_np * km
-    # dtype at construction: MPS has no float64, so a float64 tensor cannot even land there
-    k_t = torch.as_tensor(k_np, dtype=fc.real.dtype, device=fc.device)
+    # dtype on the host, then device — never fuse (MPS has no float64)
+    k_t = _to_like(k_np, fc.real)
     if f_bulk is not None:
         fb_np = _np(f_bulk, np.complex128)
-        fb_t = torch.as_tensor(fb_np, dtype=fc.dtype, device=fc.device)
+        fb_t = _to_like(fb_np, fc)
         f_model = k_t * (fc + fb_t)
     else:
         f_model = k_t * fc
@@ -1925,7 +2300,7 @@ def ml_i_target_and_gradients(
         # The client's scale_k1: LS scale of sqrt|I| on |F_model|, held fixed for the
         # gradient exactly as the functor path holds it.
         with torch.no_grad():
-            fo_t = torch.sqrt(torch.abs(obs.data)).to(fc.real.dtype)
+            fo_t = _to_like(torch.sqrt(torch.abs(obs.data)), fc.real)
             fm_abs = f_model.detach().abs()
             den = float((fm_abs * fm_abs).sum().item())
             k1 = float((fo_t * fm_abs).sum().item()) / den if den > 0 else 1.0
@@ -1935,7 +2310,7 @@ def ml_i_target_and_gradients(
             f_model = f_model * k1
 
     ev = tgt.evaluate(f_model.detach(), obs, compute_curvature=do_precond)
-    g = torch.as_tensor(ev.d_target_d_f_calc, dtype=fc.dtype, device=fc.device)
+    g = _to_like(ev.d_target_d_f_calc, fc)
     # Scale derivative w.r.t fc: dQ/dfc = k * dQ/df_model
     q = (k_t * fc * g.conj()).real.sum()
     grads = torch.autograd.grad(q, p, allow_unused=True)
@@ -1943,6 +2318,8 @@ def ml_i_target_and_gradients(
         (torch.zeros_like(t) if gr is None else gr).detach().cpu().numpy().astype(np.float64)
         for t, gr in zip(p, grads)
     ]
+    if w_v2 is not None:
+        arrays[1] = occupancy_grads_to_model(arrays[1], w_v2)
 
     gradients = PackedSfGradients(
         d_site_frac=arrays[0],

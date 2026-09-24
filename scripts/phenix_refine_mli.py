@@ -76,10 +76,20 @@ def run(args: list[str]) -> int:
             print(f"✓ Student-t degrees of freedom set: nu={val}")
         elif lower in ("--fit-nu", "fit_nu=true", "fit_nu=1"):
             os.environ["PHRIDGE_FIT_NU"] = "1"
-            print("✓ Student-t nu refinement enabled (fit_nu=True)")
+            print("✓ Student-t ν search enabled (grid on cycle 1, then held)")
         elif lower in ("--no-fit-nu", "fit_nu=false", "fit_nu=0"):
             os.environ["PHRIDGE_FIT_NU"] = "0"
             print("✓ Student-t nu refinement disabled (fit_nu=False)")
+        elif lower in ("--fit-nu-every-cycle", "fit_nu_every_cycle=true", "fit_nu_every_cycle=1"):
+            os.environ["PHRIDGE_FIT_NU"] = "1"
+            os.environ["PHRIDGE_FIT_NU_EVERY_CYCLE"] = "1"
+            print("✓ Student-t ν search every macro cycle")
+        elif lower.startswith("--fit-nu-cycles=") or lower.startswith("fit_nu_cycles="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_FIT_NU"] = "1"
+            os.environ["PHRIDGE_FIT_NU_CYCLES"] = val
+            os.environ["PHRIDGE_FIT_NU_EVERY_CYCLE"] = "0"
+            print(f"✓ Student-t ν search on the first {val} macro cycle(s)")
         elif lower in ("--no-sigma-a-tensor", "sigma_a_tensor=false", "sigma_a_tensor=0"):
             os.environ["PHRIDGE_SIGMA_A_TENSOR"] = "0"
             print("✓ σ_A/β Laue-class tensors disabled")
@@ -90,7 +100,15 @@ def run(args: list[str]) -> int:
         elif lower.startswith("--nu-mode=") or lower.startswith("nu_mode="):
             val = arg.split("=", 1)[1].strip().lower()
             os.environ["PHRIDGE_NU_MODE"] = val
-            print(f"✓ Student-t ν fit mode: {val} (bins|global)")
+            print(f"✓ Student-t ν fit mode: {val} (grid|grid-bins|bins|global)")
+        elif lower.startswith("--nu-grid=") or lower.startswith("nu_grid="):
+            val = arg.split("=", 1)[1].strip()
+            os.environ["PHRIDGE_NU_GRID"] = val
+            if os.environ.get("PHRIDGE_NU_MODE", "grid") not in (
+                "grid_bins", "grid-bins", "per-bin", "per_bin", "bins-grid", "bins_grid",
+            ):
+                os.environ["PHRIDGE_NU_MODE"] = "grid"
+            print(f"✓ Student-t ν grid: {val} (σ_A/β refit at each node)")
         elif lower in ("--precondition", "precondition=true", "precondition=1"):
             os.environ["PHRIDGE_PRECONDITION"] = "1"
             print("✓ Gauss-Newton diagonal preconditioning enabled for XYZ, occupancy, and ADP gradients")
@@ -133,6 +151,59 @@ def run(args: list[str]) -> int:
         elif lower in ("--no-omit-windows", "omit_windows=false", "omit_windows=0"):
             os.environ["PHRIDGE_OMIT_WINDOWS"] = "0"
             print("✓ Windowed omit map coefficients disabled")
+        elif lower in (
+            "--spatial-sigmaa-v2",
+            "--spatial-sigma-a-v2",
+            "spatial_sigma_a_v2=true",
+            "spatial_sigma_a_v2=1",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2"] = "1"
+            print("✓ Spatial σ_A v2 (per-atom error model) enabled")
+        elif lower in (
+            "--no-spatial-sigma-a-v2",
+            "--no-spatial-sigmaa-v2",
+            "spatial_sigma_a_v2=false",
+            "spatial_sigma_a_v2=0",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2"] = "0"
+            print("✓ Spatial σ_A v2 disabled")
+        elif lower in (
+            "--spatial-sigmaa-v2-fisher",
+            "--spatial-sigma-a-v2-fisher",
+            "spatial_sigma_a_v2_fisher=true",
+            "spatial_sigma_a_v2_fisher=1",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2"] = "1"
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER"] = "1"
+            print("✓ Spatial σ_A v2 Fisher closure enabled")
+        elif lower in (
+            "--no-spatial-sigma-a-v2-fisher",
+            "--no-spatial-sigmaa-v2-fisher",
+            "spatial_sigma_a_v2_fisher=false",
+            "spatial_sigma_a_v2_fisher=0",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER"] = "0"
+            print("✓ Spatial σ_A v2 Fisher closure disabled")
+        elif lower in (
+            "--spatial-sigmaa",
+            "--spatial-sigma-a",
+            "spatial_sigma_a=true",
+            "spatial_sigma_a=1",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A"] = "1"
+            print("✓ Spatial σ_A (inverse-mask two-channel mix) enabled")
+        elif lower in (
+            "--no-spatial-sigma-a",
+            "--no-spatial-sigmaa",
+            "spatial_sigma_a=false",
+            "spatial_sigma_a=0",
+        ):
+            os.environ["PHRIDGE_SPATIAL_SIGMA_A"] = "0"
+            print("✓ Spatial σ_A disabled")
+        elif lower in ("--dt-mask", "dt_mask=true", "dt_mask=1") or lower.startswith("--dt-mask-"):
+            print("Distance-transform F_mask is not used in phenix refine (flat Jiang–Brünger mask only).")
+        elif lower in ("--no-dt-mask", "dt_mask=false", "dt_mask=0"):
+            os.environ["PHRIDGE_DT_MASK"] = "0"
         elif lower.startswith("--omit-box-size=") or lower.startswith("omit_box_size="):
             val = arg.split("=", 1)[1].strip()
             os.environ["PHRIDGE_OMIT_BOX_SIZE"] = val

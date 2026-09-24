@@ -29,6 +29,7 @@ from phridge.packing_xtal import (
 )
 from phridge.packing_geometry import PackedRestraints
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
+from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2, PackedSpatialSigmaAV2Result
 
 def has_cctbx() -> bool:
     try:
@@ -64,6 +65,8 @@ def to_canonical(value: Any) -> Any:
         PackedSfGradients,
         PackedSfCurvatures,
         PackedTargetResult,
+        PackedSpatialSigmaAV2,
+        PackedSpatialSigmaAV2Result,
         ModelGeometry,
         CrystalGridding,
         CrystalSymmetry,

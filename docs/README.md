@@ -8,6 +8,7 @@
 - [Redis store, remote jobs, and `Bridge(memory=True)`](redis.md)
 - [External ops, `phridge.contrib`, and custom workers](extending.md) (worked example: agentsg Niggli)
 - [Generated LinkML class catalog](schema/index.md) (`make schema-docs`)
+- [Spatial σ_A v2 inspection](spatial_sigmaA_v2/INSPECTION.md) (per-atom error model; opt-in `--spatial-sigmaA-v2`)
 
 JSON Schema for metadata is under [`schema/generated/`](../schema/generated/).
 Instance checks (`linkml-validate` / `linkml.validator.validate`) cover JSON

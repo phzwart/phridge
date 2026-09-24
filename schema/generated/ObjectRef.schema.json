@@ -1428,6 +1428,85 @@
             "title": "SlotBinding",
             "type": "object"
         },
+        "SpatialSigmaAV2": {
+            "additionalProperties": false,
+            "description": "Optional per-atom error-model block (spatial \u03c3_A v2). Absent from the job when --spatial-sigmaA-v2 is off. Fourier coefficients are the unique real, symmetry-adapted set with c_0 excluded. npz: lambda_c [K], kappa_c [K], coeff_hkl int32 [K,3], D0 [S], Sigma_miss [S], shell_s2_edges [S+1], v_k [K].",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "entropy_weight": {
+                    "description": "\u03b1 in the explained-power relative-entropy regulariser",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "field_cutoff": {
+                    "description": "Band-limit of \u03bb(x) and \u03ba(x) in \u00c5",
+                    "type": "number"
+                },
+                "fisher": {
+                    "description": "If true, U_j from Fisher 3\u00d73 blocks instead of \u03ba",
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "n_coeff": {
+                    "description": "K, unique field coefficients (c_0 excluded)",
+                    "type": "integer"
+                },
+                "n_scatterers": {
+                    "description": "Atom count when per-atom diagnostics are attached",
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "n_shells": {
+                    "description": "S, resolution shells for D_0(s) and Sigma_miss(s)",
+                    "type": "integer"
+                },
+                "spectral_taper_scale": {
+                    "description": "Scale of the spectral prior variances v_k",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "enabled",
+                "field_cutoff",
+                "n_coeff",
+                "n_shells"
+            ],
+            "title": "SpatialSigmaAV2",
+            "type": "object"
+        },
+        "SpatialSigmaAV2Result": {
+            "additionalProperties": false,
+            "description": "Field-coefficient gradients and per-atom diagnostics returned after a field step. npz: d_lambda_c [K], d_kappa_c [K], d_D0 [S], d_Sigma_miss [S], w [N], u_err_star [N,6], tr_U [N].",
+            "properties": {
+                "n_coeff": {
+                    "type": "integer"
+                },
+                "n_scatterers": {
+                    "type": "integer"
+                },
+                "n_shells": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n_scatterers",
+                "n_coeff",
+                "n_shells"
+            ],
+            "title": "SpatialSigmaAV2Result",
+            "type": "object"
+        },
         "SymOp": {
             "additionalProperties": false,
             "description": "One symmetry operator in fractional coordinates. r is row-major 3x3 (9 values), t is 3 values. Rational parts are stored as floats.",

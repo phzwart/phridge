@@ -145,6 +145,102 @@ def test_nuisance_fit_global_nu_still_works():
     np.testing.assert_allclose(nu_arr, float(out["nu"]))
 
 
+def test_parse_nu_grid_spec():
+    from phridge.contrib.intensity_ll.ops import parse_nu_grid
+
+    assert parse_nu_grid("5:50:5") == [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
+    assert parse_nu_grid(None) == parse_nu_grid("5:50:5")
+    assert parse_nu_grid([5, 15, 30]) == [5.0, 15.0, 30.0]
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("torch") is None,
+    reason="torch required for ml_i_nuisance_fit",
+)
+def test_nuisance_fit_nu_grid_refits_sigma_a_beta():
+    """Each grid node gets its own σ_A/β; the winner is a node, not the clamped start."""
+    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+
+    f_calc, f_obs, tune, s2, _ = _packed_arrays(n=800, seed=5)
+    out = ml_i_nuisance_fit(
+        f_calc,
+        f_obs,
+        tune_mask=tune,
+        s_sq=s2,
+        fit_nu=True,
+        nu_mode="grid",
+        nu_grid=[5, 15, 30],
+        fit_scale=False,
+        sigma_a_mode="bins",
+        n_sigma_a_bins=6,
+        nu_bounds=(2.5, 200.0),
+    )
+    np_ = out["nu_params"]
+    assert np_["mode"] == "grid"
+    assert np_["grid"] == [5.0, 15.0, 30.0]
+    assert len(np_["grid_nll"]) == 3
+    assert np_["grid_nll_gaussian"] is not None
+    assert len(np_["grid_sigma_a"]) == 3
+    assert len(np_["grid_beta"]) == 3
+    assert len(np_["grid_nll_shell"]) == 3
+    n_shell = len(np_["grid_sigma_a"][0])
+    assert n_shell == 6
+    assert all(len(row) == n_shell for row in np_["grid_sigma_a"])
+    assert all(len(row) == n_shell for row in np_["grid_beta"])
+    assert all(len(row) == n_shell for row in np_["grid_nll_shell"])
+    assert len(np_["gaussian_sigma_a"]) == n_shell
+    assert len(np_["gaussian_beta"]) == n_shell
+    assert len(np_["gaussian_nll_shell"]) == n_shell
+    assert float(out["nu"]) in {5.0, 15.0, 30.0}
+    assert float(out["nu"]) == pytest.approx(float(np_["nu"]))
+    best = min(range(3), key=lambda i: np_["grid_nll"][i])
+    assert float(out["nu"]) == pytest.approx(np_["grid"][best])
+    nu_arr = np.asarray(out["nu_per_refl"], dtype=np.float64)
+    np.testing.assert_allclose(nu_arr, float(out["nu"]))
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("torch") is None,
+    reason="torch required for ml_i_nuisance_fit",
+)
+def test_nuisance_fit_nu_grid_bins_picks_per_shell():
+    """grid-bins: each σ_A shell keeps the ν that won that shell’s NLL."""
+    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+
+    f_calc, f_obs, tune, s2, _ = _packed_arrays(n=800, seed=7)
+    out = ml_i_nuisance_fit(
+        f_calc,
+        f_obs,
+        tune_mask=tune,
+        s_sq=s2,
+        fit_nu=True,
+        nu_mode="grid-bins",
+        nu_grid=[5, 15, 30],
+        fit_scale=False,
+        sigma_a_mode="bins",
+        n_sigma_a_bins=6,
+        nu_bounds=(2.5, 200.0),
+    )
+    np_ = out["nu_params"]
+    assert np_["mode"] == "grid_bins"
+    assert np_["grid"] == [5.0, 15.0, 30.0]
+    assert len(np_["bin_nu"]) == 6
+    allowed = {5.0, 15.0, 30.0, 200.0}
+    assert all(float(v) in allowed for v in np_["bin_nu"])
+    nll_shell = np.asarray(np_["grid_nll_shell"], dtype=np.float64)
+    g_shell = np.asarray(np_["gaussian_nll_shell"], dtype=np.float64)
+    for k, chosen in enumerate(np_["bin_nu"]):
+        scores = list(nll_shell[:, k]) + [g_shell[k]]
+        labels = [5.0, 15.0, 30.0, 200.0]
+        finite = [(s, lab) for s, lab in zip(scores, labels) if np.isfinite(s)]
+        assert finite
+        expect = min(finite, key=lambda t: t[0])[1]
+        assert float(chosen) == pytest.approx(expect)
+    nu_arr = np.asarray(out["nu_per_refl"], dtype=np.float64)
+    assert nu_arr.shape == (800,)
+    assert np.all(np.isfinite(nu_arr))
+
+
 @pytest.mark.skipif(
     __import__("importlib").util.find_spec("torch") is None,
     reason="torch required for ml_i_nuisance_fit",

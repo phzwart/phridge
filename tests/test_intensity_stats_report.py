@@ -15,6 +15,7 @@ from phridge.client.intensity.stats_report import (
     format_aniso_scale_summary,
     format_cc_isig_table,
     format_intensity_stats_report,
+    format_nu_grid_profiles,
     stats_report_enabled,
 )
 
@@ -66,6 +67,38 @@ def test_stats_report_enabled_env(monkeypatch):
     assert stats_report_enabled(default=True) is False
     monkeypatch.setenv("PHRIDGE_STATS_REPORT", "1")
     assert stats_report_enabled(default=False) is True
+
+
+def test_format_nu_grid_profiles_prints_nll_and_shell_tables():
+    nu_params = {
+        "mode": "grid",
+        "nu": 15.0,
+        "grid": [5.0, 15.0, 30.0],
+        "grid_nll": [0.80, 0.77, 0.78],
+        "grid_nll_gaussian": 0.79,
+        "bin_centers_s2": [0.04, 0.16],
+        "grid_n_shell": [40, 60],
+        "grid_nll_shell": [[0.70, 0.90], [0.68, 0.86], [0.69, 0.87]],
+        "grid_sigma_a": [[0.99, 0.80], [0.98, 0.81], [0.97, 0.82]],
+        "grid_beta": [[0.12, 0.30], [0.13, 0.29], [0.14, 0.28]],
+        "gaussian_nll_shell": [0.71, 0.88],
+        "gaussian_sigma_a": [0.96, 0.83],
+        "gaussian_beta": [0.15, 0.27],
+    }
+    text = "\n".join(format_nu_grid_profiles(nu_params))
+    assert "ν grid" in text
+    assert "selected ν=15" in text
+    assert "per-shell NLL" in text
+    assert "per-shell σ_A" in text
+    assert "per-shell β" in text
+    assert "0.7700" in text
+    assert format_nu_grid_profiles({"mode": "none"}) == []
+    per_shell = dict(nu_params)
+    per_shell["mode"] = "grid_bins"
+    per_shell["bin_nu"] = [15.0, 200.0]
+    text_b = "\n".join(format_nu_grid_profiles(per_shell))
+    assert "per shell" in text_b
+    assert "selected ν(s): 15 G" in text_b
 
 
 # ============================================================ agreement statistics

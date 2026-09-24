@@ -356,7 +356,10 @@ def run_omit_windows_from_fmodel(
         register_ops()
         bridge = fmodel.bridge
         i_obs = fmodel._i_obs
-        f_model = fmodel.f_model_scaled_with_k1() if hasattr(fmodel, "f_model_scaled_with_k1") else fmodel.f_model()
+        if hasattr(fmodel, "_likelihood_f_calc"):
+            f_model = fmodel._likelihood_f_calc()
+        else:
+            f_model = fmodel.f_model_scaled_with_k1() if hasattr(fmodel, "f_model_scaled_with_k1") else fmodel.f_model()
         xs = fmodel._xray_structure
         xray = xray_from_cctbx(xs)
         table = scattering_table_from_cctbx(xs)

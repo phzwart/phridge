@@ -41,6 +41,10 @@ def to_torch(value: Any, device: str, compute_dtype: Any = None) -> Any:
         return value
     if isinstance(value, np.ndarray):
         return _ndarray_to_torch(value, device, compute_dtype)
+    # Spatial σ_A v2 is a numpy field / Fisher step. Do not lift its arrays
+    # onto the compute device — apply.py / alternate.py read them on the host.
+    if _is_host_spatial_sigma_a_v2(value):
+        return value
     return value
 
 
@@ -58,6 +62,9 @@ def from_torch(value: Any) -> Any:
         if _is_torch(value.data):
             value.data = _torch_to_canonical(value.data)
         return value
+    hosted = _host_spatial_sigma_a_v2(value)
+    if hosted is not None:
+        return hosted
     if _is_torch(value):
         return _torch_to_canonical(value)
     if isinstance(value, dict):
@@ -66,6 +73,32 @@ def from_torch(value: Any) -> Any:
         return [from_torch(v) for v in value]
     if isinstance(value, tuple):
         return tuple(from_torch(v) for v in value)
+    return value
+
+
+def _spatial_sigma_a_v2_types() -> tuple[type, ...]:
+    try:
+        from phridge.contrib.spatial_sigmaa_v2.packing import (
+            PackedSpatialSigmaAV2,
+            PackedSpatialSigmaAV2Result,
+        )
+    except ImportError:
+        return ()
+    return (PackedSpatialSigmaAV2, PackedSpatialSigmaAV2Result)
+
+
+def _is_host_spatial_sigma_a_v2(value: Any) -> bool:
+    return bool(_spatial_sigma_a_v2_types()) and isinstance(value, _spatial_sigma_a_v2_types())
+
+
+def _host_spatial_sigma_a_v2(value: Any) -> Any:
+    types = _spatial_sigma_a_v2_types()
+    if not types or not isinstance(value, types):
+        return None
+    for name in getattr(value, "FIELDS", ()):
+        arr = getattr(value, name, None)
+        if _is_torch(arr):
+            setattr(value, name, _torch_to_canonical(arr))
     return value
 
 

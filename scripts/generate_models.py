@@ -43,9 +43,18 @@ REQUIRED_CLASSES = {
     "SfGradients",
     "SfCurvatures",
     "TargetResult",
+    "SpatialSigmaAV2",
+    "SpatialSigmaAV2Result",
 }
 
-JSONSCHEMA_CLASSES = ("JobEnvelope", "CrystalSymmetry", "ObjectRef", "ModelGeometry")
+JSONSCHEMA_CLASSES = (
+    "JobEnvelope",
+    "CrystalSymmetry",
+    "ObjectRef",
+    "ModelGeometry",
+    "SpatialSigmaAV2",
+    "SpatialSigmaAV2Result",
+)
 
 
 def _load_view():

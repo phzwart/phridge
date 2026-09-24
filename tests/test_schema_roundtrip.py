@@ -176,5 +176,7 @@ def test_cctbx_types_registry():
         "GeometryRestraints",
         "ModelGeometry",
         "EmMap",
+        "SpatialSigmaAV2",
+        "SpatialSigmaAV2Result",
     ):
         assert name in CCTBX_TYPES

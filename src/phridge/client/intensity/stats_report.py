@@ -326,6 +326,7 @@ class IntensityStatsReport:
     sigma_a_params: dict[str, float] = field(default_factory=dict)
     sigma_wilson_params: dict[str, float] = field(default_factory=dict)
     nu: Optional[float] = None
+    nu_params: dict[str, Any] = field(default_factory=dict)
     label: str = ""
     # Overall S family (filled by merge from ml_i_maps)
     s_post_work: float = float("nan")
@@ -429,6 +430,7 @@ def compute_intensity_stats_report(
     sigma_a_params: Optional[dict[str, float]] = None,
     sigma_wilson_params: Optional[dict[str, float]] = None,
     nu: Optional[float] = None,
+    nu_params: Optional[dict[str, Any]] = None,
     label: str = "",
 ) -> IntensityStatsReport:
     """Build resolution-ordered bins of intensity / σ_A diagnostics."""
@@ -477,6 +479,7 @@ def compute_intensity_stats_report(
             sigma_a_params=dict(sigma_a_params or {}),
             sigma_wilson_params=dict(sigma_wilson_params or {}),
             nu=nu,
+            nu_params=dict(nu_params or {}),
             label=label,
         )
 
@@ -537,6 +540,7 @@ def compute_intensity_stats_report(
         sigma_a_params=dict(sigma_a_params or {}),
         sigma_wilson_params=dict(sigma_wilson_params or {}),
         nu=nu,
+        nu_params=dict(nu_params or {}),
         label=label,
     )
 
@@ -759,7 +763,10 @@ def format_wilson_normalization(sw_params: Optional[dict[str, Any]]) -> list[str
     return out
 
 
-def format_shell_nuisance(sa_params: Optional[dict[str, Any]]) -> list[str]:
+def format_shell_nuisance(
+    sa_params: Optional[dict[str, Any]],
+    nu_params: Optional[dict[str, Any]] = None,
+) -> list[str]:
     """Render the per-shell σ_A and β fit, with errors and the normalization check.
 
     ``σ_A² + β`` is the column to read: it is 1 exactly when the Wilson normalization is
@@ -838,9 +845,14 @@ def format_shell_nuisance(sa_params: Optional[dict[str, Any]]) -> list[str]:
             return f"{'.':>{width}}"
         return f"{float(v):>{width}.{dec}f}"
 
+    nu_bins: list[Any] = []
+    np_ = dict(nu_params or {})
+    if np_.get("mode") in ("bins", "grid_bins") and isinstance(np_.get("bin_nu"), (list, tuple)):
+        nu_bins = list(np_["bin_nu"])
+    nu_hdr = f" {'ν':>6}" if nu_bins else ""
     out.append(
         f"    {'shell':>5} {'d(Å)':>7} {'σ_A':>7} {'±':>6} "
-        f"{'β':>7} {'±':>6} {'σ_A²+β':>7} {'corr':>6}"
+        f"{'β':>7} {'±':>6} {'σ_A²+β':>7} {'corr':>6}{nu_hdr}"
     )
     for i in range(len(sa)):
         try:
@@ -850,11 +862,187 @@ def format_shell_nuisance(sa_params: Optional[dict[str, Any]]) -> list[str]:
             d_txt = f"{'.':>7}"
         cons = float(sa[i]) ** 2 + float(beta[i])
         flag = "*" if i in at_bound else " "
+        nu_txt = f" {_num(nu_bins, i, 6, 2)}" if nu_bins else ""
         out.append(
             f"    {i + 1:>5} {d_txt} {float(sa[i]):>7.3f} {_num(sa_se, i, 6, 3)} "
             f"{float(beta[i]):>7.3f} {_num(b_se, i, 6, 3)} {cons:>7.3f} "
-            f"{_num(corr, i, 6, 2)}{flag}"
+            f"{_num(corr, i, 6, 2)}{flag}{nu_txt}"
         )
+    return out
+
+
+def _nu_col_label(v: float) -> str:
+    if not np.isfinite(float(v)):
+        return "G"
+    if abs(float(v) - round(float(v))) < 1e-6:
+        return str(int(round(float(v))))
+    return f"{float(v):g}"
+
+
+def format_nu_grid_profiles(nu_params: Optional[dict[str, Any]]) -> list[str]:
+    """ν-grid NLL and the per-shell σ_A / β that were refit at each node.
+
+    Printed on the cycle that searched ν. Later cycles hold ν and only show the
+    selected σ_A/β table.
+    """
+    p = dict(nu_params or {})
+    grid = p.get("grid")
+    nll = p.get("grid_nll")
+    if p.get("mode") not in ("grid", "grid_bins") or not isinstance(grid, (list, tuple)) or not isinstance(nll, (list, tuple)):
+        return []
+    if len(grid) == 0 or len(nll) != len(grid):
+        return []
+
+    g_nll = p.get("grid_nll_gaussian")
+    chosen = p.get("nu")
+    try:
+        ref = float(g_nll) if g_nll is not None else float(min(nll))
+    except (TypeError, ValueError):
+        ref = float(nll[0])
+
+    def _mean_row(rows: Any) -> list[float]:
+        out: list[float] = []
+        if not isinstance(rows, (list, tuple)):
+            return out
+        for row in rows:
+            if not isinstance(row, (list, tuple)) or not row:
+                out.append(float("nan"))
+                continue
+            vals = [float(x) for x in row if x is not None and np.isfinite(float(x))]
+            out.append(float(np.mean(vals)) if vals else float("nan"))
+        return out
+
+    mean_sa = _mean_row(p.get("grid_sigma_a"))
+    mean_b = _mean_row(p.get("grid_beta"))
+    g_sa = p.get("gaussian_sigma_a") or []
+    g_b = p.get("gaussian_beta") or []
+    g_mean_sa = (
+        float(np.mean([float(x) for x in g_sa if np.isfinite(float(x))]))
+        if isinstance(g_sa, (list, tuple)) and g_sa
+        else float("nan")
+    )
+    g_mean_b = (
+        float(np.mean([float(x) for x in g_b if np.isfinite(float(x))]))
+        if isinstance(g_b, (list, tuple)) and g_b
+        else float("nan")
+    )
+
+    def _num(v: Any, width: int, dec: int) -> str:
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return f"{'.':>{width}}"
+        if not np.isfinite(x):
+            return f"{'.':>{width}}"
+        return f"{x:>{width}.{dec}f}"
+
+    out = [
+        "  ν grid"
+        + (" per shell" if p.get("mode") == "grid_bins" else "")
+        + " (σ_A,β refit at each node; NLL per tune reflection)",
+        f"    {'ν':>6} {'NLL':>8} {'Δ vs G':>8} {'⟨σ_A⟩':>7} {'⟨β⟩':>7}",
+    ]
+    for i, (nu_i, nll_i) in enumerate(zip(grid, nll)):
+        mark = (
+            "*"
+            if p.get("mode") != "grid_bins"
+            and chosen is not None
+            and abs(float(nu_i) - float(chosen)) < 1e-6
+            else " "
+        )
+        sa_i = mean_sa[i] if i < len(mean_sa) else float("nan")
+        b_i = mean_b[i] if i < len(mean_b) else float("nan")
+        out.append(
+            f"    {_nu_col_label(float(nu_i)):>6} {_num(nll_i, 8, 4)} "
+            f"{_num(float(nll_i) - ref, 8, 4)} {_num(sa_i, 7, 3)} {_num(b_i, 7, 3)}{mark}"
+        )
+    if g_nll is not None:
+        out.append(
+            f"    {'G':>6} {_num(g_nll, 8, 4)} {_num(0.0, 8, 4)} "
+            f"{_num(g_mean_sa, 7, 3)} {_num(g_mean_b, 7, 3)}"
+        )
+    bin_nu = p.get("bin_nu") if p.get("mode") == "grid_bins" else None
+    if isinstance(bin_nu, (list, tuple)) and bin_nu:
+        labels = []
+        for v in bin_nu:
+            labels.append("G" if float(v) >= 199.0 else _nu_col_label(float(v)))
+        out.append("    selected ν(s): " + " ".join(labels))
+    elif chosen is not None:
+        out.append(f"    selected ν={float(chosen):g}  (*)")
+
+    centers = p.get("bin_centers_s2") or []
+    nll_shell = p.get("grid_nll_shell")
+    sa_shell = p.get("grid_sigma_a")
+    n_shells = 0
+    for block in (sa_shell, nll_shell, p.get("grid_beta")):
+        if isinstance(block, (list, tuple)) and block and isinstance(block[0], (list, tuple)):
+            n_shells = max(n_shells, len(block[0]))
+    if n_shells == 0:
+        return out
+
+    labels = [_nu_col_label(float(v)) for v in grid] + (["G"] if g_nll is not None else [])
+    col_w = max(6, max(len(x) for x in labels))
+
+    def _d_txt(i: int) -> str:
+        try:
+            s_sq = float(centers[i])
+            return f"{1.0 / math.sqrt(s_sq):>7.2f}" if s_sq > 0 else f"{'.':>7}"
+        except (IndexError, TypeError, ValueError):
+            return f"{'.':>7}"
+
+    def _matrix_block(title: str, rows_by_nu: Any, gaussian_row: Any, dec: int) -> list[str]:
+        if not isinstance(rows_by_nu, (list, tuple)) or len(rows_by_nu) != len(grid):
+            return []
+        head = f"    {'shell':>5} {'d(Å)':>7} " + " ".join(f"{lab:>{col_w}}" for lab in labels)
+        lines = [f"  {title}", head]
+        n_sh = min(n_shells, max((len(r) for r in rows_by_nu if isinstance(r, (list, tuple))), default=0))
+        n_tune = p.get("grid_n_shell") or []
+        for k in range(n_sh):
+            cells = []
+            for row in rows_by_nu:
+                try:
+                    cells.append(_num(row[k], col_w, dec))
+                except (IndexError, TypeError):
+                    cells.append(f"{'.':>{col_w}}")
+            if g_nll is not None:
+                try:
+                    cells.append(_num(gaussian_row[k], col_w, dec) if gaussian_row else f"{'.':>{col_w}}")
+                except (IndexError, TypeError):
+                    cells.append(f"{'.':>{col_w}}")
+            n_txt = ""
+            try:
+                n_txt = f"  n={int(n_tune[k])}" if n_tune else ""
+            except (IndexError, TypeError, ValueError):
+                n_txt = ""
+            lines.append(
+                f"    {k + 1:>5} {_d_txt(k)} " + " ".join(cells) + n_txt
+            )
+        return lines
+
+    out.extend(
+        _matrix_block(
+            "per-shell NLL (tune, per reflection)",
+            nll_shell,
+            p.get("gaussian_nll_shell"),
+            4,
+        )
+    )
+    out.extend(
+        _matrix_block(
+            "per-shell σ_A (α) at each ν",
+            p.get("grid_sigma_a"),
+            p.get("gaussian_sigma_a"),
+            3,
+        )
+    )
+    out.extend(
+        _matrix_block(
+            "per-shell β at each ν",
+            p.get("grid_beta"),
+            p.get("gaussian_beta"),
+            3,
+        )
+    )
     return out
 
 
@@ -972,7 +1160,8 @@ def format_intensity_stats_report(report: IntensityStatsReport) -> str:
         bits.append(f"ν={float(report.nu):.2f}")
     if bits:
         lines.append("  " + "  ".join(bits))
-    lines.extend(format_shell_nuisance(sa_p))
+    lines.extend(format_shell_nuisance(sa_p, nu_params=report.nu_params))
+    lines.extend(format_nu_grid_profiles(report.nu_params))
     lines.extend(format_wilson_normalization(sw_p))
     # The overall anisotropic B of the global scale. B_iso_equiv is shown but is shared
     # with k_isotropic; the anisotropy is the part only this tensor can supply.
@@ -1177,5 +1366,6 @@ def report_from_fmodel(
         sigma_a_params=sigma_a_params or getattr(fmodel, "_sigma_a_params", None),
         sigma_wilson_params=sigma_wilson_params or getattr(fmodel, "_sigma_wilson_params", None),
         nu=nu,
+        nu_params=getattr(fmodel, "_nu_params", None),
         label=label,
     )

@@ -225,6 +225,21 @@ def test_the_scan_ranks_by_free_nll_and_marks_what_was_selected():
     assert "1.440000" in [r for r in rows if r.lstrip().startswith("*")][0]
 
 
+def test_the_scan_says_when_the_installed_weight_is_not_the_nll_best():
+    """If clash filtering installed the worst NLL, the summary must not paste the
+    best NLL onto that weight."""
+    journal, _ = _journal()
+    group = _scan(
+        journal,
+        [(0.0036, 6.491112, 6.587022), (0.0654, 6.482001, 6.579463), (0.0763, 6.480830, 6.578696)],
+        selected=0.0036,
+    )
+    text = "\n".join(group.table())
+    assert "selected weight=0.0036 at free NLL 6.587022" in text
+    assert "free-NLL best was 0.0763 at 6.578696" in text
+    assert "+0.008326 vs selected" in text
+
+
 def test_a_scan_that_did_not_separate_its_best_two_trials_says_so():
     """A weight chosen by a gap in the sixth decimal has not really been chosen."""
     journal, _ = _journal()

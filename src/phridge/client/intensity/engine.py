@@ -266,6 +266,29 @@ def _env_int(name: str) -> Optional[int]:
     return value if value > 0 else None
 
 
+def _fit_nu_this_cycle(cycle: int) -> bool:
+    """Whether this macro cycle should search ν.
+
+    Default is cycle 1 only: later cycles hold the value already on the engine.
+    ``PHRIDGE_FIT_NU_EVERY_CYCLE=1`` searches every cycle. ``PHRIDGE_FIT_NU_CYCLES=N``
+    searches the first N cycles.
+    """
+    if _env_flag_enabled("PHRIDGE_FIT_NU_EVERY_CYCLE", "0"):
+        return True
+    limit = _env_int("PHRIDGE_FIT_NU_CYCLES") or 1
+    return int(cycle) <= int(limit)
+
+
+def _k_mask_is_negligible(k: Any, thresh: float = 0.05) -> bool:
+    """True when k_mask is missing, empty, or everywhere below ``thresh``."""
+    if k is None:
+        return True
+    arr = np.asarray(k, dtype=np.float64).ravel()
+    if arr.size == 0 or not np.any(np.isfinite(arr)):
+        return True
+    return float(np.nanmax(np.abs(arr))) < thresh
+
+
 def _nuisance_detail(
     tune_label: str,
     before: tuple[Optional[float], Optional[float]],
@@ -558,7 +581,10 @@ class IntensityElectronDensityMap:
     def _compute_maps(self) -> RemoteIntensityMapResult:
         """Invoke ml_i_maps op on the PyTorch worker."""
         eng = self._get_engine()
-        fc = eng.f_model_scaled_with_k1() if hasattr(eng, "f_model_scaled_with_k1") else eng.f_model()
+        if hasattr(eng, "_likelihood_f_calc"):
+            fc = eng._likelihood_f_calc()
+        else:
+            fc = eng.f_model_scaled_with_k1() if hasattr(eng, "f_model_scaled_with_k1") else eng.f_model()
         kw = eng._common_eval_kwargs()
         kw["target"] = eng.target_spec
         from phridge.client.intensity.stats_report import stats_bin_size
@@ -980,7 +1006,9 @@ class IntensityTargetFunctor:
         **kwargs: Any,
     ) -> IntensityTargetResult:
         t_start = time.perf_counter()
-        if f_calc is None:
+        if hasattr(self.manager, "_likelihood_f_calc"):
+            f_calc = self.manager._likelihood_f_calc()
+        elif f_calc is None:
             # Likelihood needs F on the I_obs / counts scale. After BSS with
             # apply_back_trace=True, CCTBX often leaves overall scale in residual
             # scale_k1 (not in k_iso); fold that in via f_model_scaled_with_k1.
@@ -1996,6 +2024,80 @@ class IntensityScaleMixin:
             return None
         return float(np.sqrt(np.mean(diff**2)) / den)
 
+    def _k_mask_curve_from_k_sol(self, k_sol: float, b_sol: float) -> np.ndarray:
+        d = np.asarray(self._i_obs.d_spacings().data(), dtype=np.float64)
+        ss = 1.0 / (4.0 * np.maximum(d, 1e-6) ** 2)
+        return np.clip(float(k_sol) * np.exp(-float(b_sol) * ss), 0.0, 1.0)
+
+    def _k_mask_from_f_bulk(self) -> Optional[np.ndarray]:
+        """Per-reflection k_mask recovered as Re(F_bulk · F_mask*) / |F_mask|²."""
+        fb = None
+        if hasattr(self, "arrays") and self.arrays is not None and hasattr(self.arrays, "core"):
+            core = self.arrays.core
+            if core is not None and hasattr(core, "data"):
+                fb = getattr(core.data, "f_bulk", None)
+        fm = self.f_mask()
+        if fb is None or fm is None:
+            return None
+        bulk = np.asarray(fb, dtype=np.complex128).ravel()
+        mask = np.asarray(fm.data(), dtype=np.complex128).ravel()
+        if bulk.shape != mask.shape or bulk.size == 0:
+            return None
+        den = np.abs(mask) ** 2
+        med = float(np.median(den))
+        if med <= 0.0:
+            return None
+        k = np.where(den > 1e-8 * med, (bulk * np.conjugate(mask)).real / den, 0.0)
+        k = np.clip(k, 0.0, 1.0)
+        if _k_mask_is_negligible(k):
+            return None
+        return k
+
+    def _recover_k_mask_after_scaling(self, log: Any = None) -> None:
+        """If LS left k_masks ~0, rebuild a start from f_bulk, k_sol, or 0.35/46.
+
+        ``f_model_all_scales`` copies ``__dict__`` onto a working manager and back.
+        The R drop 0.38→0.25 is real on that copy, but ``arrays.core.k_masks``
+        often comes back as ~0. The NLL fit then starts at (and stays at) no
+        solvent. Recover the curve mmtbx actually used, or a conventional start.
+        """
+        kms = self.k_masks()
+        k0 = kms[0] if kms else None
+        if not _k_mask_is_negligible(k0):
+            return
+        recovered = self._k_mask_from_f_bulk()
+        source = "f_bulk / F_mask"
+        if recovered is None:
+            ks = getattr(self, "k_sol", None)
+            bs = getattr(self, "b_sol", None)
+            if callable(ks):
+                try:
+                    ks = ks()
+                except Exception:
+                    ks = None
+            if callable(bs):
+                try:
+                    bs = bs()
+                except Exception:
+                    bs = None
+            if ks is not None and float(ks) > 0.05:
+                recovered = self._k_mask_curve_from_k_sol(float(ks), float(bs) if bs else 46.0)
+                source = f"k_sol/B_sol {float(ks):.3f}/{float(bs) if bs else 46.0:.1f}"
+        if recovered is None:
+            recovered = self._k_mask_curve_from_k_sol(0.35, 46.0)
+            source = "default 0.35/46"
+        if hasattr(self, "update_core") and getattr(self, "arrays", None) is not None:
+            self.update_core(k_mask=[flex.double(np.ascontiguousarray(recovered))])
+            self._f_model = None
+            self._last_maps = None
+            self._r_values = None
+        if log is not None:
+            print(
+                f"[mli_quad] LS k_mask was ~0 after f_model_all_scales; "
+                f"seeded from {source} (max={float(np.nanmax(recovered)):.3f})",
+                file=log if log is not None else sys.stdout,
+            )
+
     def _fit_bulk_solvent_nll(self, log: Any = None) -> Optional[str]:
         """Refit the binned k_mask to the intensity NLL; install it if it beats mmtbx's.
 
@@ -2012,6 +2114,11 @@ class IntensityScaleMixin:
         f_masks, k_masks = self.f_masks(), self.k_masks()
         if not f_masks or not k_masks or len(f_masks) != 1 or len(k_masks) != 1:
             return None
+        if _k_mask_is_negligible(k_masks[0]):
+            self._recover_k_mask_after_scaling(log=log)
+            k_masks = self.k_masks()
+            if not k_masks or _k_mask_is_negligible(k_masks[0]):
+                return None
         k_model = self._model_scale_array()
         if k_model is None or self.sigma_wilson is None:
             return None
@@ -2541,6 +2648,9 @@ class IntensityFModel(
         self._f_mode: Optional[Any] = None
         self._r_values: Optional[Dict[str, Any]] = None
         self._scale_fitted: bool = False
+        self._spatial_sigma_a: Optional[Dict[str, Any]] = None
+        self._spatial_sigma_a_v2_block: Optional[Any] = None
+        self._spatial_sigma_a_v2_result: Optional[Any] = None
 
         # Interleaved refinement (refinement.target_mode). Exact by default: the
         # surrogate path is entirely opt-in and never active unless a controller has
@@ -2677,6 +2787,7 @@ class IntensityFModel(
         beta_res = getattr(self, "beta_residual", None)
         if beta_res is not None:
             kw["beta_residual"] = beta_res
+        kw.update(self._spatial_sigma_a_v2_kwargs())
         return kw
 
     # ---------------------------------------------------------------- interleaved mode
@@ -2800,8 +2911,267 @@ class IntensityFModel(
             scale_factor=raw.meta.scale_factor,
         )
 
+    def _spatial_sigma_a_enabled(self) -> bool:
+        return _env_flag_enabled("PHRIDGE_SPATIAL_SIGMA_A", "0")
+
+    def _spatial_sigma_a_v2_kwargs(self) -> dict[str, Any]:
+        """Optional v2 block + fitted result. Empty when the flag is off."""
+        from phridge.contrib.spatial_sigmaa_v2.options import job_input_from_state, options_from_env
+
+        return job_input_from_state(
+            getattr(self, "_spatial_sigma_a_v2_block", None),
+            getattr(self, "_spatial_sigma_a_v2_result", None),
+            opts=options_from_env(),
+        )
+
+    def _run_spatial_sigma_a_v2_step(self, log: Any = None) -> None:
+        """Field or Fisher half-step after nuisance fit. No-op when the flag is off.
+
+        (w_j, U_j) are frozen for the subsequent xyz/ADP cycle (spec §10).
+        Failures never abort the macrocycle.
+        """
+        from phridge.contrib.spatial_sigmaa_v2 import block_from_env, options_from_env
+
+        opts = options_from_env()
+        if not opts.enabled:
+            return
+        try:
+            from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+            from phridge.contrib.spatial_sigmaa_v2.alternate import run_macrocycle_step
+            from phridge.sfcalc.ops import scattering_model
+
+            model = scattering_model(
+                xray_from_cctbx(self.xray_structure),
+                scattering_table_from_cctbx(self.xray_structure),
+            )
+            hkl = np.array(list(self._i_obs.indices()), dtype=np.int64)
+            intensity = np.asarray(self._i_obs.data(), dtype=np.float64)
+            epsilon = np.asarray(self._i_obs.epsilons().data(), dtype=np.float64)
+            centric = np.asarray(self._i_obs.centric_flags().data(), dtype=bool)
+            block = self._spatial_sigma_a_v2_block or block_from_env()
+            if block is None:
+                return
+            packed, result, _frozen = run_macrocycle_step(
+                model, hkl, intensity, block, opts, epsilon=epsilon, centric=centric
+            )
+            self._spatial_sigma_a_v2_block = packed
+            self._spatial_sigma_a_v2_result = result
+            if log is not None:
+                kind = "Fisher" if packed.meta.fisher else "field"
+                print(
+                    f"[spatial_sigma_a_v2] {kind} step  n_coeff={packed.meta.n_coeff}  "
+                    f"mean w={float(np.mean(result.w)):.3f}  mean tr(U)={float(np.mean(result.tr_U)):.4f}",
+                    file=log,
+                )
+            self._write_spatial_sigma_a_v2_maps(packed, result, model, log=log)
+        except Exception as exc:
+            try:
+                print(f"[spatial_sigma_a_v2] step skipped: {exc}", file=sys.stderr if log is None else log)
+            except Exception:
+                pass
+
+    def _spatial_options_from_env(self) -> Any:
+        from phridge.contrib.intensity_ll.local_sigma_a import LocalSigmaAOptions
+
+        return LocalSigmaAOptions(
+            enabled=self._spatial_sigma_a_enabled(),
+            d_min=_env_float("PHRIDGE_SPATIAL_SIGMA_A_D_MIN", 15.0) or 15.0,
+            lambda_u=_env_float("PHRIDGE_SPATIAL_SIGMA_A_LAMBDA_U", 1.0),
+        )
+
+    def _atoms_bulk_split(self) -> Optional[tuple[np.ndarray, np.ndarray]]:
+        """``F_atoms = k F_calc``, ``F_bulk = k f_bulk()`` on the observation scale."""
+        k = self._model_scale_array()
+        try:
+            fc = np.asarray(self.f_calc().data(), dtype=np.complex128)
+        except Exception:
+            return None
+        fb_arr = self.f_bulk()
+        if fb_arr is None:
+            return None
+        try:
+            fb = np.asarray(fb_arr.data(), dtype=np.complex128)
+        except Exception:
+            return None
+        n = int(self._i_obs.size())
+        if fc.shape[0] != n or fb.shape[0] != n:
+            return None
+        if k is None:
+            k = np.ones(n, dtype=np.float64)
+        residual_k1 = float(self.scale_k1()) if getattr(self, "_scale_fitted", False) else 1.0
+        if residual_k1 > 0 and np.isfinite(residual_k1):
+            k = k * residual_k1
+        return k * fc, k * fb
+
+    def _spatial_n_per_refl(self, state: dict[str, Any]) -> np.ndarray:
+        n = int(self._i_obs.size())
+        n_k = np.asarray(state.get("n_shell_rms") or [1.0], dtype=np.float64).reshape(-1)
+        edges = state.get("bin_edges_s2")
+        if n_k.size <= 1 or not edges:
+            return np.full(n, float(n_k[0]) if n_k.size else 1.0)
+        d = np.asarray(self._i_obs.d_spacings().data(), dtype=np.float64)
+        s_sq = 1.0 / np.maximum(d, 1e-12) ** 2
+        ed = np.asarray(edges, dtype=np.float64)
+        sid = np.clip(np.digitize(s_sq, ed[1:-1], right=False), 0, n_k.size - 1)
+        return n_k[sid]
+
+    def _likelihood_f_calc(self) -> Any:
+        """The F the Rice target / maps / surrogate score. ``F_eff`` when spatial σ_A is on."""
+        state = getattr(self, "_spatial_sigma_a", None)
+        if not state or not state.get("enabled"):
+            return self._checkpoint_f_model()
+        split = self._atoms_bulk_split()
+        if split is None:
+            return self._checkpoint_f_model()
+        fa, fb = split
+        n_per = self._spatial_n_per_refl(state)
+        # n_k stored per shell; apply_frozen_mix wants shell n_k + ids, or a scalar.
+        # Broadcast the already-expanded per-reflection n as a "global" divide via
+        # mixing then dividing elementwise.
+        f_mix = float(state["w_mol"]) * fa + float(state["w_sol"]) * fb
+        scale = np.where(n_per > 1e-30, n_per, 1.0)
+        f_eff = f_mix / scale
+        template = self._checkpoint_f_model()
+        try:
+            from cctbx.array_family import flex as _flex
+
+            return template.customized_copy(data=_flex.complex_double(np.ascontiguousarray(f_eff)))
+        except Exception:
+            return template
+
+    def _apply_spatial_to_target_kwargs(self, kw: dict[str, Any]) -> dict[str, Any]:
+        """Rewrite ``k_model`` / ``f_bulk`` so target_and_gradients sees ``F_eff``."""
+        state = getattr(self, "_spatial_sigma_a", None)
+        if not state or not state.get("enabled"):
+            return kw
+        w_mol = float(state.get("w_mol") or 1.0)
+        w_sol = float(state.get("w_sol") or 1.0)
+        if w_mol == 1.0 and w_sol == 1.0:
+            return kw
+        n_per = self._spatial_n_per_refl(state)
+        if "k_model" in kw and kw["k_model"] is not None:
+            k = np.asarray(kw["k_model"], dtype=np.float64).reshape(-1)
+            k = k * (w_mol / np.where(n_per > 1e-30, n_per, 1.0))
+            kw["k_model"] = flex.double(np.ascontiguousarray(k))
+        if "f_bulk" in kw and kw["f_bulk"] is not None and abs(w_mol) > 1e-12:
+            fb = np.asarray(kw["f_bulk"], dtype=np.complex128).reshape(-1)
+            kw["f_bulk"] = (w_sol / w_mol) * fb
+        return kw
+
+    def _write_spatial_sigma_a_v2_maps(
+        self,
+        packed: Any,
+        result: Any,
+        model: Any,
+        log: Any = None,
+    ) -> None:
+        """CCP4 λ / κ / w volumes and a diagnostic PDB. Never fails refinement."""
+        try:
+            from phridge.contrib.spatial_sigmaa_v2.viz import atom_display_columns, field_volumes
+
+            prefix = (
+                os.environ.get("PHRIDGE_SPATIAL_SIGMA_A_V2_PREFIX")
+                or os.environ.get("PHRIDGE_SPATIAL_SIGMA_A_PREFIX", "mli")
+            ).strip() or "mli"
+            vols = field_volumes(packed, model)
+            cs = self.xray_structure.crystal_symmetry()
+            written: list[str] = []
+            for name in ("lambda", "kappa", "w"):
+                path = f"{prefix}_{name}.ccp4"
+                self._write_real_ccp4(path, vols[name], cs, f"phridge spatial_sigma_a_v2 {name}")
+                written.append(path)
+            w, b_err = atom_display_columns(result)
+            pdb_path = f"{prefix}_field_atoms.pdb"
+            self._write_field_atoms_pdb(pdb_path, w, b_err)
+            written.append(pdb_path)
+            out = log if log is not None else sys.stdout
+            print(f"[spatial_sigma_a_v2] wrote {' '.join(written)}", file=out)
+            print(
+                "[spatial_sigma_a_v2] Coot: open λ/κ/w maps; contour λ at ±0.2, "
+                "w at 0.7; colour field_atoms.pdb by B (error-B = κ)",
+                file=out,
+            )
+        except Exception as exc:
+            try:
+                print(f"[spatial_sigma_a_v2] maps skipped: {exc}", file=sys.stderr if log is None else log)
+            except Exception:
+                pass
+
+    def _write_real_ccp4(self, path: str, data: np.ndarray, crystal_symmetry: Any, label: str) -> None:
+        from iotbx.map_manager import map_manager
+        from scitbx.array_family import flex
+
+        n = tuple(int(x) for x in np.asarray(data).shape)
+        flat = np.ascontiguousarray(np.asarray(data, dtype=np.float64).reshape(-1))
+        flex_data = flex.double(flat)
+        flex_data.reshape(flex.grid(n))
+        mm = map_manager(
+            map_data=flex_data,
+            unit_cell_grid=n,
+            unit_cell_crystal_symmetry=crystal_symmetry,
+            wrapping=True,
+        )
+        if hasattr(mm, "write_map"):
+            mm.write_map(path)
+        else:
+            from iotbx import ccp4_map
+
+            ccp4_map.write_ccp4_map(
+                file_name=path,
+                unit_cell=crystal_symmetry.unit_cell(),
+                space_group=crystal_symmetry.space_group(),
+                map_data=flex_data,
+                labels=[label],
+            )
+
+    def _write_field_atoms_pdb(self, path: str, w: np.ndarray, b_err: np.ndarray) -> None:
+        from cctbx.array_family import flex
+
+        xs = self.xray_structure.deep_copy_scatterers()
+        n = int(xs.scatterers().size())
+        ww = np.asarray(w, dtype=np.float64).reshape(-1)
+        bb = np.asarray(b_err, dtype=np.float64).reshape(-1)
+        if ww.shape[0] != n or bb.shape[0] != n:
+            raise ValueError("field-atom columns do not match xray_structure")
+        xs.set_occupancies(flex.double(np.ascontiguousarray(ww)))
+        xs.set_b_iso(values=flex.double(np.ascontiguousarray(bb)))
+        with open(path, "w") as fh:
+            fh.write(xs.as_pdb_file())
+
+    def _write_log_sigma_a_map(self, state: dict[str, Any], log: Any = None) -> None:
+        """Write ``{prefix}_log_sigma_a.ccp4`` from φ coefficients. Never fails refinement."""
+        try:
+            prefix = os.environ.get("PHRIDGE_SPATIAL_SIGMA_A_PREFIX", "mli").strip() or "mli"
+            masks = self.f_masks()
+            if not masks:
+                return
+            fm = masks[0]
+            d = np.asarray(self._i_obs.d_spacings().data(), dtype=np.float64)
+            s_sq = 1.0 / np.maximum(d, 1e-12) ** 2
+            from phridge.contrib.intensity_ll.local_sigma_a import phi_on_full_list
+
+            hkl = np.asarray(fm.indices(), dtype=np.int32)
+            phi = phi_on_full_list(
+                np.asarray(fm.data(), dtype=np.complex128),
+                s_sq,
+                float(state.get("u") or 0.0),
+                float(state.get("d_min") or 15.0),
+                float(state.get("b_blur") or 0.0),
+                hkl=hkl,
+            )
+            arr = fm.customized_copy(data=flex.complex_double(np.ascontiguousarray(phi)))
+            fft_map = arr.fft_map(resolution_factor=0.25)
+            path = f"{prefix}_log_sigma_a.ccp4"
+            fft_map.as_ccp4_map(file_name=path, labels=["phridge log_sigma_a"])
+            print(f"[mli_spatial_sigma_a] wrote {path}", file=log if log is not None else sys.stdout)
+        except Exception as exc:
+            try:
+                print(f"[mli_spatial_sigma_a] map skipped: {exc}", file=sys.stderr)
+            except Exception:
+                pass
+
     def _checkpoint_f_model(self) -> Any:
-        """The F on the observation scale that both the exact target and the fit see."""
+        """The structural F_model on the observation scale (not the spatial mix)."""
         if hasattr(self, "f_model_scaled_with_k1"):
             try:
                 return self.f_model_scaled_with_k1()
@@ -2821,7 +3191,7 @@ class IntensityFModel(
 
         kw = self._common_eval_kwargs()
         kw["target"] = self.target_spec
-        f_model = self._checkpoint_f_model()
+        f_model = self._likelihood_f_calc()
         raw = self.bridge.call(SURROGATE_FIT_OP_NAME, f_calc=f_model, **kw)
 
         f_p = np.asarray(raw["f_p"], dtype=np.float64)
@@ -2859,7 +3229,7 @@ class IntensityFModel(
         kw = self._common_eval_kwargs()
         kw["target"] = self.target_spec
         kw["compute_curvature"] = False
-        raw = self.bridge.call("target_eval", f_calc=self._checkpoint_f_model(), **kw)
+        raw = self.bridge.call("target_eval", f_calc=self._likelihood_f_calc(), **kw)
         self._mli_eval_count = getattr(self, "_mli_eval_count", 0) + 1
         return float(raw.meta.value)
 
@@ -2869,7 +3239,7 @@ class IntensityFModel(
             raise RuntimeError("no surrogate is installed")
         kw = self._surrogate_eval_kwargs()
         kw["compute_curvature"] = False
-        raw = self.bridge.call("target_eval", f_calc=self._checkpoint_f_model(), **kw)
+        raw = self.bridge.call("target_eval", f_calc=self._likelihood_f_calc(), **kw)
         return float(raw.meta.value)
 
     def interleaved_controller(self, log: Any = None) -> Optional[Any]:
@@ -2959,6 +3329,8 @@ class IntensityFModel(
         fb = self.f_bulk()
         if fb is not None:
             kw["f_bulk"] = fb.data()
+        kw = self._apply_spatial_to_target_kwargs(kw)
+        kw.update(self._spatial_sigma_a_v2_kwargs())
 
         t_start = time.perf_counter()
         out = self.bridge.call(TARGET_AND_GRADIENTS_OP_NAME, **kw)
@@ -3208,6 +3580,26 @@ class IntensityFModel(
             env_fit_nu = os.environ.get("PHRIDGE_FIT_NU")
             if env_fit_nu is not None and env_fit_nu.strip().lower() in ("1", "true", "yes", "on"):
                 fit_nu = True
+        if fit_nu and not _fit_nu_this_cycle(self.macro_cycle_index):
+            held = getattr(self, "nu", None)
+            nu_p = dict(getattr(self, "_nu_params", None) or {})
+            if log is not None:
+                if nu_p.get("bin_nu"):
+                    sel = " ".join(
+                        "G" if float(v) >= 199 else f"{float(v):g}" for v in nu_p["bin_nu"]
+                    )
+                    print(
+                        f"[mli_quad] ν held per shell at {sel} "
+                        f"(search is cycle 1 only; --fit-nu-every-cycle to refit)",
+                        file=log,
+                    )
+                elif held is not None:
+                    print(
+                        f"[mli_quad] ν held at {float(held):g} "
+                        f"(search is cycle 1 only; --fit-nu-every-cycle to refit)",
+                        file=log,
+                    )
+            fit_nu = False
 
         # The NLL journal: this is the run's first chance to measure the target, and the
         # two stages below are the only ones that refit nuisances rather than move atoms.
@@ -3243,28 +3635,38 @@ class IntensityFModel(
                 self.__dict__["b_h"] = 0.0
                 self.__dict__["target_name"] = "mli_quad"
                 params = self._constrain_scaling_to_isotropic(params, log=log)
-                with mli_heartbeat("bulk_solvent_and_scaling", log=log, announce=True):
-                    try:
-                        f_model_all_scales.run(
-                            fmodel=self,
-                            apply_back_trace=apply_back_trace,
-                            remove_outliers=False,
-                            fast=fast,
-                            params=params,
-                            refine_hd_scattering=refine_hd_scattering,
-                            log=log,
+                if os.environ.get("PHRIDGE_DT_MASK", "").strip().lower() in {"1", "true", "yes", "on"}:
+                    if not getattr(self, "_dt_mask_ignored_logged", False):
+                        self._dt_mask_ignored_logged = True
+                        print(
+                            "[mli_quad] PHRIDGE_DT_MASK is set but ignored: "
+                            "phenix refine uses the flat Jiang–Brünger F_mask.",
+                            file=log if log is not None else sys.stdout,
                         )
-                    finally:
-                        self._resync_after_mmtbx_scaling(log=log)
+                with mli_heartbeat("bulk_solvent_and_scaling", log=log, announce=True):
+                    f_model_all_scales.run(
+                        fmodel=self,
+                        apply_back_trace=apply_back_trace,
+                        remove_outliers=False,
+                        fast=fast,
+                        params=params,
+                        refine_hd_scattering=refine_hd_scattering,
+                        log=log,
+                    )
+                    self._resync_after_mmtbx_scaling(log=log)
                 if optimize_mask and hasattr(self, "optimize_mask"):
                     self.optimize_mask(out=log)
                 try:
                     ks, bs = self.k_sol_b_sol_from_k_mask()
-                    if ks is not None and bs is not None:
+                    kms = self.k_masks()
+                    k0 = kms[0] if kms else None
+                    # A caption of a ~0 k_mask (0.02/26) must not overwrite mmtbx's k_sol.
+                    if ks is not None and bs is not None and not _k_mask_is_negligible(k0):
                         self.k_sol = float(ks)
                         self.b_sol = float(bs)
                 except Exception:
                     pass
+                self._recover_k_mask_after_scaling(log=log)
             except Exception as exc:
                 # Scaling is allowed to fail without stopping refinement, but not silently:
                 # a failed run leaves whatever scales were there before.
@@ -3373,11 +3775,24 @@ class IntensityFModel(
         # fits one amplitude scale and scores another.
         residual_k1 = float(self.scale_k1())
         f_model = self._checkpoint_f_model()
-        nu_mode = os.environ.get("PHRIDGE_NU_MODE", "bins").strip().lower() or "bins"
+        nu_mode = os.environ.get("PHRIDGE_NU_MODE", "grid").strip().lower() or "grid"
+        nu_grid = os.environ.get("PHRIDGE_NU_GRID", "5:50:5")
+        spatial_opts = self._spatial_options_from_env()
+        spatial_kw: dict[str, Any] = {}
+        if spatial_opts.enabled:
+            split = self._atoms_bulk_split()
+            if split is not None:
+                fa, fb = split
+                spatial_kw["f_atoms"] = fa
+                spatial_kw["f_bulk"] = fb
+                spatial_kw["local_sigma_a"] = spatial_opts.model_dump()
+            else:
+                spatial_kw["local_sigma_a"] = spatial_opts.model_dump()
         raw = None
         with mli_heartbeat(
             f"ml_i_nuisance_fit(sigma_a_mode={sa_mode}, nu_mode={nu_mode if fit_nu else 'off'}, "
-            f"wilson={'ml' if fit_sigma_wilson else 'moment'}, tune={tune_label})",
+            f"wilson={'ml' if fit_sigma_wilson else 'moment'}, tune={tune_label}"
+            f"{', spatial σ_A' if spatial_opts.enabled else ''})",
             log=log,
             announce=True,
         ):
@@ -3390,11 +3805,16 @@ class IntensityFModel(
                 centric=self._i_obs.centric_flags().data(),
                 fit_nu=bool(fit_nu),
                 nu_mode=nu_mode,
+                nu_grid=nu_grid,
                 fit_scale=self._fix_scale_for_free_beta(
                     bool(fit_scale and not bulk_solvent_and_scaling), log=log
                 ),
                 nu_bounds=list(nu_bounds),
-                nu=self.nu,
+                nu=(
+                    np.asarray(self.nu_per_refl, dtype=np.float64)
+                    if getattr(self, "nu_per_refl", None) is not None
+                    else self.nu
+                ),
                 sigma_a_mode=sa_mode,
                 n_sigma_a_bins=n_sa_bins,
                 tv_norm=tv_norm,
@@ -3408,6 +3828,8 @@ class IntensityFModel(
                 beta_consistency_prior=_env_float("PHRIDGE_BETA_CONSISTENCY_PRIOR", 0.0),
                 sigma_a_tensor=_env_flag_enabled("PHRIDGE_SIGMA_A_TENSOR", "1"),
                 sphericity=_env_float("PHRIDGE_SPHERICITY", 1.0),
+                **spatial_kw,
+                **self._spatial_sigma_a_v2_kwargs(),
             )
         self.sigma_a = flex.double(np.asarray(raw["sigma_a"], dtype=np.float64))
         self.sigma_wilson = flex.double(np.asarray(raw["sigma_wilson"], dtype=np.float64))
@@ -3424,6 +3846,15 @@ class IntensityFModel(
             else:
                 self.beta_residual = None
         self._sigma_a_params = dict(raw.get("sigma_a_params") or {})
+        loc = dict(self._sigma_a_params.get("local_sigma_a") or {})
+        if loc.get("enabled") and loc.get("u") is not None:
+            self._spatial_sigma_a = loc
+            try:
+                self._write_log_sigma_a_map(loc, log=log)
+            except Exception:
+                pass
+        else:
+            self._spatial_sigma_a = loc if loc.get("fallback") else None
         self._sigma_wilson_params = dict(raw.get("sigma_wilson_params") or {})
         self._nu_params = dict(raw.get("nu_params") or {})
         if raw.get("scale_k") is not None and (not bulk_solvent_and_scaling):
@@ -3452,6 +3883,11 @@ class IntensityFModel(
         norm_after = self._normalization_offset()
         detail = _nuisance_detail(tune_label, norm_before, norm_after)
         detail += f", residual k1={residual_k1:.4f}"
+        loc = dict(self._sigma_a_params.get("local_sigma_a") or {})
+        if loc.get("enabled") and loc.get("u") is not None:
+            detail += f", spatial σ_A u={float(loc['u']):+.4f}"
+        elif loc.get("fallback"):
+            detail += f", spatial σ_A fallback={loc['fallback']}"
         # tune_nll is the objective stage 2 minimized: mean −log p(Z) on the tune
         # set. The stage line is −log p(I). They differ by mean log(εΣ), so printing
         # both is what shows whether the installed model is the one that was fit.
@@ -3461,6 +3897,36 @@ class IntensityFModel(
                 detail += f", tune −log p(Z)={float(tune_nll):.4f}"
             except (TypeError, ValueError):
                 pass
+        nu_p = dict(self._nu_params or {})
+        if nu_p.get("mode") in ("grid", "grid_bins") and nu_p.get("grid") and nu_p.get("grid_nll"):
+            body = " ".join(
+                f"{float(n):g}:{float(v):.4f}"
+                for n, v in zip(nu_p["grid"], nu_p["grid_nll"])
+            )
+            if nu_p.get("mode") == "grid_bins" and nu_p.get("bin_nu"):
+                sel = " ".join(
+                    "G" if float(v) >= 199 else f"{float(v):g}" for v in nu_p["bin_nu"]
+                )
+                detail += f", ν grid {body} per-shell {sel}"
+            else:
+                detail += f", ν grid {body} best={nu_p.get('nu')}"
+            g_nll = nu_p.get("grid_nll_gaussian")
+            if g_nll is not None and nu_p.get("mode") == "grid" and nu_p.get("nu") is not None:
+                chosen = float(nu_p["nu"])
+                best_nll = next(
+                    (
+                        float(v)
+                        for n, v in zip(nu_p["grid"], nu_p["grid_nll"])
+                        if abs(float(n) - chosen) < 1e-6
+                    ),
+                    None,
+                )
+                if best_nll is not None:
+                    detail += f" vs Gaussian {float(g_nll):.4f} ({best_nll - float(g_nll):+.4f})"
+                else:
+                    detail += f" vs Gaussian {float(g_nll):.4f}"
+            elif g_nll is not None:
+                detail += f" vs Gaussian {float(g_nll):.4f}"
         failures = raw.get("lbfgs_failures") if isinstance(raw, dict) else None
         if failures:
             detail += ", LBFGS failed: " + "; ".join(str(item) for item in failures)
@@ -3472,6 +3938,11 @@ class IntensityFModel(
             seconds=time.monotonic() - nuisance_t0,
             detail=detail,
         )
+        # Spatial σ_A v2 field / Fisher half-step: atoms frozen. Inert when the flag is off.
+        try:
+            self._run_spatial_sigma_a_v2_step(log=log)
+        except Exception:
+            pass
         # The anisotropic scale was just refitted, so the cached tensor is stale. Report
         # it here, in the scaling method, next to the k_sol / b_sol it belongs with.
         try:
@@ -4039,26 +4510,33 @@ class IntensityFModel(
         print(f"  Reflections: {self._i_obs.size()} (d_min: {self.d_min:.2f} Å)", file=target_out)
         print(f"  Scale k: {float(self.scale_factor):.4f}{sol_str} | Student-t nu: {self.nu}", file=target_out)
         nu_p = getattr(self, "_nu_params", None) or {}
-        if nu_p.get("mode") == "bins" and nu_p.get("bin_nu"):
+        if nu_p.get("mode") in ("bins", "grid_bins") and nu_p.get("bin_nu"):
             bn = nu_p["bin_nu"]
+            kind = "grid" if nu_p.get("mode") == "grid_bins" else "LBFGS"
             print(
-                f"  ν(s) bins: n={nu_p.get('n_bins')}  range=[{min(bn):.2f}, {max(bn):.2f}]  "
-                f"tv={nu_p.get('tv_norm', 0)}",
+                f"  ν(s) bins ({kind}): n={nu_p.get('n_bins')}  "
+                f"values={' '.join('G' if float(v) >= 199 else f'{float(v):g}' for v in bn)}",
                 file=target_out,
             )
-        p_nu, p_nll = nu_p.get("profile_nu"), nu_p.get("profile_nll")
-        if p_nu and p_nll and len(p_nu) == len(p_nll):
-            g_nll = nu_p.get("profile_nll_gaussian")
-            best = min(range(len(p_nll)), key=lambda i: p_nll[i])
-            ref = g_nll if g_nll is not None else p_nll[best]
-            # ΔNLL vs the Gaussian limit: all ≥0 and falling means ν is unidentified.
-            body = "  ".join(f"{n:g}:{v - ref:+.4f}" for n, v in zip(p_nu, p_nll))
-            print(f"  ν profile ΔNLL vs Gaussian (per refl): {body}", file=target_out)
-            print(
-                f"    best ν={p_nu[best]:g} (ΔNLL={p_nll[best] - ref:+.4f}); "
-                f"Gaussian NLL={ref:.4f}",
-                file=target_out,
-            )
+        try:
+            from phridge.client.intensity.stats_report import format_nu_grid_profiles
+
+            for line in format_nu_grid_profiles(nu_p):
+                print(line, file=target_out)
+        except Exception:
+            p_nu, p_nll = nu_p.get("profile_nu"), nu_p.get("profile_nll")
+            if p_nu and p_nll and len(p_nu) == len(p_nll):
+                g_nll = nu_p.get("profile_nll_gaussian")
+                best = min(range(len(p_nll)), key=lambda i: p_nll[i])
+                ref = g_nll if g_nll is not None else p_nll[best]
+                kind = "σ_A,β refit" if nu_p.get("mode") == "grid" else "σ_A frozen"
+                body = "  ".join(f"{n:g}:{v - ref:+.4f}" for n, v in zip(p_nu, p_nll))
+                print(f"  ν profile ΔNLL vs Gaussian (per refl, {kind}): {body}", file=target_out)
+                print(
+                    f"    best ν={p_nu[best]:g} (ΔNLL={p_nll[best] - ref:+.4f}); "
+                    f"Gaussian NLL={ref:.4f}",
+                    file=target_out,
+                )
         rv = self.inferred_r_values()
         cw = rv.get("cc_post_work", rv.get("cc_work", float("nan")))
         cf = rv.get("cc_post_free", rv.get("cc_free", float("nan")))

@@ -49,6 +49,27 @@ def _weight_metric_is_nll() -> bool:
     return env not in ("0", "false", "no", "off", "rfree", "r_free", "r")
 
 
+def _adp_r_percent_vs_nll(a: Any, b: Any, eps: float = 1.0e-6) -> bool:
+    """True when Phenix's post-select check is comparing R% to journal NLL.
+
+    ``refine_adp`` asserts ``r_work()*100 == rw_best`` with ``eps=0.001``.
+    Under ``PHRIDGE_WEIGHT_METRIC=nll`` we store NLL in ``r_work``, so
+    ``rw_best`` is −log p(I) (around 6.5) and the left side is R as a percent
+    (around 24). A cut of ``NLL < 5`` was written for −log p(Z) (around 0.8)
+    and misses the journal scale: both numbers then sit above 5 and the
+    assert kills the run after the winner is already installed. The
+    ``target_w`` consistency assert does not pass ``eps``, so a real functor
+    mismatch still fires.
+    """
+    try:
+        fa, fb = float(a), float(b)
+    except (TypeError, ValueError):
+        return False
+    if fa != fa or fb != fb:
+        return False
+    return float(eps) >= 0.001 and abs(fa - fb) > 1.0
+
+
 def _nll_point(fmodel: Any) -> Any:
     """One exact evaluation as an :class:`~phridge.client.intensity.nll_log.NllPoint`.
 
@@ -355,17 +376,20 @@ def patch_weight_selection() -> bool:
                     )
                 if self.b.size() == 0:
                     return
-                # Geometry gates (unchanged), then lowest free-set NLL.
+                # Geometry gates, then lowest free-set NLL. Phenix's min(clash+
+                # rama+rota+cbet) filter is a relative ranking, not a cutoff:
+                # applying it first lets a 0.4 clash difference (0.5 vs 0.9)
+                # discard the whole scan and install the worst NLL.
                 sel = self.b <= bond_rmsd
                 sel &= self.a <= angle_rmsd
                 if sel.count(True) == 0:
                     sel = flex.abs(self.nll_f - flex.min(self.nll_f)) < 1.0e-4
                 self._select(sel)
+                sel = flex.abs(self.nll_f - flex.min(self.nll_f)) <= getattr(self, "eps", 1.0e-4)
+                self._select(sel)
                 t = self.clsc + self.rama + self.rota + self.cbet
                 t = flex.double([round(t_, 1) for t_ in t])
                 sel = t <= flex.min(t)
-                self._select(sel)
-                sel = flex.abs(self.nll_f - flex.min(self.nll_f)) <= getattr(self, "eps", 1.0e-4)
                 self._select(sel)
                 if self.log is not None:
                     print(
@@ -513,14 +537,7 @@ def patch_weight_selection() -> bool:
                 real_ae = adp_ref.approx_equal
 
                 def guarded_ae(a: Any, b: Any, eps: float = 1.0e-6, **kw: Any) -> bool:
-                    try:
-                        fa, fb = float(a), float(b)
-                    except Exception:
-                        return real_ae(a, b, eps=eps, **kw)
-                    # Skip R% vs NLL mismatch after NLL-based weight pick.
-                    if fa > 5.0 and fb < 5.0:
-                        return True
-                    if fb > 5.0 and fa < 5.0:
+                    if _adp_r_percent_vs_nll(a, b, eps=float(kw.get("eps", eps))):
                         return True
                     return real_ae(a, b, eps=eps, **kw)
 

@@ -75,8 +75,11 @@ Options:
     --device DEVICE     PyTorch compute device ('auto', 'mps', 'cpu', 'cuda'). Default: ${DEVICE}
     --port PORT         Redis port (only with --redis). Default: ${REDIS_PORT}
     --nu VALUE          Student-t noise degrees of freedom (e.g. 5.0). Default: None (Gaussian).
-    --fit-nu            Enable refinement of Student-t nu during scale updates (default: bins + TV).
-    --nu-mode MODE      ν fit: bins (default, same shells as σ_A) or global (scalar).
+    --fit-nu            Enable Student-t ν (grid 5:50:5 on cycle 1, then held).
+    --fit-nu-every-cycle  Repeat the ν search on every macro cycle.
+    --fit-nu-cycles N   Search ν on the first N macro cycles (default: 1).
+    --nu-mode MODE      grid (one ν), grid-bins (one ν per σ_A shell), bins, or global.
+    --nu-grid SPEC      ν grid as lo:hi:step or a list (default 5:50:5).
     --precondition      Enable Gauss-Newton diagonal preconditioning of XYZ, occupancy, and ADP gradients (Phenix LBFGS).
     --stats-report      Print I/σ + σ_A(resolution) table after each scale update (default on).
     --no-stats-report   Disable the resolution stats report.
@@ -88,6 +91,10 @@ Options:
     --fit-sigma-wilson  Intensity-only ML Wilson Σ₀/B_W (default; no model). Then fit σ_A.
     --no-fit-sigma-wilson  Keep moment-plot Σ₀/B_W (skip intensity ML Wilson).
     --omit-windows      After scale updates, write windowed omit map coefficients (.npz).
+    --dt-mask           Ignored. Phenix refine uses the flat Jiang–Brünger F_mask.
+    --spatial-sigmaA    Inverse-mask spatial σ_A (two-channel F_eff mix). Off by default.
+    --spatial-sigmaA-v2 Per-atom error model (spatial σ_A v2). Off by default.
+    --spatial-sigmaA-v2-fisher  Fisher-closure U_j (requires --spatial-sigmaA-v2). Off by default.
     --omit-box-size Å   Omit box edge length in Å (default: 10).
     --omit-mode MODE    boxes (default) or residue_blocks.
     --omit-prefix PATH  Output prefix → {prefix}_omit_windows.mtz (stitched omit coeffs).
@@ -119,7 +126,10 @@ Environment Overrides:
     PHRIDGE_HEARTBEAT_INTERVAL  Seconds between alive prints (default 30)
     PHRIDGE_NU          Default Student-t nu degrees of freedom
     PHRIDGE_FIT_NU      Enable nu refinement ('1' or 'true')
-    PHRIDGE_NU_MODE     ν fit mode: bins (default) or global
+    PHRIDGE_FIT_NU_EVERY_CYCLE  Search ν every macro cycle ('1')
+    PHRIDGE_FIT_NU_CYCLES  Search ν on the first N cycles (default 1)
+    PHRIDGE_NU_MODE     ν fit mode: grid (default) | grid-bins | bins | global
+    PHRIDGE_NU_GRID     ν grid lo:hi:step (default 5:50:5) when mode=grid or grid-bins
     PHRIDGE_PRECONDITION Enable XYZ/occ/ADP Gauss-Newton preconditioning ('1' or 'true')
     PHRIDGE_STATS_REPORT Print I/σ + σ_A bins after scale updates (default on; '0' to disable)
     PHRIDGE_STATS_BIN_SIZE  Reflections per stats bin (default 500)
@@ -149,6 +159,12 @@ Environment Overrides:
     PHRIDGE_SIGMA_A_TV_NORM Total-variation penalty λ_TV on adjacent σ_A and ν bins
     PHRIDGE_FIT_SIGMA_WILSON  Intensity-only ML Wilson Σ₀/B_W then σ_A (default on; 0 = moment plot only)
     PHRIDGE_OMIT_WINDOWS    Write windowed omit coefficients after scale updates ('1')
+    PHRIDGE_DT_MASK         Ignored in phenix refine (flat F_mask only)
+    PHRIDGE_SPATIAL_SIGMA_A Inverse-mask spatial σ_A two-channel mix ('1' to enable)
+    PHRIDGE_SPATIAL_SIGMA_A_D_MIN  Envelope cutoff Å (default 15)
+    PHRIDGE_SPATIAL_SIGMA_A_LAMBDA_U  u² prior (default 1)
+    PHRIDGE_SPATIAL_SIGMA_A_V2  Per-atom error model spatial σ_A v2 ('1' to enable)
+    PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER  Fisher-closure U_j ('1'; implies v2)
     PHRIDGE_OMIT_BOX_SIZE   Omit box edge (Å, default 10)
     PHRIDGE_OMIT_MODE       boxes|residue_blocks
     PHRIDGE_OMIT_PREFIX     Output prefix → {prefix}_omit_windows.mtz
@@ -364,12 +380,45 @@ while [[ $# -gt 0 ]]; do
             export PHRIDGE_FIT_NU="0"
             shift
             ;;
+        --fit-nu-every-cycle)
+            export PHRIDGE_FIT_NU="1"
+            export PHRIDGE_FIT_NU_EVERY_CYCLE="1"
+            shift
+            ;;
+        --fit-nu-cycles)
+            export PHRIDGE_FIT_NU="1"
+            export PHRIDGE_FIT_NU_CYCLES="$2"
+            export PHRIDGE_FIT_NU_EVERY_CYCLE="0"
+            shift 2
+            ;;
+        --fit-nu-cycles=*)
+            export PHRIDGE_FIT_NU="1"
+            export PHRIDGE_FIT_NU_CYCLES="${1#*=}"
+            export PHRIDGE_FIT_NU_EVERY_CYCLE="0"
+            shift
+            ;;
         --nu-mode)
             export PHRIDGE_NU_MODE="$2"
             shift 2
             ;;
         --nu-mode=*)
             export PHRIDGE_NU_MODE="${1#*=}"
+            shift
+            ;;
+        --nu-grid)
+            export PHRIDGE_NU_GRID="$2"
+            case "${PHRIDGE_NU_MODE:-grid}" in
+                grid_bins|grid-bins|per-bin|per_bin|bins-grid|bins_grid) ;;
+                *) export PHRIDGE_NU_MODE="grid" ;;
+            esac
+            shift 2
+            ;;
+        --nu-grid=*)
+            export PHRIDGE_NU_GRID="${1#*=}"
+            case "${PHRIDGE_NU_MODE:-grid}" in
+                grid_bins|grid-bins|per-bin|per_bin|bins-grid|bins_grid) ;;
+                *) export PHRIDGE_NU_MODE="grid" ;;
+            esac
             shift
             ;;
         --precondition)
@@ -486,6 +535,45 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-omit-windows)
             export PHRIDGE_OMIT_WINDOWS="0"
+            shift
+            ;;
+        --spatial-sigmaA-v2|--spatial-sigma-a-v2)
+            export PHRIDGE_SPATIAL_SIGMA_A_V2="1"
+            shift
+            ;;
+        --no-spatial-sigma-a-v2|--no-spatial-sigmaA-v2)
+            export PHRIDGE_SPATIAL_SIGMA_A_V2="0"
+            shift
+            ;;
+        --spatial-sigmaA-v2-fisher|--spatial-sigma-a-v2-fisher)
+            export PHRIDGE_SPATIAL_SIGMA_A_V2="1"
+            export PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER="1"
+            shift
+            ;;
+        --no-spatial-sigma-a-v2-fisher|--no-spatial-sigmaA-v2-fisher)
+            export PHRIDGE_SPATIAL_SIGMA_A_V2_FISHER="0"
+            shift
+            ;;
+        --spatial-sigmaA|--spatial-sigma-a)
+            export PHRIDGE_SPATIAL_SIGMA_A="1"
+            shift
+            ;;
+        --no-spatial-sigma-a|--no-spatial-sigmaA)
+            export PHRIDGE_SPATIAL_SIGMA_A="0"
+            shift
+            ;;
+        --dt-mask|--no-dt-mask|--dt-mask-alpha|--dt-mask-length|--dt-mask-phi|--dt-mask-mode)
+            echo "Distance-transform F_mask is not used in phenix refine (flat Jiang–Brünger mask only)." >&2
+            if [[ "$1" == *=* ]]; then
+                shift
+            elif [[ "$1" == --dt-mask-alpha || "$1" == --dt-mask-length || "$1" == --dt-mask-phi || "$1" == --dt-mask-mode ]]; then
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --dt-mask-alpha=*|--dt-mask-length=*|--dt-mask-phi=*|--dt-mask-mode=*)
+            echo "Distance-transform F_mask is not used in phenix refine (flat Jiang–Brünger mask only)." >&2
             shift
             ;;
         --omit-box-size)

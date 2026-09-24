@@ -609,9 +609,17 @@ def test_fitting_p_directions_on_work_splits_xi_and_s_post():
 def test_ops_never_fuses_device_and_dtype_in_to():
     """MPS has no float64: a fused ``.to(dtype=float64, device="cpu")`` raises for
     small tensors but silently yields uninitialized memory past ~1k elements."""
-    src = (ROOT / "src" / "phridge" / "contrib" / "intensity_ll" / "ops.py").read_text()
     fused = re.compile(r"\.to\([^)]*dtype=[^)]*device=[^)]*\)|\.to\([^)]*device=[^)]*dtype=[^)]*\)")
-    offenders = [ln for ln in src.splitlines() if fused.search(ln) and not ln.lstrip().startswith("#")]
+    paths = [
+        ROOT / "src" / "phridge" / "contrib" / "intensity_ll" / "ops.py",
+        ROOT / "src" / "phridge" / "sfcalc" / "ops.py",
+        ROOT / "src" / "phridge" / "worker" / "convert.py",
+    ]
+    offenders: list[str] = []
+    for path in paths:
+        for ln in path.read_text().splitlines():
+            if fused.search(ln) and not ln.lstrip().startswith("#"):
+                offenders.append(f"{path.name}: {ln.strip()}")
     assert offenders == [], f"use .cpu().double() instead: {offenders}"
 
 

@@ -43,6 +43,8 @@ Name: phridge
 | [SfCurvatures](SfCurvatures.md) | Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligne... |
 | [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |
 | [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |
+| [SpatialSigmaAV2](../spatial_sigmaA_v2/INSPECTION.md) | Optional per-atom error-model block (spatial σ_A v2) |
+| [SpatialSigmaAV2Result](../spatial_sigmaA_v2/INSPECTION.md) | Field-coefficient gradients and per-atom w_j / U_j diagnostics |
 | [SlotBinding](SlotBinding.md) |  |
 | [SymOp](SymOp.md) | One symmetry operator in fractional coordinates |
 | [TargetResult](TargetResult.md) | Evaluation of a reciprocal-space target on a reflection list |

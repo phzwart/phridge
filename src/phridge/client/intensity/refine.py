@@ -795,6 +795,19 @@ class IntensityRefineMixin:
 
         s2_t = torch.as_tensor(np.asarray(self.i_obs.d_star_sq().data(), dtype=np.float64), dtype=self.float_dtype, device=self.torch_device)
         fm_t = torch.as_tensor(np.asarray(self.f_mask.data(), dtype=np.complex128), dtype=self.complex_dtype, device=self.torch_device) if self.use_bulk_solvent and self.f_mask is not None else None
+        fm_mod_t = None
+        dt_alpha_t = None
+        if self.use_bulk_solvent and getattr(self, "f_mask_mod", None) is not None:
+            fm_mod_t = torch.as_tensor(
+                np.asarray(self.f_mask_mod.data(), dtype=np.complex128),
+                dtype=self.complex_dtype,
+                device=self.torch_device,
+            )
+            dt_alpha_t = torch.tensor(
+                float(self.dt_mask.alpha) if getattr(self, "dt_mask", None) is not None else 0.0,
+                dtype=self.float_dtype,
+                device=self.torch_device,
+            )
 
         io_np = np.asarray(self.i_obs.data(), dtype=np.float64)
         si_np = np.asarray(self.i_obs.sigmas(), dtype=np.float64)
@@ -902,6 +915,8 @@ class IntensityRefineMixin:
             fc_t = torch.as_tensor(np.asarray(self.f_calc.data(), dtype=np.complex128), dtype=self.complex_dtype, device=self.torch_device)
             if self.use_bulk_solvent and fm_t is not None:
                 f_sol = k_sol_t * torch.exp(-b_sol_t * s2_t / 4.0) * fm_t
+                if fm_mod_t is not None and dt_alpha_t is not None:
+                    f_sol = f_sol + k_sol_t * dt_alpha_t * fm_mod_t
                 f_mod = k_tot_t * (fc_t + f_sol)
             else:
                 f_mod = k_tot_t * fc_t
