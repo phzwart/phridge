@@ -246,6 +246,11 @@ class IntensityLogLikelihood(Target):
     def evaluate(self, f_calc, obs: Observations, compute_curvature: bool = True) -> TargetEval:
         import time
 
+        from phridge.sfcalc.ops import _accel_like
+
+        # C++ stamp leaves F on CPU; worker device may be MPS/CUDA. Lift the
+        # 1-D miller arrays so Newton + quadrature run on the accelerator.
+        f_calc = _accel_like(f_calc)
         t0 = time.perf_counter()
         res = super().evaluate(f_calc, obs, compute_curvature=compute_curvature)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
@@ -267,7 +272,7 @@ class IntensityLogLikelihood(Target):
             curv_str = f"curv={'yes' if compute_curvature else 'no'}"
             print(
                 f">>> [mli_quad worker] Target (work) = {res.value:.6f} | Free = {test_val} | "
-                f"PyTorch eval: {elapsed_ms:.2f} ms | {nu_str} | {curv_str}",
+                f"PyTorch eval: {elapsed_ms:.2f} ms | {f_calc.device} | {nu_str} | {curv_str}",
                 flush=True,
             )
         return res

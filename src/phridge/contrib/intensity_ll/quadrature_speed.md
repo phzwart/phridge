@@ -78,6 +78,19 @@ A few centrics still hit the cap. The Legendre window is built for that; replay 
 
 `Target.evaluate` with `compute_curvature=True` still runs the quadrature twice (value+grad, then Hessian). Refine `target_and_gradients` defaults `precondition=False`, so that double pass is off unless you turn it on.
 
+## MPS / CUDA
+
+The C++ stamp still builds ρ on the host (no Metal kernel). When the worker device is `mps` or `cuda`, `ml_i` evaluate uploads the 1-D miller arrays (`_accel_like`) and runs Newton + quadrature there, then downloads \(G_h\). MPS is float32 only.
+
+Same 80 000-reflection generative grid, value-only (this machine):
+
+| | CPU float64 | MPS float32 |
+|---|---|---|
+| Gaussian (warm) | 56 ms | 40 ms |
+| Student-\(t\) \(\nu=5\) cold / warm | 631 / 392 ms | 181 / 83 ms |
+
+\(\lvert\log L_{\mathrm{cpu64}} - \log L_{\mathrm{mps32}}\rvert\): median \(2\times10^{-7}\), 99th percentile \(1\times10^{-5}\), max \(6\times10^{-5}\) (8k draw). That is inside the documented Legendre error. Maps and `evaluate(..., compute_curvature=True)` also run on Metal.
+
 ## What this does not save
 
 The 24-point (weak / centric) and 7-point (strong) integrands are now the bulk of the time. Warm start only removes Newton. Cutting node count, a Laplace/GH fallback on mid-SNR acentrics, or a float32 Legendre branch would be the next chunk — those change the quadrature error, unlike the work above.

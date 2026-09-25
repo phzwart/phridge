@@ -295,7 +295,9 @@ def intensity_map_coefficients(
     maps and the refinement target share one posterior.
     """
     opts = options or IntensityMapOptions()
-    f_calc = f_calc.detach()
+    from phridge.sfcalc.ops import _accel_like
+
+    f_calc = _accel_like(f_calc.detach())
     obs = obs.to_like(f_calc)
     fo = obs.data
     fc = f_calc.abs()

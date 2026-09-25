@@ -53,6 +53,37 @@ def test_map_options_accept_reject():
         IntensityMapOptions.model_validate({"bogus": 1})
 
 
+def test_evaluate_lifts_cpu_f_to_mps_when_worker_is_mps():
+    """C++ stamp leaves F on CPU; ml_i evaluate must still run quadrature on Metal."""
+    if not torch.backends.mps.is_available():
+        pytest.skip("MPS not available")
+    from phridge.sfcalc.ops import set_device
+
+    n = 64
+    rng = np.random.default_rng(0)
+    io = rng.normal(1.0, 0.5, n)
+    sig = np.full(n, 0.2)
+    fc = torch.randn(n, dtype=torch.complex64)  # CPU, as after stamp_cpp
+    obs = Observations.from_numpy(
+        device="cpu",
+        dtype=torch.float32,
+        data=io,
+        sigmas=sig,
+        epsilon=np.ones(n),
+        centric=np.zeros(n, dtype=bool),
+        alpha=np.full(n, 0.8),
+        beta=np.full(n, 10.0),
+    )
+    set_device("mps")
+    try:
+        ev = IntensityLogLikelihood().evaluate(fc, obs, compute_curvature=True)
+    finally:
+        set_device("cpu")
+    assert np.isfinite(ev.value)
+    assert np.isfinite(ev.d_target_d_f_calc).all()
+    assert np.isfinite(ev.curv_radial).all()
+
+
 # ------------------------------------------------------------------ posterior identities
 @pytest.mark.parametrize("nu", [None, 4.0])
 def test_posterior_score_matches_autograd(nu):

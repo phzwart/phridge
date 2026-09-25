@@ -70,6 +70,31 @@ def _to_like(value: Any, like: Any) -> Any:
     return t
 
 
+def _accel_like(value: Any) -> Any:
+    """Move ``value`` onto the worker device when that device is MPS or CUDA.
+
+    The C++ stamp keeps ρ and F on CPU (no Metal kernel). The intensity
+    quadrature is real and elementwise and runs on MPS float32 / CUDA, so
+    evaluate uploads the 1-D miller arrays, then downloads G_h.
+    """
+    import torch
+
+    dev = str(_DEVICE["device"])
+    kind = "mps" if dev.startswith("mps") else ("cuda" if dev.startswith("cuda") else None)
+    if kind is None:
+        return value
+    t = value if torch.is_tensor(value) else torch.as_tensor(value)
+    if t.device.type == kind:
+        return t
+    dummy_dtype = (
+        (torch.complex64 if t.is_complex() else torch.float32)
+        if kind == "mps"
+        else t.dtype
+    )
+    dummy = torch.empty((), dtype=dummy_dtype, device=dev)
+    return _to_like(t, dummy)
+
+
 def _engine_params(params: Any) -> EngineParams:
     if isinstance(params, SfEngineParams):
         p = params
