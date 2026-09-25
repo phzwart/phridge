@@ -512,3 +512,125 @@ def test_cross_engine_vs_stamp():
     )
     r = _r_factor(nufft.f_calc_numpy(), stamp.f_calc_numpy())
     assert r <= 5e-4, f"cross-engine R(F)={r}"
+
+
+def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    a = np.asarray(a, dtype=np.float64).ravel()
+    b = np.asarray(b, dtype=np.float64).ravel()
+    na, nb = np.linalg.norm(a), np.linalg.norm(b)
+    if na < 1e-300 or nb < 1e-300:
+        return 1.0 if na < 1e-300 and nb < 1e-300 else 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+def _rel_norm(a: np.ndarray, b: np.ndarray) -> float:
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    return float(np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-300))
+
+
+def test_gradients_match_finite_difference():
+    """Autograd gradients vs central FD of Q = Σ Re[conj(G) F] (truncated model)."""
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    model = _toy_mixed_iso(n_repeat=2, seed=12)
+    d_min = 2.0
+    hkl = _miller_sphere(d_min, model.unit_cell)
+    eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=d_min, n_max=2, tau=1e-5, eps=1e-8))
+    rng = np.random.default_rng(0)
+    dtdf = rng.normal(size=len(hkl)) + 1j * rng.normal(size=len(hkl))
+    grads = eng.gradients(dtdf)
+
+    def q_of(params_np):
+        tensors = [torch.as_tensor(x, dtype=torch.float64) for x in params_np]
+        with torch.no_grad():
+            f = eng.f_calc(*tensors).cpu().numpy()
+        return float(np.sum(np.real(np.conj(dtdf) * f)))
+
+    names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+    base = [np.asarray(x, dtype=np.float64).copy() for x in (model.sites_frac, model.occupancy, model.u_iso, model.u_star, model.fp, model.fdp)]
+    h = 1e-6
+    fd = []
+    for i, arr in enumerate(base):
+        gfd = np.zeros_like(arr)
+        it = np.nditer(arr, flags=["multi_index"])
+        while not it.finished:
+            idx = it.multi_index
+            plus = [a.copy() for a in base]
+            minus = [a.copy() for a in base]
+            plus[i][idx] += h
+            minus[i][idx] -= h
+            gfd[idx] = (q_of(plus) - q_of(minus)) / (2 * h)
+            it.iternext()
+        fd.append(gfd)
+        if names[i] == "u_star":
+            continue  # all-iso model, u_star unused
+        assert _cosine(grads[names[i]], gfd) >= 0.99999, f"{names[i]} cosine {_cosine(grads[names[i]], gfd)}"
+        assert _rel_norm(grads[names[i]], gfd) <= 1e-3, f"{names[i]} rel {_rel_norm(grads[names[i]], gfd)}"
+
+
+def test_gradients_match_cctbx_direct():
+    pytest.importorskip("cctbx")
+    from cctbx import xray
+    from cctbx.array_family import flex
+
+    for aniso in (False, True):
+        xs = _structure("P21", elements=("C", "N", "O", "S"), n_repeat=3, aniso=aniso, anomalous=True, seed=0)
+        d_min = 1.6
+        fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+        hkl = np.array(list(fc.indices()))
+        rng = np.random.default_rng(0)
+        dtdf = rng.normal(size=len(hkl)) + 1j * rng.normal(size=len(hkl))
+        ref = xray.structure_factors.gradients_direct(
+            xray_structure=xs,
+            u_iso_refinable_params=None,
+            miller_set=fc,
+            d_target_d_f_calc=flex.complex_double(dtdf),
+            n_parameters=0,
+        )._results
+        mine = _nufft_engine(xs, hkl, d_min, n_max=2, tau=1e-5, eps=1e-8).gradients(dtdf)
+        pairs = [
+            ("site_frac", ref.d_target_d_site_frac()),
+            ("occupancy", ref.d_target_d_occupancy()),
+            ("fp", ref.d_target_d_fp()),
+            ("fdp", ref.d_target_d_fdp()),
+        ]
+        if aniso:
+            mask = np.array([sc.flags.use_u_aniso() for sc in xs.scatterers()])
+            pairs.append(("u_star", np.asarray(ref.d_target_d_u_star())[mask]))
+            mine_u = mine["u_star"][mask]
+        else:
+            mask = np.array([sc.flags.use_u_iso() for sc in xs.scatterers()])
+            pairs.append(("u_iso", np.asarray(ref.d_target_d_u_iso())[mask]))
+            mine["u_iso"] = mine["u_iso"][mask]
+        for name, r in pairs:
+            m = mine_u if name == "u_star" else mine[name]
+            assert _cosine(m, r) >= 0.99999, f"{name} aniso={aniso} cosine {_cosine(m, r)}"
+            assert _rel_norm(m, r) <= 1e-3, f"{name} aniso={aniso} rel {_rel_norm(m, r)}"
+
+
+def test_jvp_finite_difference():
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    model = _toy_mixed_iso(n_repeat=2, seed=13)
+    d_min = 2.0
+    hkl = _miller_sphere(d_min, model.unit_cell)
+    eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=d_min, n_max=2, tau=1e-5, eps=1e-8))
+    rng = np.random.default_rng(2)
+    params = eng.tensors()
+    tangents = []
+    for i, p in enumerate(params):
+        t = rng.normal(size=tuple(p.shape)).astype(np.float64)
+        if i == 3:  # u_star unused for iso
+            t[:] = 0.0
+        tangents.append(t)
+    _f, df = eng.jvp(tangents)
+    eps = 1e-6
+    plus = [p.detach() + eps * torch.as_tensor(t, dtype=p.dtype) for p, t in zip(params, tangents)]
+    minus = [p.detach() - eps * torch.as_tensor(t, dtype=p.dtype) for p, t in zip(params, tangents)]
+    with torch.no_grad():
+        fd = ((eng.f_calc(*plus) - eng.f_calc(*minus)) / (2 * eps)).cpu().numpy()
+    df_np = df.cpu().numpy()
+    denom = max(np.linalg.norm(fd), 1e-300)
+    rel = float(np.linalg.norm(df_np - fd) / denom)
+    assert rel < 1e-4, f"jvp vs FD rel {rel}"

@@ -470,16 +470,88 @@ class NufftStructureFactorEngine:
             return self.f_calc(*self.tensors()).cpu().numpy().astype(np.complex128)
 
     def gradients(self, d_target_d_f_calc: np.ndarray, params=None):
-        raise NotImplementedError("gradients are added in the autograd step")
+        """dQ/d(params) for Q with given per-reflection complex gradient.
+
+        Convention (cctbx d_target_d_f_calc): G_h = dQ/dA_h + i dQ/dB_h, so
+        dQ/dp = sum_h Re[conj(G_h) dF_h/dp].
+        ``u_iso`` / ``u_star`` derivatives are of the truncated (current-plan) model.
+        """
+        torch = self.torch
+        params = self.tensors(requires_grad=True) if params is None else params
+        g = torch.as_tensor(np.asarray(d_target_d_f_calc, dtype=np.complex128), dtype=self.cdtype, device=self.device)
+        f = self.f_calc(*params)
+        q = (f * g.conj()).real.sum()
+        grads = torch.autograd.grad(q, params, allow_unused=True)
+        names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+        return {
+            k: (torch.zeros_like(p) if gr is None else gr).detach().cpu().numpy().astype(np.float64)
+            for k, p, gr in zip(names, params, grads)
+        }
 
     def jvp(self, tangents, params=None):
-        raise NotImplementedError("jvp is added in the autograd step")
+        """Directional derivative (dF/dp) . v as a complex tensor (N_refl,)."""
+        torch = self.torch
+        params = self.tensors(requires_grad=True) if params is None else params
+        tangents = tuple(torch.as_tensor(np.asarray(t, dtype=np.float64), dtype=self.dtype, device=self.device) for t in tangents)
+        f = self.f_calc(*params)
+        u = torch.zeros_like(f, requires_grad=True)
+        q = (f * u.conj()).real.sum()
+        grads = torch.autograd.grad(q, params, create_graph=True, allow_unused=True)
+        s = sum((g * v).sum() for g, v in zip(grads, tangents) if g is not None)
+        (df,) = torch.autograd.grad(s, u)
+        return f.detach(), df.detach()
 
     def gauss_newton_hvp(self, tangents, curv_radial, curv_tangential, params=None):
-        raise NotImplementedError("gauss_newton_hvp is added in the autograd step")
+        """Gauss-Newton Hessian-vector product (J^T H_F J) v."""
+        torch = self.torch
+        f, df = self.jvp(tangents, params=params)
+        phase = f / f.abs().clamp(min=1e-300)
+        c = df * phase.conj()
+        cr = torch.as_tensor(np.asarray(curv_radial, dtype=np.float64), dtype=self.dtype, device=self.device)
+        ct = torch.as_tensor(np.asarray(curv_tangential, dtype=np.float64), dtype=self.dtype, device=self.device)
+        h_df = phase * torch.complex(cr * c.real, ct * c.imag)
+        return self.gradients(h_df.cpu().numpy(), params=self.tensors(requires_grad=True))
 
-    def gauss_newton_diagonal(self, curv_radial, curv_tangential, n_probes: int = 8, seed: int = 0, params=None):
-        raise NotImplementedError("gauss_newton_diagonal is added in the autograd step")
+    def gauss_newton_diagonal(
+        self,
+        curv_radial,
+        curv_tangential,
+        n_probes: int = 8,
+        seed: int = 0,
+        params=None,
+    ):
+        """Hutchinson estimate of diag(J^T H_F J) with Rademacher probes."""
+        torch = self.torch
+        if params is None:
+            leaf_params = None
+            shapes = [tuple(p.shape) for p in self.tensors(requires_grad=False)]
+        else:
+            leaf_params = tuple(
+                p if getattr(p, "requires_grad", False) else p.detach().clone().requires_grad_(True)
+                for p in params
+            )
+            shapes = [tuple(p.shape) for p in leaf_params]
+        rng = np.random.default_rng(int(seed))
+        names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+        aniso = np.asarray(self.model.anisotropic, dtype=bool)
+        acc = [np.zeros(s, dtype=np.float64) for s in shapes]
+        m = max(1, int(n_probes))
+        for _ in range(m):
+            tangents = []
+            for i, shape in enumerate(shapes):
+                z = rng.choice(np.array([-1.0, 1.0]), size=shape).astype(np.float64)
+                if i == 2:
+                    z[aniso] = 0.0
+                elif i == 3:
+                    z[~aniso] = 0.0
+                tangents.append(z)
+            hv = self.gauss_newton_hvp(tangents, curv_radial, curv_tangential, params=leaf_params)
+            for i, name in enumerate(names):
+                acc[i] += tangents[i] * hv[name]
+        out = {name: acc[i] / float(m) for i, name in enumerate(names)}
+        out["u_iso"][aniso] = 0.0
+        out["u_star"][~aniso] = 0.0
+        return out
 
     def gauss_newton_blocks(self, curv_radial, curv_tangential, params=None):
         raise NotImplementedError("analytic gauss_newton_blocks are not implemented for the NUFFT engine")
