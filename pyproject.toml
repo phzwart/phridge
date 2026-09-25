@@ -22,6 +22,8 @@ cctbx = ["cctbx-base"]
 worker = ["torch"]
 triton = ["torch", "triton"]
 numba = ["numba"]
+finufft = ["torch", "pytorch-finufft"]
+nufft = ["pytorch-finufft"]
 agentsg = [
     "agentsg @ git+https://github.com/phzwart/agentsg.git#subdirectory=agentsg",
 ]
@@ -32,6 +34,7 @@ dev = [
     "cctbx-base",
     "torch",
     "numba",
+    "pytorch-finufft",
 ]
 
 [project.scripts]
