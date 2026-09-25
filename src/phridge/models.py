@@ -365,7 +365,24 @@ class SfEngineParams(_Strict):
     u_extra: Optional[float] = None
     n_real: Optional[list[int]] = None
     dtype: str = "float64"  # float64 | float32 | float16
-    stamp_backend: str = "auto"  # auto | torch | triton | numba | cpp | cuda
+    stamp_backend: str = "auto"  # auto | fast | torch | triton | numba | cpp | cuda
+
+    @classmethod
+    def fastest(cls, d_min: float, **overrides: Any) -> "SfEngineParams":
+        """Refine default: ASU C++/CUDA stamp, float32, cctbx-matched quality.
+
+        ``stamp_backend='fast'`` is CUDA on NVIDIA, otherwise the CPU C++
+        kernel (same path MPS ``auto`` already uses). Does not change
+        ``auto`` on CPU (Numba stays the explicit-auto default).
+        """
+        data: dict[str, Any] = {
+            "d_min": float(d_min),
+            "quality_factor": 1000.0,
+            "dtype": "float32",
+            "stamp_backend": "fast",
+        }
+        data.update(overrides)
+        return cls.model_validate(data)
 
 
 class SfGradients(_Strict):

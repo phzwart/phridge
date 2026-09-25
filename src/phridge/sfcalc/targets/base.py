@@ -48,6 +48,60 @@ class Observations:
                 out[name] = torch.as_tensor(arr.astype(np.float64), dtype=dtype, device=device)
         return cls(**out)
 
+    def to_like(self, like: Any) -> "Observations":
+        """Copy fields onto ``like``'s device and real dtype (MPS never sees float64).
+
+        The C++ stamp keeps ρ and F on CPU even when the worker device is MPS;
+        observations are built on the worker device. Mixing them is the
+        ``mps:0 and cpu`` error in ``ml_i`` evaluate.
+        """
+        import torch
+
+        device = like.device
+        dtype = like.real.dtype if like.is_complex() else like.dtype
+        if str(device).startswith("mps") and dtype == torch.float64:
+            dtype = torch.float32
+
+        def _move(t: Any, *, boolean: bool = False) -> Any:
+            if t is None:
+                return None
+            if boolean:
+                return t if t.device == device else t.to(device=device)
+            if t.device.type == "mps" and dtype == torch.float64:
+                t = t.detach().cpu()
+            if t.dtype != dtype:
+                t = t.to(dtype=dtype)
+            if t.device != device:
+                t = t.to(device=device)
+            return t
+
+        fields = {
+            "data": _move(self.data),
+            "sigmas": _move(self.sigmas),
+            "weights": _move(self.weights),
+            "r_free": _move(self.r_free, boolean=True),
+            "epsilon": _move(self.epsilon),
+            "centric": _move(self.centric, boolean=True),
+            "alpha": _move(self.alpha),
+            "beta": _move(self.beta),
+            "nu": _move(self.nu),
+            "beta_residual": _move(self.beta_residual),
+        }
+        if (
+            fields["data"] is self.data
+            and fields["sigmas"] is self.sigmas
+            and fields["weights"] is self.weights
+            and fields["r_free"] is self.r_free
+            and fields["epsilon"] is self.epsilon
+            and fields["centric"] is self.centric
+            and fields["alpha"] is self.alpha
+            and fields["beta"] is self.beta
+            and fields["nu"] is self.nu
+            and fields["beta_residual"] is self.beta_residual
+        ):
+            return self
+        return Observations(**fields)
+
     @property
     def work(self):
         """Boolean mask of work reflections."""
@@ -103,11 +157,13 @@ class Target:
 
     # -- generic machinery ---------------------------------------------------
     def value(self, f_calc, obs: Observations):
+        obs = obs.to_like(f_calc)
         return self.reduce(self.per_reflection(f_calc, obs), obs)
 
     def evaluate(self, f_calc, obs: Observations, compute_curvature: bool = True) -> TargetEval:
         import torch
 
+        obs = obs.to_like(f_calc)
         f = f_calc.detach().clone().requires_grad_(True)
         self.prepare(f.detach(), obs)
         t = self.per_reflection(f, obs)

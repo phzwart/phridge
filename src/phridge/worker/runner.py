@@ -7,6 +7,10 @@ import inspect
 import os
 import socket
 import traceback
+
+# Torch and the C++ stamp must share one OpenMP runtime. Without this,
+# macOS SIGSEGVs in __kmp_suspend_initialize_thread on the first splat.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 from typing import Any, Optional
 
 import redis

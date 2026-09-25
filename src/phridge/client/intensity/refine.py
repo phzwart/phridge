@@ -685,7 +685,7 @@ class IntensityRefineMixin:
 
         hkl = np.asarray(list(self.i_obs.indices()), dtype=np.int32)
         px, table = _packed_xray(self.xray_structure, None)
-        params = SfEngineParams(d_min=self.d_min)
+        params = getattr(self, "params", None) or SfEngineParams.fastest(self.d_min)
         eng = _engine(px, table, hkl, params)
         blocks = eng.gauss_newton_blocks(ev.curv_radial, ev.curv_tangential)
 

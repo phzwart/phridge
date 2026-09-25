@@ -2562,7 +2562,8 @@ class IntensityFModel(
 
         self.table = table
         self.d_min = float(d_min) if d_min is not None else float(i_obs.d_min())
-        self.params = params or SfEngineParams(d_min=self.d_min)
+        self.params = params or SfEngineParams.fastest(self.d_min)
+        self._sf_handle: Optional[str] = None
 
         # Resolution filter if d_min requested
         if d_min is not None and float(i_obs.d_min()) < d_min:
@@ -2725,6 +2726,14 @@ class IntensityFModel(
         return sa
 
     # ---------------------------------------------------------------- Core SF & Model
+    def _ensure_sf_handle(self, px: Any, table: Any, hkl: Any) -> str:
+        """Bind the stamp engine once; later F / grads refresh sites on the handle."""
+        hid = getattr(self, "_sf_handle", None)
+        if hid is None:
+            hid = str(self.bridge.call("sf_bind", xray=px, table=table, hkl=hkl, params=self.params))
+            self._sf_handle = hid
+        return hid
+
     def f_calc(self, xray_structure: Optional[Any] = None) -> Any:
         """Calculated structure factors F_calc in physical electron units (remote)."""
         if xray_structure is not None:
@@ -2732,7 +2741,14 @@ class IntensityFModel(
         if self._f_calc is None:
             px, table = _packed_xray(self._xray_structure, self.table)
             hkl = self._i_obs
-            raw = self.bridge.call("sf_calc", xray=px, table=table, hkl=hkl, params=self.params)
+            raw = self.bridge.call(
+                "sf_calc",
+                xray=px,
+                table=table,
+                hkl=hkl,
+                params=self.params,
+                handle=self._ensure_sf_handle(px, table, hkl),
+            )
             self._f_calc = _to_miller(raw)
             if hasattr(self, "update_core") and hasattr(self, "arrays") and self.arrays is not None:
                 try:
@@ -3318,6 +3334,7 @@ class IntensityFModel(
             "xray": px,
             "table": table,
             "params": self.params,
+            "handle": self._ensure_sf_handle(px, table, self._i_obs),
             "target": self.target_spec,
             "precondition": bool(precondition),
             "damping": float(damping),

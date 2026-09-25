@@ -69,31 +69,8 @@ def _kernel(name: str, suffix: str):
 
 
 def _compile_flags() -> tuple[list[str], list[str]]:
-    import sys
-    from pathlib import Path as P
-
-    cflags = ["-O3", "-std=c++17"]
-    ldflags: list[str] = []
-    if sys.platform == "darwin":
-        brew = P("/opt/homebrew/opt/libomp")
-        if not brew.is_dir():
-            brew = P("/usr/local/opt/libomp")
-        if brew.is_dir():
-            cflags.extend(
-                [
-                    "-Xpreprocessor",
-                    "-fopenmp",
-                    f"-I{brew / 'include'}",
-                    "-march=native",
-                ]
-            )
-            ldflags.extend([f"-L{brew / 'lib'}", "-lomp"])
-        else:
-            cflags.append("-march=native")
-    else:
-        cflags.extend(["-fopenmp", "-march=native"])
-        ldflags.append("-fopenmp")
-    return cflags, ldflags
+    """No OpenMP: torch already ships libomp; a second runtime SIGSEGVs on macOS."""
+    return ["-O3", "-std=c++17", "-march=native"], []
 
 
 def _module():
@@ -111,14 +88,14 @@ def _module():
     )
     try:
         _MOD = load(
-            name="phridge_stamp_cpp_wd",
+            name="phridge_stamp_cpp_st",
             extra_cflags=cflags,
             extra_ldflags=ldflags,
             **kwargs,
         )
     except Exception:
         _MOD = load(
-            name="phridge_stamp_cpp_wd_serial",
+            name="phridge_stamp_cpp_st_serial",
             extra_cflags=["-O3", "-std=c++17", "-march=native"],
             extra_ldflags=[],
             **kwargs,

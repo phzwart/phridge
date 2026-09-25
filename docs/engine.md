@@ -167,7 +167,9 @@ when `numba` is installed (`pip install phridge[numba]`); the eager torch
 chunk path remains the differentiable reference and the fallback.
 `stamp_backend="cpp"` is a CPU C++ stamp (one grid, exp table,
 JIT via `torch.utils.cpp_extension`). `auto` does **not** select it on
-CPU (Numba stays the default). On **MPS**, `auto` selects C++ (no Metal
+CPU (Numba stays the default). `stamp_backend="fast"` (what
+`SfEngineParams.fastest` / phridge refine use when you omit `params`)
+picks CUDA on NVIDIA, otherwise C++. On **MPS**, `auto` selects C++ (no Metal
 kernel). `stamp_backend="cuda"` is the same stamp/VJP on NVIDIA
 (`atomicAdd` + cuFFT + algebraic gather); `auto` on CUDA prefers it
 when the extension builds, else Triton, else torch.

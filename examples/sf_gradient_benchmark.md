@@ -49,15 +49,22 @@ Numba, torch, and CUDA all use the same gather.
 
 ## 1. Options
 
-Nothing below changes the default. `sf_calc` / `sf_gradients` stay on the
-stamp engine. Pick the rest through `SfEngineParams` (JSON on the wire)
-or `EngineParams` (in-process).
+`auto` on CPU is still Numba. **phridge refine** (and any client that
+omits `params`) now uses `SfEngineParams.fastest`: `stamp_backend='fast'`
+(CUDA if the worker is NVIDIA, otherwise C++), `dtype=float32`,
+`quality_factor=1000`, ASU splat + agentsg gather, kept `sf_bind`.
+Pass an explicit `SfEngineParams(...)` to override.
+
+Pick the rest through `SfEngineParams` (JSON on the wire) or
+`EngineParams` (in-process). `sf_calc` / `sf_gradients` stay on the
+stamp engine.
 
 ### 1.1 Stamp backend (`stamp_backend`)
 
 | value | what it is | when `auto` picks it |
 |---|---|---|
 | `auto` | dispatch below | — |
+| `fast` | CUDA if present, else C++ | refine default (`SfEngineParams.fastest`) |
 | `numba` | parallel thread-local CPU grids | CPU if Numba is installed |
 | `cpp` | one-grid OpenMP/C++ stamp, exp table | **MPS** (no Metal kernel) |
 | `cuda` | same stamp/VJP in `.cu` (`atomicAdd`) | NVIDIA if the extension builds |

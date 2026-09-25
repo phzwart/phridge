@@ -2164,6 +2164,7 @@ _TARGET_AND_GRADIENTS_INPUTS = {
     "residual_k1": "json",
     "spatial_sigma_a_v2": "SpatialSigmaAV2",
     "spatial_sigma_a_v2_result": "SpatialSigmaAV2Result",
+    "handle": "json",
 }
 
 _TARGET_AND_GRADIENTS_OUTPUTS = {
@@ -2217,6 +2218,7 @@ def ml_i_target_and_gradients(
     residual_k1: Optional[Any] = False,
     spatial_sigma_a_v2: Optional[Any] = None,
     spatial_sigma_a_v2_result: Optional[Any] = None,
+    handle: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Whole chain for intensity likelihood: F_calc -> ml_i target -> dQ/dF -> dQ/d(scatterer params).
 
@@ -2239,6 +2241,7 @@ def ml_i_target_and_gradients(
     from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
     from phridge.sfcalc.ops import (
         _DEVICE,
+        _bound_engine,
         _engine,
         _miller_like,
         _np,
@@ -2269,7 +2272,9 @@ def ml_i_target_and_gradients(
         cell = tuple(float(x) for x in xray.meta.crystal.unit_cell)
         d0_v2 = d0_from_block(spatial_sigma_a_v2, cell, _np(f_obs.hkl))
 
-    eng = _engine(xray, table, _np(f_obs.hkl), params)
+    eng, _tmpl = _bound_engine(handle, xray)
+    if eng is None:
+        eng = _engine(xray, table, _np(f_obs.hkl), params)
     spec = dict(target)
     if spec.get("name") != "ml_i":
         spec["name"] = "ml_i"
@@ -2315,6 +2320,7 @@ def ml_i_target_and_gradients(
             k_t = k_t * k1
             f_model = f_model * k1
 
+    obs = obs.to_like(f_model)
     ev = tgt.evaluate(f_model.detach(), obs, compute_curvature=do_precond)
     g = _to_like(ev.d_target_d_f_calc, fc)
     # Scale derivative w.r.t fc: dQ/dfc = k * dQ/df_model

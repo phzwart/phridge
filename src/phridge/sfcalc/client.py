@@ -190,7 +190,7 @@ class RemoteStructureFactors:
         self.miller_set = miller_set
         if params is None:
             d_min = d_min if d_min is not None else float(miller_set.d_min())
-            params = SfEngineParams(d_min=d_min)
+            params = SfEngineParams.fastest(d_min)
         self.params = params
         self.table = table
         self._template = _miller_template(miller_set)
@@ -350,7 +350,7 @@ class RemoteRefinementTarget:
         self.xray_structure = xray_structure
         self.functor = RemoteTargetFunctor(bridge, f_obs, target_spec, **functor_kwargs)
         if params is None:
-            params = SfEngineParams(d_min=d_min if d_min is not None else float(f_obs.d_min()))
+            params = SfEngineParams.fastest(d_min if d_min is not None else float(f_obs.d_min()))
         self.params = params
         self.table = table
         self.last: Optional[dict] = None
@@ -685,7 +685,7 @@ class StructureFactorServer:
             data = self.default_params.model_dump()
             data["d_min"] = d
             return SfEngineParams.model_validate(data)
-        return SfEngineParams(d_min=d)
+        return SfEngineParams.fastest(d)
 
     def from_scatterers(
         self,

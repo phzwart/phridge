@@ -62,7 +62,7 @@ import torch
 from pydantic import BaseModel, Field
 
 from phridge.contrib.intensity_ll.maps import _fom_at
-from phridge.contrib.intensity_ll.mli import _loggamma_rule, normalize, quadrature_terms_normal
+from phridge.contrib.intensity_ll.mli import normalize, quadrature_terms_normal, quadrature_terms_t
 
 Tensor = torch.Tensor
 
@@ -147,31 +147,9 @@ def posterior_amplitude_cache(
             nodes = nodes[:, None, :]
             terms = terms[:, None, :]
         else:
-            nu_t = torch.as_tensor(nu, dtype=Ec.dtype, device=Ec.device).expand_as(Ec)
-            J = max(int(n_legendre), int(n_hermite))
-            nodes = torch.ones(Ec.shape[0], n_u, J, dtype=Ec.dtype, device=Ec.device)
-            terms = torch.full((Ec.shape[0], n_u, J), -math.inf, dtype=Ec.dtype, device=Ec.device)
-            nu_t = torch.nan_to_num(nu_t, nan=200.0, posinf=200.0, neginf=2.5)
-            nu_t = nu_t.clamp(2.05, 500.0)
-            for nu_val in torch.unique(nu_t).tolist():
-                sel = nu_t == nu_val
-                if not bool(sel.any()):
-                    continue
-                u, w = _loggamma_rule(float(nu_val), n_u)
-                for k, (uk, wk) in enumerate(zip(u, w)):
-                    wk_f = float(wk)
-                    if not math.isfinite(wk_f) or wk_f <= 0.0:
-                        continue
-                    X, T, _st = quadrature_terms_normal(
-                        Ec[sel],
-                        sA[sel],
-                        Zo[sel],
-                        sZ[sel] * math.exp(-uk / 2),
-                        centric_t[sel],
-                        **q_kw,
-                    )
-                    nodes[sel, k, : X.shape[-1]] = X
-                    terms[sel, k, : T.shape[-1]] = T + math.log(wk_f)
+            nodes, terms, _u_nodes, _stats = quadrature_terms_t(
+                Ec, sA, Zo, sZ, centric_t, nu, n_u=n_u, **q_kw
+            )
 
         flat_terms = terms.reshape(terms.shape[0], -1)
         flat_terms = torch.where(

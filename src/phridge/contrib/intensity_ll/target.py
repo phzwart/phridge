@@ -200,6 +200,7 @@ class IntensityLogLikelihood(Target):
 
         from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t
 
+        obs = obs.to_like(f_calc)
         fo = obs.data
         fc = f_calc.abs()
         eps = obs.epsilon if obs.epsilon is not None else torch.ones_like(fo)

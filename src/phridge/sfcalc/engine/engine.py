@@ -97,7 +97,7 @@ class EngineParams:
     cpu_numpy_fft: bool = False
     n_radius_buckets: int = 4  # group expanded atoms by cutoff radius to shrink sampling boxes
     compile_stamp: bool = False  # torch.compile the per-chunk stamp (off in unit tests)
-    stamp_backend: str = "auto"  # auto | torch | triton | numba | cpp | cuda
+    stamp_backend: str = "auto"  # auto | fast | torch | triton | numba | cpp | cuda
     p1_expand: bool = False  # True: paint all sym copies; False: ASU + agentsg gather
 
 
@@ -536,6 +536,17 @@ class StructureFactorEngine:
             if cuda_available() and device.startswith("cuda"):
                 return "cuda"
             raise RuntimeError("stamp_backend='cuda' requires NVIDIA CUDA")
+        if backend == "fast":
+            if device.startswith("cuda"):
+                from phridge.sfcalc.engine.stamp_cuda import cuda_available
+
+                if cuda_available():
+                    return "cuda"
+            from phridge.sfcalc.engine.stamp_cpp import cpp_available
+
+            if cpp_available():
+                return "cpp"
+            backend = "auto"
         if backend == "auto":
             if device.startswith("cuda"):
                 from phridge.sfcalc.engine.stamp_cuda import cuda_available

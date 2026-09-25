@@ -663,11 +663,13 @@ else
 
     if [[ "$WORKER_ONLY" -eq 1 ]]; then
         echo "• Starting PyTorch worker in foreground (device=${DEVICE}). Press Ctrl+C to exit."
+        export KMP_DUPLICATE_LIB_OK="${KMP_DUPLICATE_LIB_OK:-TRUE}"
         exec "$PHRIDGE_WORKER" --redis-url "$REDIS_URL" --device "$DEVICE"
     fi
 
     echo "• Launching fresh PyTorch worker daemon (device=${DEVICE})..."
     : > "$WORKER_LOG"  # truncate so this run's log is unambiguous
+    export KMP_DUPLICATE_LIB_OK="${KMP_DUPLICATE_LIB_OK:-TRUE}"
     "$PHRIDGE_WORKER" --redis-url "$REDIS_URL" --device "$DEVICE" >> "$WORKER_LOG" 2>&1 &
     WORKER_PID=$!
     STARTED_WORKER=1

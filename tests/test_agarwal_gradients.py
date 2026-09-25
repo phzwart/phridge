@@ -208,3 +208,16 @@ def test_auto_cpu_stays_numba():
     hkl = _hkl(model, d_min)
     eng = StructureFactorEngine(model, hkl, EngineParams(d_min=d_min, quality_factor=100.0))
     assert eng._stamp_kind() == "numba"
+
+
+def test_fast_cpu_uses_cpp():
+    pytest.importorskip("torch")
+    from phridge.sfcalc.engine.stamp_cpp import cpp_available
+
+    if not cpp_available():
+        pytest.skip("C++ stamp required")
+    model = _toy()
+    d_min = 2.5
+    hkl = _hkl(model, d_min)
+    eng = StructureFactorEngine(model, hkl, EngineParams(d_min=d_min, stamp_backend="fast"))
+    assert eng._stamp_kind() == "cpp"

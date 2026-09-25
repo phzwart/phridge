@@ -31,7 +31,6 @@ which is what a refinement of nu needs. See ``maps.md`` next to this module.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
@@ -40,11 +39,11 @@ import torch
 from pydantic import BaseModel, Field
 
 from phridge.contrib.intensity_ll.mli import (
-    _loggamma_rule,
     _ratio,
     normalize,
     posterior_mode_E,
     quadrature_terms_normal,
+    quadrature_terms_t,
 )
 from phridge.sfcalc.targets.base import Observations
 
@@ -158,24 +157,9 @@ def posterior_node_cache(
             terms = terms[:, None, :]
             u_nodes = torch.zeros(Ec.shape[0], 1, dtype=Ec.dtype, device=Ec.device)
         else:
-            nu_t = torch.as_tensor(nu, dtype=Ec.dtype, device=Ec.device).expand_as(Ec)
-            nu_t = torch.nan_to_num(nu_t, nan=200.0, posinf=200.0, neginf=2.5).clamp(2.05, 500.0)
-            J = max(int(n_legendre), int(n_hermite))
-            nodes = torch.ones(Ec.shape[0], n_u, J, dtype=Ec.dtype, device=Ec.device)
-            terms = torch.full((Ec.shape[0], n_u, J), -math.inf, dtype=Ec.dtype, device=Ec.device)
-            u_nodes = torch.zeros(Ec.shape[0], n_u, dtype=Ec.dtype, device=Ec.device)
-            stats = {}
-            for nu_val in torch.unique(nu_t).tolist():
-                sel = nu_t == nu_val
-                u, w = _loggamma_rule(float(nu_val), n_u)
-                for k, (uk, wk) in enumerate(zip(u, w)):
-                    X, T, st = quadrature_terms_normal(
-                        Ec[sel], sA[sel], Zo[sel], sZ[sel] * math.exp(-uk / 2), centric_t[sel], **q_kw
-                    )
-                    nodes[sel, k, :] = X
-                    terms[sel, k, :] = T + math.log(wk)
-                    u_nodes[sel, k] = float(uk)
-                stats = st  # last group; only used for diagnostics
+            nodes, terms, u_nodes, stats = quadrature_terms_t(
+                Ec, sA, Zo, sZ, centric_t, nu, n_u=n_u, **q_kw
+            )
 
         flat_terms = terms.reshape(terms.shape[0], -1)
         log_lik = torch.logsumexp(flat_terms, dim=1)
@@ -312,6 +296,7 @@ def intensity_map_coefficients(
     """
     opts = options or IntensityMapOptions()
     f_calc = f_calc.detach()
+    obs = obs.to_like(f_calc)
     fo = obs.data
     fc = f_calc.abs()
     eps = obs.epsilon if obs.epsilon is not None else torch.ones_like(fo)
