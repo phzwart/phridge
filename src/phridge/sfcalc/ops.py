@@ -168,7 +168,13 @@ def _refresh_model(eng: Any, xray: PackedXray) -> None:
 
     m = eng.model
     n = m.n_scatterers
-    m.sites_frac = _np(xray.sites_frac, np.float64).reshape(n, 3)
+    sites = _np(xray.sites_frac, np.float64).ravel()
+    if sites.size != n * 3:
+        raise ValueError(
+            f"kept SF engine has {n} scatterers, xray has {sites.size // 3}; "
+            "rebind after add/remove atoms (ordered solvent)"
+        )
+    m.sites_frac = sites.reshape(n, 3)
     m.occupancy = _np(xray.occupancy, np.float64).reshape(n)
     m.u_iso = _np(xray.u_iso, np.float64).reshape(n)
     m.u_star = _np(xray.u_star, np.float64).reshape(n, 6)
@@ -187,6 +193,10 @@ def _bound_engine(handle: Any, xray: Optional[PackedXray] = None):
     sess = get_engine_session(hid)
     eng = sess["engine"]
     if xray is not None:
+        n_new = int(_np(xray.sites_frac).size // 3)
+        if n_new != int(eng.model.n_scatterers):
+            # Ordered solvent add/remove: handle is stale. Caller rebuilds.
+            return None, None
         _refresh_model(eng, xray)
     return eng, sess["hkl"]
 

@@ -2564,6 +2564,7 @@ class IntensityFModel(
         self.d_min = float(d_min) if d_min is not None else float(i_obs.d_min())
         self.params = params or SfEngineParams.fastest(self.d_min)
         self._sf_handle: Optional[str] = None
+        self._sf_n_scatterers: Optional[int] = None
 
         # Resolution filter if d_min requested
         if d_min is not None and float(i_obs.d_min()) < d_min:
@@ -2727,11 +2728,16 @@ class IntensityFModel(
 
     # ---------------------------------------------------------------- Core SF & Model
     def _ensure_sf_handle(self, px: Any, table: Any, hkl: Any) -> str:
-        """Bind the stamp engine once; later F / grads refresh sites on the handle."""
+        """Bind the stamp engine once; later F / grads refresh sites on the handle.
+
+        Rebind when the scatterer count changes (ordered solvent add/remove).
+        """
+        n = int(np.asarray(px.sites_frac).reshape(-1, 3).shape[0])
         hid = getattr(self, "_sf_handle", None)
-        if hid is None:
+        if hid is None or getattr(self, "_sf_n_scatterers", None) != n:
             hid = str(self.bridge.call("sf_bind", xray=px, table=table, hkl=hkl, params=self.params))
             self._sf_handle = hid
+            self._sf_n_scatterers = n
         return hid
 
     def f_calc(self, xray_structure: Optional[Any] = None) -> Any:
