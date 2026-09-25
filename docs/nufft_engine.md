@@ -108,11 +108,22 @@ PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
     --out docs/nufft_engine.md
 ```
 
-Results (fill after running the commands above):
+Results (this environment has no cctbx and no CUDA; 1ee2 / 6czg / cctbx-direct
+rows were skipped. Re-run the commands above on a cctbx+CUDA box to fill the
+full table):
 
-| engine | d_min | n_groups | T | R(F) vs cctbx direct | t(F) | t(F+grad) | peak mem |
-|--------|-------|----------|---|----------------------|------|-----------|----------|
-| *(run benchmark.py)* | | | | | | | |
+    PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark --cases synthetic --d-min 2.5 --device cpu --repeats 3 --n-synthetic 80
+
+| engine | case | d_min | device | n_atoms | n_refl | n_groups | T | R(F) vs cctbx direct | t(F) | t(F+grad) | peak mem (MB) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| stamp_qf100 | synthetic_p1 | 2.5 | cpu | 80 | 20256 | 0 | 0 | n/a | 0.0028 | 0.0085 | ~520 |
+| stamp_qf1000 | synthetic_p1 | 2.5 | cpu | 80 | 20256 | 0 | 0 | n/a | 0.0028 | 0.0082 | ~530 |
+| nufft_tau1e-3 | synthetic_p1 | 2.5 | cpu | 80 | 20256 | 1 | 3 | n/a | 0.0035 | 0.0199 | ~580 |
+| nufft_tau1e-4 | synthetic_p1 | 2.5 | cpu | 80 | 20256 | 2 | 6 | n/a | 0.0062 | 0.0338 | ~600 |
+
+On this CPU smoke (80 atoms, dense P1 sphere, no GPU) NUFFT is **not** 5×
+faster than the stamp engine; the go/no-go for a CUDA default remains open
+until the 1ee2 / 6czg / 20k-atom suite is run with cctbx.
 
 The default worker engine is **not** changed in this PR. A go/no-go for
 making `engine: "nufft"` the CUDA default is a ≥5× `F+grad` speedup over
