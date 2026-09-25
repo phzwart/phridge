@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Large-N GPU SF gradient benchmark: phridge CUDA vs CCTBX direct.
+"""Large-N SF gradient benchmark: phridge (CUDA / MPS) vs CCTBX direct and FFT.
 
 Builds ~1000-atom random structures, computes F_obs from the true model,
 applies a small Gaussian Cartesian site perturbation, then compares LS
 site-gradient length and direction across several space groups. Writes::
 
-    python examples/sf_gradient_benchmark.py
+    python examples/sf_gradient_benchmark.py --device mps
     # → examples/sf_gradient_benchmark.md
 
-Requires cctbx + torch with CUDA (``make test-sf-gpu`` runs the same checks).
+Import cctbx before torch in the calling process.
+``make test-sf-gpu`` runs the CUDA accuracy checks.
 """
 
 from __future__ import annotations
@@ -20,15 +21,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Import cctbx before torch (Boost.Python / MKL ordering).
-import cctbx  # noqa: F401
-import torch
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client import Bridge  # noqa: E402
+# Import cctbx before torch (Boost.Python / MKL ordering).
+import cctbx  # noqa: E402,F401
 
 from sf_gradient_bench import (  # noqa: E402
     SPACE_GROUPS,
@@ -38,6 +36,17 @@ from sf_gradient_bench import (  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_MD = HERE / "sf_gradient_benchmark.md"
+
+# 2026-09-05 CUDA table (same n_atoms / d_min / seed). Kept when this machine
+# has no CUDA so FFT-vs-FFT + MPS numbers sit next to the published GPU column.
+CUDA_2026_09_05 = {
+    "P1": {"phridge_f_s": 0.38, "phridge_grad_s": 0.25, "remote_grad_s": 0.44},
+    "P21": {"phridge_f_s": 0.18, "phridge_grad_s": 0.22, "remote_grad_s": 0.58},
+    "P212121": {"phridge_f_s": 0.24, "phridge_grad_s": 0.42, "remote_grad_s": 0.87},
+    "C2": {"phridge_f_s": 0.18, "phridge_grad_s": 0.42, "remote_grad_s": 0.92},
+    "P4132": {"phridge_f_s": 0.99, "phridge_grad_s": 2.27, "remote_grad_s": 8.68},
+    "R3:H": {"phridge_f_s": 0.55, "phridge_grad_s": 1.15, "remote_grad_s": 2.39},
+}
 
 
 @dataclass
@@ -88,8 +97,8 @@ class DemoLog:
             "\n## Summary\n",
             "\n| | |\n|---|---|\n",
             "| Flow | true model F_obs → Gaussian site shake → LS site grads |\n",
-            "| Reference | CCTBX `gradients_direct` |\n",
-            "| Phridge | CUDA `StructureFactorEngine` + `RemoteStructureFactors` |\n",
+            "| Accuracy | CCTBX `gradients_direct` |\n",
+            "| Timing | CCTBX direct + `algorithm=fft`; phridge CUDA (2026-09-05) + MPS + CPU |\n",
             f"| Checks | **{n_ok}/{n}** passed |\n",
             f"| Result | **{'OK' if not self.failed else 'FAILED'}** |\n",
             "\n### Checklist\n",
@@ -105,6 +114,90 @@ class DemoLog:
         print(f"wrote {path}")
 
 
+def _write_methods(log: DemoLog) -> None:
+    log.heading("4. CPU (same machine, same models)")
+    log.para(
+        "Same 1000-atom / `d_min=2.0` / `quality_factor=1000` harness, `device=cpu`: "
+        "float64, `torch.fft.fftn` (pocketfft), `stamp_backend='auto'` → **Numba** "
+        "per-atom stamp (16 threads, one untimed F + grad warmup for JIT). "
+        "Timed 2026-09-25 on this laptop (`run_space_group(..., device='cpu')` for "
+        "P1 and P2₁2₁2₁ only)."
+    )
+    log.table(
+        [
+            "SG",
+            "N_refl",
+            "CCTBX FFT F / grad (s)",
+            "phridge CPU F / grad (s)",
+            "phridge density (s)",
+            "CCTBX direct F / grad (s)",
+        ],
+        [
+            ["P1", "13090", "0.005 / 0.020", "0.015 / 0.035", "0.014", "0.20 / 0.26"],
+            ["P212121", "14098", "0.008 / 0.022", "0.046 / 0.098", "0.036", "0.58 / 0.80"],
+        ],
+    )
+    log.para(
+        "Accuracy matched the MPS run (R(F) ~1e-4, cosine ≥ 0.99999 vs CCTBX direct). "
+        "The Numba stamp (per-atom box, thread-local grids, analytical VJP) brings "
+        "CPU F / grad in line with compiled MPS (P2₁2₁2₁ 0.05 / 0.10 vs 0.05 / 0.09). "
+        "Eager torch CPU was 0.32 / 0.91 on the same P2₁2₁2₁ model. CCTBX FFT is still "
+        "ahead (~6× F, ~4× grad): C++ Ten Eyck + hardcoded Agarwal, no autograd tape. "
+        "Density-only is still most of F. The older 2-core quote in `docs/engine.md` "
+        "(~10 s F / ~45 s grads at **2000** atoms) is the pre-Numba torch path."
+    )
+    log.heading("5. How these numbers were generated")
+    log.para(
+        "Command: `python examples/sf_gradient_benchmark.py --device mps` "
+        "(harness in `tests/sf_gradient_bench.py`). "
+        "Each space group builds a ~1000-atom random ASU (C/N/O/S, `volume_per_atom=50`, "
+        "`quality_factor=1000`, `wing_cutoff=1e-4`, `d_min=2.0` Å), takes F_obs from "
+        "CCTBX `algorithm='direct'` on the unperturbed model, then times site LS "
+        "gradients after a 0.05 Å Cartesian Gaussian shake."
+    )
+    log.para(
+        "**CCTBX FFT** columns wrap a fresh `from_scatterers` / `gradients` manager "
+        "plus `algorithm='fft'` in one `perf_counter` interval (setup + Ten Eyck + "
+        "Agarwal). **CCTBX direct** is `structure_factors(..., algorithm='direct')` "
+        "and `gradients_direct`. **phridge MPS** is `StructureFactorEngine` on Metal "
+        "float32 with `compile_stamp=True`: one untimed F + grad warmup (shader / "
+        "`torch.compile`), then timed `f_calc_numpy` (already `torch.no_grad`) and "
+        "`gradients`, each followed by `torch.mps.synchronize()`. **phridge density** "
+        "is `density(*tensors())` only, after that warmup. **phridge CUDA** F / grad / "
+        "remote are the 2026-09-05 in-process CUDA table (same n_atoms / d_min / seed), "
+        "not re-timed on this machine. **phridge CPU** (section 4) used the same "
+        "harness with `device=cpu` on P1 and P2₁2₁2₁ only: float64, "
+        "`stamp_backend='auto'` (Numba when installed), warmup for JIT. "
+        "Accuracy (R(F), cosine) is always vs CCTBX **direct**, not vs CCTBX FFT."
+    )
+    log.heading("6. Optimization headroom")
+    log.para(
+        "These phridge times are **not** a finished FFT engine. CPU now uses a "
+        "parallel Numba stamp (`pip install phridge[numba]`); the remaining gap vs "
+        "CCTBX FFT (P2₁2₁2₁ ~0.05 / 0.10 s vs 0.01 / 0.02 s) is still stamp + "
+        "autograd-through-FFT vs C++ Ten Eyck + Agarwal, not `torch.fft.fftn`. "
+        "Headroom: fused CUDA Triton / Metal stamp, hardcoded Agarwal IFFT for "
+        "higher-order paths, a kept engine (no rebuild per RPC), and staying "
+        "on-device instead of numpy upload/download every call. The first `density` "
+        "row can also include leftover `torch.compile` / Dynamo recompile "
+        "(`requires_grad` mismatch) and should not be quoted as stamp cost. Treat "
+        "the MPS table as a convenient differentiable baseline, not the ceiling."
+    )
+
+
+def _apply_kept_cuda(rows) -> None:
+    for row in rows:
+        kept = CUDA_2026_09_05.get(row.space_group)
+        if not kept:
+            continue
+        if row.timings.phridge_f_s == 0.0:
+            row.timings.phridge_f_s = kept["phridge_f_s"]
+        if row.timings.phridge_grad_s == 0.0:
+            row.timings.phridge_grad_s = kept["phridge_grad_s"]
+        if row.timings.remote_grad_s == 0.0:
+            row.timings.remote_grad_s = kept["remote_grad_s"]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--n-atoms", type=int, default=1000)
@@ -113,26 +206,57 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--device", default="cuda")
     p.add_argument("--md", type=Path, default=DEFAULT_MD)
     p.add_argument("--space-groups", nargs="*", default=list(SPACE_GROUPS))
+    p.add_argument("--cctbx-only", action="store_true", help="Time CCTBX only (no torch)")
+    p.add_argument("--no-remote", action="store_true", help="Skip Bridge / RemoteStructureFactors")
+    p.add_argument(
+        "--keep-cuda",
+        action="store_true",
+        help="Fill empty CUDA columns from the 2026-09-05 table",
+    )
     args = p.parse_args(argv)
 
-    log = DemoLog("Large-N GPU structure-factor gradient benchmark")
-    if args.device.startswith("cuda") and not torch.cuda.is_available():
-        print("CUDA not available; aborting.", file=sys.stderr)
-        return 2
+    time_phridge = not args.cctbx_only
+    keep_cuda = args.keep_cuda or (args.device.startswith("mps") and time_phridge)
+    time_remote = time_phridge and not args.no_remote and not args.device.startswith("mps")
 
+    if time_phridge:
+        import torch
+
+        if args.device.startswith("cuda") and not torch.cuda.is_available():
+            print("CUDA not available; aborting.", file=sys.stderr)
+            return 2
+        if args.device.startswith("mps") and not torch.backends.mps.is_available():
+            print("MPS not available; aborting.", file=sys.stderr)
+            return 2
+
+    log = DemoLog("Large-N structure-factor gradient benchmark")
     log.heading("1. Setup")
     log.para(
         f"~{args.n_atoms} ASU atoms (C/N/O/S), `d_min={args.d_min}` Å, "
         f"Cartesian Gaussian σ={args.sigma} Å, device=`{args.device}`. "
         "F_obs from CCTBX direct F_calc of the unperturbed model; "
-        "site gradients of amplitude LS residual at the perturbed model."
+        "site gradients of amplitude LS residual at the perturbed model. "
+        "CCTBX FFT uses `from_scatterers` / `gradients` with `algorithm='fft'`, "
+        "`quality_factor=1000`, `wing_cutoff=1e-4`. "
+        "MPS runs float32 (engine default). "
+        "phridge GPU calls are warmed (one untimed F + grad) before the timed pair. "
+        + (
+            "CUDA phridge columns are the 2026-09-05 GPU table."
+            if keep_cuda
+            else ""
+        )
     )
     log.code(
-        "bridge = Bridge(memory=True, device='cuda')\n"
-        "row = run_space_group('P212121', n_atoms=1000, device='cuda', bridge=bridge)"
+        "row = run_space_group('P212121', n_atoms=1000, device='mps', "
+        "time_remote=False, time_cctbx_fft=True)"
     )
 
-    bridge = Bridge(memory=True, device=args.device, timeout=600)
+    bridge = None
+    if time_remote:
+        from phridge.client import Bridge
+
+        bridge = Bridge(memory=True, device=args.device, timeout=600)
+
     rows = []
     t0 = time.perf_counter()
     log.heading("2. Per space group")
@@ -146,13 +270,18 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             seed=0,
             bridge=bridge,
-            time_remote=True,
+            time_remote=time_remote,
+            time_phridge=time_phridge,
         )
         rows.append(row)
-        log.check(row.cosine > 0.99, f"{sg} cosine", f"{row.cosine:.6f}")
-        log.check(0.95 <= row.length_ratio <= 1.05, f"{sg} length_ratio", f"{row.length_ratio:.4f}")
-        log.check(row.site_rel_max < 3e-2, f"{sg} site_rel_max", f"{row.site_rel_max:.3e}")
-        log.check(row.f_r_factor < 3e-3, f"{sg} R(F)", f"{row.f_r_factor:.3e}")
+        if time_phridge:
+            log.check(row.cosine > 0.99, f"{sg} cosine", f"{row.cosine:.6f}")
+            log.check(0.95 <= row.length_ratio <= 1.05, f"{sg} length_ratio", f"{row.length_ratio:.4f}")
+            log.check(row.site_rel_max < 3e-2, f"{sg} site_rel_max", f"{row.site_rel_max:.3e}")
+            log.check(row.f_r_factor < 3e-3, f"{sg} R(F)", f"{row.f_r_factor:.3e}")
+
+    if keep_cuda:
+        _apply_kept_cuda(rows)
 
     elapsed = time.perf_counter() - t0
     table_text = format_result_table(rows)
@@ -169,10 +298,15 @@ def main(argv: list[str] | None = None) -> int:
             "cosine",
             "angle°",
             "|g_p|/|g_c|",
-            "cctbx F (s)",
-            "cctbx grad (s)",
-            "phridge F (s)",
-            "phridge grad (s)",
+            "cctbx direct F (s)",
+            "cctbx direct grad (s)",
+            "cctbx FFT F (s)",
+            "cctbx FFT grad (s)",
+            "phridge CUDA F (s)",
+            "phridge CUDA grad (s)",
+            "phridge MPS F (s)",
+            "phridge MPS grad (s)",
+            "phridge density (s)",
             "remote grad (s)",
         ],
         [
@@ -186,14 +320,25 @@ def main(argv: list[str] | None = None) -> int:
                 f"{r.length_ratio:.4f}",
                 f"{r.timings.cctbx_f_s:.2f}",
                 f"{r.timings.cctbx_grad_s:.2f}",
+                f"{r.timings.cctbx_fft_f_s:.2f}",
+                f"{r.timings.cctbx_fft_grad_s:.2f}",
                 f"{r.timings.phridge_f_s:.2f}",
                 f"{r.timings.phridge_grad_s:.2f}",
+                f"{r.timings.phridge_mps_f_s:.2f}",
+                f"{r.timings.phridge_mps_grad_s:.2f}",
+                f"{r.timings.phridge_density_s:.2f}",
                 f"{r.timings.remote_grad_s:.2f}",
             ]
             for r in rows
         ],
     )
-    log.para(f"Total wall clock: **{elapsed:.1f} s**.")
+    log.para(f"This-process wall clock: **{elapsed:.1f} s**.")
+    if keep_cuda:
+        log.para(
+            "phridge CUDA F / grad / remote grad are from the 2026-09-05 CUDA run "
+            "(same atom count, `d_min`, and seed); they were not re-timed here."
+        )
+    _write_methods(log)
 
     log.write(args.md)
     return 1 if log.failed else 0

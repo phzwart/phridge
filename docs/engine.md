@@ -162,12 +162,14 @@ to the target ops.
 
 Sampling cost is (expanded atoms) x (box points) x (Gaussian terms); atoms
 are bucketed by cutoff radius and isotropic atoms take a spherical fast
-path. On a 2-core CPU in float64 a 2000-atom P212121 structure at 2 A
-takes ~10 s for F_calc and ~45 s for gradients — this engine is meant for
-a GPU worker (`phridge-worker --device cuda`), where the same work is a
-few hundred million fused exp evaluations. `SfEngineParams.wing_cutoff`
-(default 1e-4; cctbx uses 1e-3) and `quality_factor` trade accuracy for
-box size and grid size.
+path. On CPU, `stamp_backend="auto"` uses a parallel Numba per-atom stamp
+when `numba` is installed (`pip install phridge[numba]`); the eager torch
+chunk path remains the differentiable reference and the fallback. A
+1000-atom P2₁2₁2₁ at 2 Å is ~0.05 s F / ~0.10 s site grads on a laptop
+(see `examples/sf_gradient_benchmark.md`). The older 2-core torch-only
+quote (~10 s F / ~45 s grads at 2000 atoms) is that fallback, not Numba.
+`SfEngineParams.wing_cutoff` (default 1e-4; cctbx uses 1e-3) and
+`quality_factor` trade accuracy for box size and grid size.
 
 The FFT is always `torch.fft.fftn` by default (CUDA cuFFT / CPU torch), so
 the density → FFT → gather graph stays in PyTorch and per-atom gradients
@@ -181,13 +183,18 @@ on CUDA.
 
 For a ~1000-atom end-to-end check against CCTBX `gradients_direct` (F_obs
 from a known model, Gaussian site perturbation, site-gradient cosine and
-length ratio, several space groups, timings)::
+length ratio, several space groups, timings). The same table also times
+CCTBX `algorithm="fft"` / `gradients(..., algorithm="fft")` and phridge
+on CUDA and MPS (MPS is float32). CUDA columns may be reused from a prior
+GPU run when the local machine has no CUDA::
 
     make test-sf-gpu
     # or: make example-sf-gradients   # writes examples/sf_gradient_benchmark.md
+    #     python examples/sf_gradient_benchmark.py --device mps
 
-Uses `Bridge(memory=True, device="cuda")` (no Redis required). Marked
-`pytest.mark.gpu` / `slow` so default `make test` stays fast on CPU-only CI.
+Uses `Bridge(memory=True, device="cuda")` (no Redis required) for the CUDA
+accuracy test. Marked `pytest.mark.gpu` / `slow` so default `make test`
+stays fast on CPU-only CI.
 
 Note: in one process, import cctbx before torch. Importing torch first
 crashes cctbx's Boost.Python extensions, which is one more reason the

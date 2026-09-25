@@ -1,4 +1,4 @@
-"""Large-N structure-factor gradient benchmark helpers (phridge CUDA vs CCTBX).
+"""Large-N structure-factor gradient benchmark helpers (phridge vs CCTBX).
 
 Used by ``tests/test_sf_gradients_gpu.py`` and ``examples/sf_gradient_benchmark.py``.
 Import cctbx before torch in the calling process.
@@ -24,10 +24,15 @@ DEFAULT_QUALITY = 1000.0
 class TimingRow:
     cctbx_f_s: float = 0.0
     cctbx_grad_s: float = 0.0
+    cctbx_fft_f_s: float = 0.0
+    cctbx_fft_grad_s: float = 0.0
     phridge_f_s: float = 0.0
     phridge_grad_s: float = 0.0
+    phridge_mps_f_s: float = 0.0
+    phridge_mps_grad_s: float = 0.0
     remote_f_s: float = 0.0
     remote_grad_s: float = 0.0
+    phridge_density_s: float = 0.0
 
 
 @dataclass
@@ -45,9 +50,27 @@ class SpaceGroupResult:
     device: str = "cuda"
 
 
-def time_call(fn: Callable[[], Any]) -> tuple[Any, float]:
+def _sync_device(device: str) -> None:
+    """Flush queued GPU work so ``perf_counter`` includes device time."""
+    if device.startswith("mps"):
+        import torch
+
+        if hasattr(torch, "mps"):
+            torch.mps.synchronize()
+    elif device.startswith("cuda"):
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+
+def time_call(fn: Callable[[], Any], device: str = "") -> tuple[Any, float]:
+    if device:
+        _sync_device(device)
     t0 = time.perf_counter()
     out = fn()
+    if device:
+        _sync_device(device)
     return out, time.perf_counter() - t0
 
 
@@ -167,13 +190,53 @@ def cctbx_site_grads(xs, miller_set, dtdf: np.ndarray) -> np.ndarray:
     return np.asarray(ref.d_target_d_site_frac(), dtype=np.float64).reshape(-1, 3)
 
 
+def _fft_managers(miller_set, quality_factor: float, wing_cutoff: float = 1e-4):
+    from cctbx.xray.structure_factors import from_scatterers, gradients
+
+    kwargs = dict(miller_set=miller_set, quality_factor=quality_factor, wing_cutoff=wing_cutoff)
+    return from_scatterers(**kwargs), gradients(**kwargs)
+
+
+def cctbx_fft_f(xs, miller_set, quality_factor: float = DEFAULT_QUALITY):
+    """F_calc from CCTBX ``from_scatterers(..., algorithm='fft')``."""
+    mgr, _ = _fft_managers(miller_set, quality_factor)
+    return mgr(xray_structure=xs, miller_set=miller_set, algorithm="fft").f_calc()
+
+
+def cctbx_fft_site_grads(
+    xs,
+    miller_set,
+    dtdf: np.ndarray,
+    quality_factor: float = DEFAULT_QUALITY,
+) -> np.ndarray:
+    """Site-frac gradients from CCTBX ``gradients(..., algorithm='fft')``."""
+    from cctbx.array_family import flex
+
+    _, g_mgr = _fft_managers(miller_set, quality_factor)
+    g = g_mgr(
+        xray_structure=xs,
+        u_iso_refinable_params=None,
+        miller_set=miller_set,
+        d_target_d_f_calc=flex.complex_double(dtdf),
+        n_parameters=0,
+        algorithm="fft",
+    )
+    return np.asarray(g.d_target_d_site_frac(), dtype=np.float64).reshape(-1, 3)
+
+
 def _phridge_engine(xs, hkl: np.ndarray, d_min: float, device: str, quality_factor: float = DEFAULT_QUALITY):
     from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
     from phridge.worker.ops.xtal_ops import scattering_model
     from phridge.worker.xtal.engine import EngineParams, StructureFactorEngine
 
     model = scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
-    params = EngineParams(d_min=d_min, quality_factor=quality_factor)
+    gpu = device.startswith(("mps", "cuda"))
+    params = EngineParams(
+        d_min=d_min,
+        quality_factor=quality_factor,
+        compile_stamp=gpu,
+        stamp_backend="auto",
+    )
     return StructureFactorEngine(model, hkl, params, device=device)
 
 
@@ -185,11 +248,17 @@ def phridge_f_and_site_grads(
     device: str = "cuda",
     quality_factor: float = DEFAULT_QUALITY,
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
-    """Direct CUDA/CPU engine: returns ``(f_calc, site_frac_grads, t_f, t_grad)``."""
+    """Engine on ``device``: returns ``(f_calc, site_frac_grads, t_f, t_grad, t_density)``."""
     eng = _phridge_engine(xs, hkl, d_min, device=device, quality_factor=quality_factor)
-    fc, t_f = time_call(eng.f_calc_numpy)
-    grads, t_g = time_call(lambda: eng.gradients(dtdf))
-    return fc, np.asarray(grads["site_frac"], dtype=np.float64), t_f, t_g
+    if device.startswith(("mps", "cuda")) or eng._stamp_kind() == "numba":
+        # Drop compile / Numba JIT / first-alloc off the timed calls.
+        eng.f_calc_numpy()
+        eng.gradients(dtdf)
+        _sync_device(device)
+    _, t_rho = time_call(lambda: eng.density(*eng.tensors()), device=device)
+    fc, t_f = time_call(eng.f_calc_numpy, device=device)
+    grads, t_g = time_call(lambda: eng.gradients(dtdf), device=device)
+    return fc, np.asarray(grads["site_frac"], dtype=np.float64), t_f, t_g, t_rho
 
 
 def remote_f_and_site_grads(
@@ -210,8 +279,9 @@ def remote_f_and_site_grads(
         miller_set,
         params=SfEngineParams(d_min=d_min, quality_factor=quality_factor),
     )
-    fc_arr, t_f = time_call(lambda: np.asarray(engine.f_calc().data(), dtype=np.complex128))
-    grads, t_g = time_call(lambda: engine.gradients(dtdf))
+    device = getattr(bridge, "device", "") or ""
+    fc_arr, t_f = time_call(lambda: np.asarray(engine.f_calc().data(), dtype=np.complex128), device=device)
+    grads, t_g = time_call(lambda: engine.gradients(dtdf), device=device)
     site = np.asarray(grads.raw.d_site_frac, dtype=np.float64).reshape(-1, 3)
     return fc_arr, site, t_f, t_g
 
@@ -227,6 +297,8 @@ def run_space_group(
     seed: int = 0,
     bridge=None,
     time_remote: bool = True,
+    time_phridge: bool = True,
+    time_cctbx_fft: bool = True,
 ) -> SpaceGroupResult:
     """Full workflow for one space group: F_obs → perturb → compare grads."""
     xs_true = build_structure(space_group, n_atoms=n_atoms, seed=seed)
@@ -253,21 +325,40 @@ def run_space_group(
 
     g_ref, t_cctbx_g = time_call(_cctbx_g)
 
-    hkl = np.asarray(list(fc_pert.indices()), dtype=np.int32)
-    fc_mine, g_mine, t_pf, t_pg = phridge_f_and_site_grads(
-        xs_pert, hkl, dtdf, d_min=d_min, device=device, quality_factor=quality_factor
-    )
-    ref_fc = np.asarray(fc_pert.data(), dtype=np.complex128)
-    f_rel = rel_max(ref_fc, fc_mine)
-    f_r = float(np.abs(np.abs(fc_mine) - np.abs(ref_fc)).sum() / max(np.abs(ref_fc).sum(), 1e-300))
-    metrics = grad_vector_metrics(g_ref, g_mine)
-
     timings = TimingRow(
         cctbx_f_s=t_cctbx_f,
         cctbx_grad_s=t_cctbx_g,
-        phridge_f_s=t_pf,
-        phridge_grad_s=t_pg,
     )
+    if time_cctbx_fft:
+        _, t_fft_f = time_call(lambda: cctbx_fft_f(xs_pert, fc_pert, quality_factor))
+        _, t_fft_g = time_call(lambda: cctbx_fft_site_grads(xs_pert, fc_pert, dtdf, quality_factor))
+        timings.cctbx_fft_f_s = t_fft_f
+        timings.cctbx_fft_grad_s = t_fft_g
+
+    f_rel = 0.0
+    f_r = 0.0
+    metrics = {
+        "cosine": 1.0,
+        "angle_deg": 0.0,
+        "length_ratio": 1.0,
+        "rel_max": 0.0,
+    }
+    if time_phridge:
+        hkl = np.asarray(list(fc_pert.indices()), dtype=np.int32)
+        fc_mine, g_mine, t_pf, t_pg, t_rho = phridge_f_and_site_grads(
+            xs_pert, hkl, dtdf, d_min=d_min, device=device, quality_factor=quality_factor
+        )
+        timings.phridge_density_s = t_rho
+        ref_fc = np.asarray(fc_pert.data(), dtype=np.complex128)
+        f_rel = rel_max(ref_fc, fc_mine)
+        f_r = float(np.abs(np.abs(fc_mine) - np.abs(ref_fc)).sum() / max(np.abs(ref_fc).sum(), 1e-300))
+        metrics = grad_vector_metrics(g_ref, g_mine)
+        if device.startswith("mps"):
+            timings.phridge_mps_f_s = t_pf
+            timings.phridge_mps_grad_s = t_pg
+        else:
+            timings.phridge_f_s = t_pf
+            timings.phridge_grad_s = t_pg
 
     if time_remote and bridge is not None:
         _, _, t_rf, t_rg = remote_f_and_site_grads(
@@ -295,7 +386,8 @@ def format_result_table(rows: list[SpaceGroupResult]) -> str:
     """Plain-text summary table for pytest -s / example logs."""
     hdr = (
         f"{'SG':<10} {'Nat':>5} {'Nrefl':>7} {'R(F)':>8} {'cos':>8} "
-        f"{'ang°':>7} {'|g|/|g|':>8} {'cctbxG':>8} {'phrG':>8} {'remG':>8}"
+        f"{'ang°':>7} {'|g|/|g|':>8} {'dirG':>7} {'fftG':>7} {'cudaG':>7} "
+        f"{'mpsG':>7} {'dens':>7} {'remG':>7}"
     )
     lines = [hdr, "-" * len(hdr)]
     for r in rows:
@@ -303,6 +395,7 @@ def format_result_table(rows: list[SpaceGroupResult]) -> str:
         lines.append(
             f"{r.space_group:<10} {r.n_atoms:5d} {r.n_refl:7d} {r.f_r_factor:8.2e} "
             f"{r.cosine:8.5f} {r.angle_deg:7.3f} {r.length_ratio:8.4f} "
-            f"{t.cctbx_grad_s:8.2f} {t.phridge_grad_s:8.2f} {t.remote_grad_s:8.2f}"
+            f"{t.cctbx_grad_s:7.2f} {t.cctbx_fft_grad_s:7.2f} {t.phridge_grad_s:7.2f} "
+            f"{t.phridge_mps_grad_s:7.2f} {t.phridge_density_s:7.2f} {t.remote_grad_s:7.2f}"
         )
     return "\n".join(lines)

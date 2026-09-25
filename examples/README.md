@@ -131,8 +131,9 @@ python examples/sf_gradient_benchmark.py
 
 Writes [`sf_gradient_benchmark.md`](sf_gradient_benchmark.md): ~1000-atom
 structures over several space groups, F_obs from a known model, small
-Gaussian site shake, then CCTBX `gradients_direct` vs phridge CUDA site
-gradients (cosine / length ratio + timings). Requires CUDA.
+Gaussian site shake, then CCTBX `gradients_direct` (accuracy) plus CCTBX
+FFT and phridge CUDA / MPS timings. CUDA check: `make test-sf-gpu`.
+Local MPS: `python examples/sf_gradient_benchmark.py --device mps`.
 
 ## External package: agentsg cell reduction
 

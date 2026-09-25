@@ -688,3 +688,68 @@ def test_gauss_newton_blocks_match_hvp_at_nonzero_residual():
             hv = np.asarray(bridge.call("gauss_newton_hvp", xray=xray, table=table, params=refiner.params, target=target, hkl=hkl, v=v).d_site_frac)
             assert abs(hv[i, a] - blocks[i, a, a]) < 1e-2 * abs(hv[i, a])  # FFT-vs-direct accuracy; the bug gave 30-50%
             assert abs(hv[i, (a + 1) % 3] - blocks[i, a, (a + 1) % 3]) < 1e-2 * abs(hv[i, a])
+
+
+def test_numba_stamp_matches_torch_f_and_grads():
+    """CPU Numba per-atom stamp vs torch chunk path (F + first-order grads)."""
+    from phridge.sfcalc.engine.stamp_numba import numba_available
+
+    if not numba_available():
+        pytest.skip("numba required")
+    xs = _structure("P21", n_repeat=2, aniso=True, anomalous=True, seed=3)
+    d_min = 2.0
+    fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl = np.array(list(fc.indices()))
+    model = scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
+    torch_eng = StructureFactorEngine(
+        model, hkl, EngineParams(d_min=d_min, quality_factor=1000, stamp_backend="torch")
+    )
+    nb_eng = StructureFactorEngine(
+        model, hkl, EngineParams(d_min=d_min, quality_factor=1000, stamp_backend="numba")
+    )
+    f_torch = torch_eng.f_calc_numpy()
+    f_nb = nb_eng.f_calc_numpy()
+    assert _rel(f_torch, f_nb) < 1e-6
+    rng = np.random.default_rng(0)
+    dtdf = rng.normal(size=len(hkl)) + 1j * rng.normal(size=len(hkl))
+    g_t = torch_eng.gradients(dtdf)
+    g_n = nb_eng.gradients(dtdf)
+    for key in ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp"):
+        a = np.asarray(g_t[key]).ravel()
+        b = np.asarray(g_n[key]).ravel()
+        if np.linalg.norm(a) < 1e-12 and np.linalg.norm(b) < 1e-12:
+            continue
+        cos = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+        assert cos > 0.999, key
+        assert _rel(a, b) < 2e-4, key
+
+
+@pytest.mark.gpu
+def test_triton_stamp_matches_torch_f_and_site_grads():
+    """CUDA Triton iso forward vs torch stamp; grads use torch VJP either way."""
+    from phridge.sfcalc.engine.stamp_triton import triton_available
+
+    if not torch.cuda.is_available() or not triton_available():
+        pytest.skip("CUDA + triton required")
+    xs = _structure("P21", n_repeat=3, aniso=False, anomalous=False, seed=1)
+    d_min = 2.0
+    fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl = np.array(list(fc.indices()))
+    model = scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
+    torch_eng = StructureFactorEngine(
+        model, hkl, EngineParams(d_min=d_min, quality_factor=1000, stamp_backend="torch"), device="cuda"
+    )
+    tri_eng = StructureFactorEngine(
+        model, hkl, EngineParams(d_min=d_min, quality_factor=1000, stamp_backend="triton"), device="cuda"
+    )
+    f_torch = torch_eng.f_calc_numpy()
+    f_tri = tri_eng.f_calc_numpy()
+    assert _rel(f_torch, f_tri) < 1e-4
+    rng = np.random.default_rng(0)
+    dtdf = rng.normal(size=len(hkl)) + 1j * rng.normal(size=len(hkl))
+    g_t = torch_eng.gradients(dtdf)["site_frac"]
+    g_r = tri_eng.gradients(dtdf)["site_frac"]
+    a = g_t.ravel()
+    b = g_r.ravel()
+    cos = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+    assert cos > 0.99

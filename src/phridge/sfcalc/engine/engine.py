@@ -96,6 +96,8 @@ class EngineParams:
     # Opt-in numpy FFT only for rare CPU torch/MKL threading bugs (see docs/engine.md).
     cpu_numpy_fft: bool = False
     n_radius_buckets: int = 4  # group expanded atoms by cutoff radius to shrink sampling boxes
+    compile_stamp: bool = False  # torch.compile the per-chunk stamp (off in unit tests)
+    stamp_backend: str = "auto"  # auto | torch | triton | numba
 
 
 def _fft_friendly(n: int) -> int:
@@ -122,6 +124,92 @@ def _iso_gauss(r2, sigma2):
 
     norm = (2.0 * math.pi * sigma2) ** (-1.5)
     return norm[:, None] * torch.exp(-0.5 * r2 / sigma2[:, None])
+
+
+def _points_core(xf, offsets, r_cut, o_mat, n_real_f, n_real_i):
+    """Grid points around atoms xf (C,3): cartesian offsets, flat indices, cutoff mask."""
+    import torch
+
+    g0 = torch.round(xf.detach() * n_real_f).to(torch.int64)
+    g = g0[:, None, :] + offsets[None, :, :]
+    r_frac = g.to(xf.dtype) / n_real_f - xf[:, None, :]
+    r_cart = r_frac @ o_mat.T
+    inside = (r_cart.detach() ** 2).sum(-1) <= r_cut[:, None] ** 2
+    flat = ((g[..., 0] % n_real_i[0]) * n_real_i[1] + (g[..., 1] % n_real_i[1])) * n_real_i[2] + (g[..., 2] % n_real_i[2])
+    return r_cart, flat, inside
+
+
+def _iso_terms_core(r_cart, u_iso, a, b, u_extra):
+    r2 = (r_cart**2).sum(-1)
+    sigma2_base = u_iso + u_extra
+    base = _iso_gauss(r2, sigma2_base)
+    sigma2_k = sigma2_base[:, None] + b / EIGHT_PI2
+    norm = (2.0 * math.pi * sigma2_k) ** (-1.5)
+    gauss_k = norm[:, :, None] * (-0.5 * r2[:, None, :] / sigma2_k[:, :, None]).exp()
+    terms = (a[:, :, None] * gauss_k).sum(1)
+    return base, terms
+
+
+def _gauss_core(r_cart, u_cart, extra_iso):
+    import torch
+
+    eye = torch.eye(3, dtype=r_cart.dtype, device=r_cart.device)
+    if torch.is_tensor(extra_iso) and extra_iso.ndim == 1:
+        cov = u_cart + extra_iso[:, None, None] * eye
+    else:
+        cov = u_cart + extra_iso * eye
+    prec, det = _inv_det_3x3(cov)
+    x, y, z = r_cart[..., 0], r_cart[..., 1], r_cart[..., 2]
+    p = lambda i, j: prec[:, i, j][:, None]  # noqa: E731
+    q = p(0, 0) * x * x + p(1, 1) * y * y + p(2, 2) * z * z + 2.0 * (p(0, 1) * x * y + p(0, 2) * x * z + p(1, 2) * y * z)
+    norm = (2.0 * math.pi) ** (-1.5) * det.rsqrt()
+    return norm[:, None] * torch.exp(-0.5 * q)
+
+
+def _aniso_terms_core(r_cart, u_cart, a, b, u_extra):
+    base = _gauss_core(r_cart, u_cart, u_extra)
+    c, k = int(a.shape[0]), int(a.shape[1])
+    p = int(r_cart.shape[1])
+    extra = b / EIGHT_PI2 + u_extra
+    r_rep = r_cart[:, None, :, :].expand(c, k, p, 3).reshape(c * k, p, 3)
+    u_rep = u_cart[:, None, :, :].expand(c, k, 3, 3).reshape(c * k, 3, 3)
+    gauss_k = _gauss_core(r_rep, u_rep, extra.reshape(c * k)).reshape(c, k, p)
+    terms = (a[:, :, None] * gauss_k).sum(1)
+    return base, terms
+
+
+def _stamp_chunk(
+    grid_re,
+    grid_im,
+    xf,
+    offsets,
+    r_cut,
+    u_iso,
+    u_cart,
+    a,
+    b,
+    c,
+    w,
+    fp,
+    fdp,
+    o_mat,
+    n_real_f,
+    n_real_i,
+    u_extra,
+    aniso: bool,
+):
+    """Paint one chunk of expanded atoms onto the flat real/imag grids."""
+    r_cart, flat, inside = _points_core(xf, offsets, r_cut, o_mat, n_real_f, n_real_i)
+    if aniso:
+        base, terms = _aniso_terms_core(r_cart, u_cart, a, b, u_extra)
+    else:
+        base, terms = _iso_terms_core(r_cart, u_iso, a, b, u_extra)
+    rho_re = (terms + (c + fp)[:, None] * base) * w[:, None] * inside
+    grid_re = grid_re.index_add(0, flat.reshape(-1), rho_re.reshape(-1))
+    if grid_im is not None:
+        rho_im = fdp[:, None] * base * w[:, None] * inside
+        grid_im = grid_im.index_add(0, flat.reshape(-1), rho_im.reshape(-1))
+    return grid_re, grid_im
 
 
 def _inv_det_3x3(m):
@@ -235,7 +323,16 @@ class StructureFactorEngine:
 
         cell = model.unit_cell
         self.n_real = tuple(int(x) for x in (params.n_real or default_gridding(cell, params.d_min, params.grid_resolution_factor)))
+        self.n_real_f = torch.as_tensor(self.n_real, dtype=self.dtype, device=device)
+        self.n_real_i = torch.as_tensor(self.n_real, dtype=torch.int64, device=device)
         self.volume = cell_volume(cell)
+        if params.compile_stamp:
+            try:
+                self._stamp_chunk_fn = torch.compile(_stamp_chunk, fullgraph=False)
+            except Exception:
+                self._stamp_chunk_fn = _stamp_chunk
+        else:
+            self._stamp_chunk_fn = _stamp_chunk
         o = orthogonalization_matrix(cell)
         self.o_mat = torch.as_tensor(o, dtype=self.dtype, device=device)
         self.u_extra = params.u_extra if params.u_extra is not None else u_base(params.d_min, params.grid_resolution_factor, params.quality_factor)
@@ -282,6 +379,7 @@ class StructureFactorEngine:
         self.r_cut_exp = torch.as_tensor(r_cut_exp, dtype=self.dtype, device=self.device)
         o_inv = np.linalg.inv(o)
         frac_scale = np.linalg.norm(o_inv, axis=1) * n  # cartesian radius -> grid units per axis
+        self.frac_scale = frac_scale
 
         # bucket by box half-width (largest axis) so small atoms use small boxes
         half_all = np.ceil(r_cut_exp[:, None] * frac_scale[None, :]).astype(int)  # (NS,3)
@@ -314,104 +412,119 @@ class StructureFactorEngine:
         u_exp = torch.einsum("sij,njk,slk->nsil", self.rot, u, self.rot)
         return x.reshape(-1, 3), u_exp.reshape(-1, 3, 3)
 
-    def density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
-        """Sample the symmetry-expanded model onto the grid. Returns (complex) grid.
+    def _stamp_kind(self) -> str:
+        """Resolved stamp implementation: ``torch``, ``triton``, or ``numba``."""
+        backend = (self.params.stamp_backend or "auto").lower()
+        device = str(self.device)
+        if backend == "torch":
+            return "torch"
+        if backend == "triton":
+            from phridge.sfcalc.engine.stamp_triton import triton_available
 
-        Isotropic atoms take a spherical fast path (one |r|^2 per point);
-        anisotropic atoms go through the full 3x3 covariance. Expanded atoms
-        are bucketed by cutoff radius so small atoms do not pay for the
-        largest atom's box.
-        """
+            if triton_available() and device.startswith("cuda"):
+                return "triton"
+            raise RuntimeError("stamp_backend='triton' requires CUDA + triton")
+        if backend == "numba":
+            from phridge.sfcalc.engine.stamp_numba import numba_available
+
+            if numba_available() and not device.startswith(("cuda", "mps")):
+                return "numba"
+            raise RuntimeError("stamp_backend='numba' requires CPU + numba")
+        if backend == "auto":
+            if device.startswith("cuda"):
+                from phridge.sfcalc.engine.stamp_triton import triton_available
+
+                if triton_available():
+                    return "triton"
+            elif not device.startswith("mps"):
+                from phridge.sfcalc.engine.stamp_numba import numba_available
+
+                if numba_available():
+                    return "numba"
+            return "torch"
+        raise ValueError(f"unknown stamp_backend {self.params.stamp_backend!r}")
+
+    def _want_triton(self) -> bool:
+        return self._stamp_kind() == "triton"
+
+    def _expanded_stamp_inputs(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
         torch = self.torch
         n_atoms, s = sites_frac.shape[0], self.rot.shape[0]
-        x_exp, ustar_exp = self.expand(sites_frac, u_star)  # (NS,3), (NS,3,3)
+        x_exp, ustar_exp = self.expand(sites_frac, u_star)
         atom = torch.arange(n_atoms, device=self.device).repeat_interleave(s)
-        rep = lambda t: t.repeat_interleave(s, dim=0)  # noqa: E731  (deterministic backward)
+        rep = lambda t: t.repeat_interleave(s, dim=0)  # noqa: E731
+        return {
+            "x_exp": x_exp,
+            "u_cart_aniso": self.o_mat @ ustar_exp @ self.o_mat.T,
+            "u_iso_exp": rep(u_iso),
+            "weight": rep(occupancy * self.weight_wo_occ),
+            "fp_exp": rep(fp),
+            "fdp_exp": rep(fdp),
+            "a_all": self.gauss_a[atom],
+            "b_all": self.gauss_b[atom],
+            "c_all": self.gauss_c[atom],
+            "atom": atom,
+            "aniso_exp": self.aniso[atom],
+        }
 
-        u_cart_aniso = self.o_mat @ ustar_exp @ self.o_mat.T  # (NS,3,3)
-        u_iso_exp = rep(u_iso)
-        weight = rep(occupancy * self.weight_wo_occ)  # (NS,)
-        fp_exp, fdp_exp = rep(fp), rep(fdp)
-        a_all, b_all, c_all = self.gauss_a[atom], self.gauss_b[atom], self.gauss_c[atom]
-
+    def _density_torch(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
+        """Sample the symmetry-expanded model onto the grid (torch chunk path)."""
+        torch = self.torch
+        pack = self._expanded_stamp_inputs(sites_frac, occupancy, u_iso, u_star, fp, fdp)
         total = int(np.prod(self.n_real))
         grid_re = torch.zeros(total, dtype=self.dtype, device=self.device)
         has_imag = bool(torch.any(fdp != 0))
         grid_im = torch.zeros(total, dtype=self.dtype, device=self.device) if has_imag else None
+        stamp = self._stamp_chunk_fn
+        u_extra = grid_re.new_tensor(self.u_extra)
 
         for bucket, offsets in zip(self.buckets, self.bucket_offsets):
-            members = bucket  # indices into expanded atoms (int64 tensor)
-            if members.numel() == 0:
+            if bucket.numel() == 0:
                 continue
             for aniso_flag in (False, True):
-                sel = members[self.aniso[atom[members]] == aniso_flag]
+                sel = bucket[pack["aniso_exp"][bucket] == aniso_flag]
                 if sel.numel() == 0:
                     continue
                 p = offsets.shape[0]
                 chunk = max(1, self.params.max_chunk_points // p)
                 for start in range(0, sel.numel(), chunk):
                     idx = sel[start : start + chunk]
-                    r_cart, flat, inside = self._points(x_exp[idx], offsets, self.r_cut_exp[idx])
-                    if aniso_flag:
-                        base, terms = self._aniso_terms(r_cart, u_cart_aniso[idx], a_all[idx], b_all[idx])
-                    else:
-                        base, terms = self._iso_terms(r_cart, u_iso_exp[idx], a_all[idx], b_all[idx])
-                    w = weight[idx]
-                    rho_re = (terms + (c_all[idx] + fp_exp[idx])[:, None] * base) * w[:, None] * inside
-                    grid_re = grid_re.index_add(0, flat.reshape(-1), rho_re.reshape(-1))
-                    if has_imag:
-                        rho_im = fdp_exp[idx][:, None] * base * w[:, None] * inside
-                        grid_im = grid_im.index_add(0, flat.reshape(-1), rho_im.reshape(-1))
+                    grid_re, grid_im = stamp(
+                        grid_re,
+                        grid_im,
+                        pack["x_exp"][idx],
+                        offsets,
+                        self.r_cut_exp[idx],
+                        pack["u_iso_exp"][idx],
+                        pack["u_cart_aniso"][idx],
+                        pack["a_all"][idx],
+                        pack["b_all"][idx],
+                        pack["c_all"][idx],
+                        pack["weight"][idx],
+                        pack["fp_exp"][idx],
+                        pack["fdp_exp"][idx],
+                        self.o_mat,
+                        self.n_real_f,
+                        self.n_real_i,
+                        u_extra,
+                        aniso_flag,
+                    )
 
         grid = grid_re if grid_im is None else torch.complex(grid_re, grid_im)
         return grid.reshape(self.n_real)
 
-    def _points(self, xf, offsets, r_cut):
-        """Grid points around atoms xf (C,3): cartesian offsets, flat indices, cutoff mask."""
-        torch = self.torch
-        n_grid = torch.as_tensor(self.n_real, dtype=self.dtype, device=self.device)
-        n_int = torch.as_tensor(self.n_real, dtype=torch.int64, device=self.device)
-        g0 = torch.round(xf.detach() * n_grid).to(torch.int64)  # nearest grid point (constant)
-        g = g0[:, None, :] + offsets[None, :, :]  # (C,P,3)
-        r_frac = g.to(self.dtype) / n_grid - xf[:, None, :]
-        r_cart = r_frac @ self.o_mat.T  # (C,P,3); K=3 GEMM, benign
-        inside = (r_cart.detach() ** 2).sum(-1) <= r_cut[:, None] ** 2
-        flat = ((g[..., 0] % n_int[0]) * n_int[1] + (g[..., 1] % n_int[1])) * n_int[2] + (g[..., 2] % n_int[2])
-        return r_cart, flat, inside
+    def density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
+        """Sample the symmetry-expanded model onto the grid. Returns (complex) grid."""
+        kind = self._stamp_kind()
+        if kind == "triton":
+            from phridge.sfcalc.engine.stamp_triton import triton_density
 
-    def _iso_terms(self, r_cart, u_iso, a, b):
-        """Spherical Gaussians. Returns (base, sum_k a_k G_k) with base = G(u_iso + u_extra)."""
-        torch = self.torch
-        r2 = (r_cart**2).sum(-1)  # (C,P)
-        sigma2_base = u_iso + self.u_extra  # (C,)
-        base = _iso_gauss(r2, sigma2_base)
-        terms = torch.zeros_like(r2)
-        for k in range(a.shape[1]):
-            terms = terms + a[:, k][:, None] * _iso_gauss(r2, sigma2_base + b[:, k] / EIGHT_PI2)
-        return base, terms
+            return triton_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
+        if kind == "numba":
+            from phridge.sfcalc.engine.stamp_numba import numba_density
 
-    def _aniso_terms(self, r_cart, u_cart, a, b):
-        torch = self.torch
-        base = self._gauss(r_cart, u_cart, self.u_extra)
-        terms = torch.zeros_like(base)
-        for k in range(a.shape[1]):
-            terms = terms + a[:, k][:, None] * self._gauss(r_cart, u_cart, b[:, k] / EIGHT_PI2 + self.u_extra)
-        return base, terms
-
-    def _gauss(self, r_cart, u_cart, extra_iso):
-        """Normalized 3D Gaussian with covariance (u_cart + extra_iso I). r_cart: (C,P,3)."""
-        torch = self.torch
-        eye = torch.eye(3, dtype=self.dtype, device=self.device)
-        cov = u_cart + extra_iso[:, None, None] * eye if torch.is_tensor(extra_iso) and extra_iso.ndim == 1 else u_cart + extra_iso * eye
-        prec, det = _inv_det_3x3(cov)  # closed form: no LAPACK calls inside the hot loop
-        # quadratic form r^T prec r written out (no batched GEMM: its backward
-        # reduces over the P axis through MKL, which misbehaves with threads on
-        # some CPU builds; elementwise products are exact and deterministic)
-        x, y, z = r_cart[..., 0], r_cart[..., 1], r_cart[..., 2]
-        p = lambda i, j: prec[:, i, j][:, None]  # noqa: E731
-        q = p(0, 0) * x * x + p(1, 1) * y * y + p(2, 2) * z * z + 2.0 * (p(0, 1) * x * y + p(0, 2) * x * z + p(1, 2) * y * z)
-        norm = (2.0 * math.pi) ** (-1.5) * det.rsqrt()
-        return norm[:, None] * torch.exp(-0.5 * q)
+            return numba_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
+        return self._density_torch(sites_frac, occupancy, u_iso, u_star, fp, fdp)
 
     def f_calc(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
         """Structure factors at self.hkl, complex tensor (N_refl,)."""

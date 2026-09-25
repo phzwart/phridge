@@ -20,6 +20,8 @@ dependencies = [
 client = ["cctbx-base"]
 cctbx = ["cctbx-base"]
 worker = ["torch"]
+triton = ["torch", "triton"]
+numba = ["numba"]
 agentsg = [
     "agentsg @ git+https://github.com/phzwart/agentsg.git#subdirectory=agentsg",
 ]
@@ -29,6 +31,7 @@ dev = [
     "linkml>=1.8",
     "cctbx-base",
     "torch",
+    "numba",
 ]
 
 [project.scripts]
