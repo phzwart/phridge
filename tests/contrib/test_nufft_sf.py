@@ -306,3 +306,209 @@ def test_plan_bound_is_honest():
         ref = _direct_f_calc(eng.model, hkl, atom_indices=g.atom_indices)
         r = _r_factor(f_g, ref)
         assert r <= tau, f"group {gi} type={g.type_index} n={len(g.atom_indices)} R={r} > tau={tau}"
+
+
+def _toy_mixed_iso(n_repeat: int = 3, seed: int = 0):
+    """C/N/O/S isotropic atoms with random U."""
+    from phridge.sfcalc.engine.engine import ScatteringModel
+    from phridge.sfcalc.engine.symmetry import identity_ops
+
+    rng = np.random.default_rng(seed)
+    n_types = 4
+    n = n_types * n_repeat
+    rot, trans = identity_ops()
+    gauss_a = np.array(
+        [
+            [2.31, 1.02, 1.5886, 0.865],
+            [12.2126, 3.1322, 2.0125, 1.1663],
+            [3.0485, 2.2868, 1.5463, 0.867],
+            [6.9053, 5.2034, 1.4379, 1.5863],
+        ],
+        dtype=np.float64,
+    )
+    gauss_b = np.array(
+        [
+            [20.8439, 10.2075, 0.5687, 51.6512],
+            [0.0057, 9.8933, 28.9975, 0.5826],
+            [13.2771, 5.7011, 0.3239, 32.9089],
+            [1.4679, 22.2151, 0.2536, 56.172],
+        ],
+        dtype=np.float64,
+    )
+    gauss_c = np.array([0.2156, 0.0, 0.2508, 0.8669], dtype=np.float64)
+    return ScatteringModel(
+        unit_cell=(18.0, 16.0, 20.0, 90.0, 90.0, 90.0),
+        sites_frac=rng.random((n, 3)),
+        occupancy=rng.uniform(0.7, 1.0, size=n),
+        u_iso=rng.uniform(0.01, 0.15, size=n),
+        u_star=np.zeros((n, 6)),
+        anisotropic=np.zeros(n, dtype=bool),
+        fp=np.zeros(n),
+        fdp=np.zeros(n),
+        type_index=np.repeat(np.arange(n_types), n_repeat),
+        gauss_a=gauss_a,
+        gauss_b=gauss_b,
+        gauss_c=gauss_c,
+        rot=rot,
+        trans=trans,
+        multiplicity=np.ones(n, dtype=np.int64),
+    )
+
+
+def _toy_aniso_anom(n_atoms: int = 10, seed: int = 5, se_like: bool = False):
+    """Mixed iso/aniso with anomalous scattering."""
+    from phridge.sfcalc.engine.cell import orthogonalization_matrix
+    from phridge.sfcalc.engine.engine import ScatteringModel
+    from phridge.sfcalc.engine.symmetry import identity_ops
+
+    rng = np.random.default_rng(seed)
+    rot, trans = identity_ops()
+    cell = (15.0, 14.0, 16.0, 90.0, 90.0, 90.0)
+    o = orthogonalization_matrix(cell)
+    o_inv = np.linalg.inv(o)
+    aniso = np.zeros(n_atoms, dtype=bool)
+    aniso[n_atoms // 2 :] = True
+    u_iso = rng.uniform(0.02, 0.08, size=n_atoms)
+    u_star = np.zeros((n_atoms, 6))
+    for j in np.where(aniso)[0]:
+        diag = rng.uniform(0.02, 0.08, size=3)
+        u_cart = np.diag(diag)
+        u_s = o_inv @ u_cart @ o_inv.T
+        u_star[j] = [u_s[0, 0], u_s[1, 1], u_s[2, 2], u_s[0, 1], u_s[0, 2], u_s[1, 2]]
+    n_types = 2 if se_like else 1
+    type_index = np.zeros(n_atoms, dtype=np.int64)
+    gauss_a = np.array([[2.31, 1.02, 1.5886, 0.865]], dtype=np.float64)
+    gauss_b = np.array([[20.8439, 10.2075, 0.5687, 51.6512]], dtype=np.float64)
+    gauss_c = np.array([0.2156], dtype=np.float64)
+    fp = np.full(n_atoms, 0.3)
+    fdp = np.full(n_atoms, 0.7)
+    if se_like:
+        type_index[-1] = 1
+        gauss_a = np.vstack([gauss_a, np.array([[17.0, 5.0, 3.0, 2.0]])])
+        gauss_b = np.vstack([gauss_b, np.array([[2.0, 0.5, 12.0, 30.0]])])
+        gauss_c = np.append(gauss_c, 1.0)
+        fp[-1] = -4.0
+        fdp[-1] = 3.0
+    return ScatteringModel(
+        unit_cell=cell,
+        sites_frac=rng.random((n_atoms, 3)),
+        occupancy=np.ones(n_atoms),
+        u_iso=u_iso,
+        u_star=u_star,
+        anisotropic=aniso,
+        fp=fp,
+        fdp=fdp,
+        type_index=type_index,
+        gauss_a=gauss_a,
+        gauss_b=gauss_b,
+        gauss_c=gauss_c,
+        rot=rot,
+        trans=trans,
+        multiplicity=np.ones(n_atoms, dtype=np.int64),
+    )
+
+
+@pytest.mark.parametrize("d_min", [2.0, 1.5, 1.0])
+def test_mixed_iso_nmax_vs_direct(d_min):
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    model = _toy_mixed_iso(n_repeat=3, seed=6)
+    hmax = int(np.ceil(max(model.unit_cell[:3]) / d_min) + 1)
+    hkl = _miller_sphere(d_min, model.unit_cell, max_index=hmax)
+    tau = 1e-4
+    eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=d_min, n_max=2, tau=tau, eps=1e-8))
+    ref = _direct_f_calc(model, hkl)
+    r2 = _r_factor(eng.f_calc_numpy(), ref)
+    assert r2 <= 3e-4, f"d_min={d_min} n_max=2 R(F)={r2}"
+    plan = eng.plan
+    rs = []
+    for n in (0, 1, 2, 3):
+        eng.apply_plan(plan.with_order(n))
+        rs.append(_r_factor(eng.f_calc_numpy(), ref))
+    for a, b, n in zip(rs, rs[1:], (0, 1, 2)):
+        assert b <= a + 1e-12, f"d_min={d_min} R not monotone at n={n}->{n+1}: {rs}"
+
+
+def test_mixed_iso_cctbx():
+    pytest.importorskip("cctbx")
+    xs = _structure("P21", elements=("C", "N", "O", "S"), n_repeat=3, seed=3)
+    for d_min in (2.0, 1.5, 1.0):
+        fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+        hkl = np.array(list(fc.indices()))
+        ref = np.array(fc.data())
+        eng = _nufft_engine(xs, hkl, d_min, n_max=2, tau=1e-4, eps=1e-8)
+        r = _r_factor(eng.f_calc_numpy(), ref)
+        assert r <= 3e-4, f"d_min={d_min} R(F)={r}"
+        plan = eng.plan
+        rs = []
+        for n in (0, 1, 2, 3):
+            eng.apply_plan(plan.with_order(n))
+            rs.append(_r_factor(eng.f_calc_numpy(), ref))
+        for a, b in zip(rs, rs[1:]):
+            assert b <= a + 1e-12, f"cctbx monotone failed {rs}"
+
+
+def test_aniso_anomalous_vs_direct():
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    d_min = 1.5
+    for se_like in (False, True):
+        model = _toy_aniso_anom(n_atoms=10, seed=7, se_like=se_like)
+        hkl = _miller_sphere(d_min, model.unit_cell, max_index=12)
+        eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=d_min, n_max=2, tau=1e-4, eps=1e-8))
+        r = _r_factor(eng.f_calc_numpy(), _direct_f_calc(model, hkl))
+        assert r <= 3e-4, f"se_like={se_like} R(F)={r}"
+
+
+def test_aniso_anomalous_cctbx():
+    pytest.importorskip("cctbx")
+    xs = _structure("P21", elements=("C", "N", "O", "S"), n_repeat=3, aniso=True, anomalous=True, seed=8)
+    d_min = 1.5
+    fc = xs.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl = np.array(list(fc.indices()))
+    eng = _nufft_engine(xs, hkl, d_min, n_max=2, tau=1e-4, eps=1e-8)
+    r = _r_factor(eng.f_calc_numpy(), np.array(fc.data()))
+    assert r <= 3e-4, f"aniso+anom R(F)={r}"
+    xs2 = _structure("P1", elements=("C", "C", "Se"), n_repeat=2, aniso=True, anomalous=True, seed=9)
+    for sc in xs2.scatterers():
+        if sc.scattering_type == "Se":
+            sc.fdp = 3.0
+    fc2 = xs2.structure_factors(d_min=d_min, algorithm="direct").f_calc()
+    hkl2 = np.array(list(fc2.indices()))
+    eng2 = _nufft_engine(xs2, hkl2, d_min, n_max=2, tau=1e-4, eps=1e-8)
+    r2 = _r_factor(eng2.f_calc_numpy(), np.array(fc2.data()))
+    assert r2 <= 3e-4, f"Se-like R(F)={r2}"
+
+
+def test_chunking_invariance():
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    model = _toy_mixed_iso(n_repeat=3, seed=10)
+    d_min = 2.0
+    hkl = _miller_sphere(d_min, model.unit_cell)
+    vals = []
+    for t_chunk in (1, 4, 1000):
+        eng = NufftStructureFactorEngine(
+            model, hkl, NufftEngineParams(d_min=d_min, n_max=2, tau=1e-4, eps=1e-8, t_chunk=t_chunk)
+        )
+        vals.append(eng.f_calc_numpy())
+    for other in vals[1:]:
+        assert np.allclose(vals[0], other, rtol=0, atol=1e-12), "chunking changed F"
+
+
+def test_cross_engine_vs_stamp():
+    from phridge.sfcalc.engine.engine import EngineParams, StructureFactorEngine
+    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+
+    # Identical atoms: NUFFT is exact at n_max=0. Stamp at quality_factor=1000 on the
+    # default 1/3 grid is only ~8e-4 vs direct; a slightly finer grid keeps the
+    # comparison inside the 5e-4 bound without changing quality_factor.
+    model = _toy_carbon_p1(n_atoms=8, u_iso=0.04, seed=1)
+    d_min = 2.0
+    hkl = _miller_sphere(d_min, model.unit_cell)
+    nufft = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=d_min, n_max=0, tau=1.0, eps=1e-6))
+    stamp = StructureFactorEngine(
+        model, hkl, EngineParams(d_min=d_min, quality_factor=1000, grid_resolution_factor=0.2, stamp_backend="torch")
+    )
+    r = _r_factor(nufft.f_calc_numpy(), stamp.f_calc_numpy())
+    assert r <= 5e-4, f"cross-engine R(F)={r}"
