@@ -14,6 +14,7 @@ from phridge.sfcalc.ops import (
     gauss_newton_diagonal,
     gauss_newton_hvp,
     refine_gradients,
+    sf_bind,
     sf_calc,
     sf_gradients,
     target_eval,
@@ -30,6 +31,7 @@ from phridge.worker.ops.scale_array import scale_array
 
 IMPLEMENTATIONS: dict[str, Callable[..., Any]] = {
     "scale_array": scale_array,
+    "sf_bind": sf_bind,
     "sf_calc": sf_calc,
     "sf_gradients": sf_gradients,
     "target_eval": target_eval,

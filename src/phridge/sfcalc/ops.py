@@ -78,7 +78,7 @@ def _engine_params(params: Any) -> EngineParams:
     else:
         raise TypeError("params must be SfEngineParams or dict")
     dtype = p.dtype
-    if _DEVICE["device"].startswith("mps"):
+    if _DEVICE["device"].startswith("mps") and str(dtype).lower() in ("float64", "fp64"):
         dtype = "float32"
     return EngineParams(
         d_min=p.d_min,
@@ -88,6 +88,7 @@ def _engine_params(params: Any) -> EngineParams:
         u_extra=p.u_extra,
         n_real=None if p.n_real is None else tuple(p.n_real),
         dtype=dtype,
+        stamp_backend=getattr(p, "stamp_backend", "auto") or "auto",
     )
 
 
@@ -119,11 +120,61 @@ def scattering_model(xray: PackedXray, table: PackedScatteringTable) -> Scatteri
         gauss_c=_np(table.gauss_c, np.float64),
         rot=rot,
         trans=trans,
+        space_group_hall=crystal.space_group_hall,
     )
 
 
 def _engine(xray: PackedXray, table: PackedScatteringTable, hkl: np.ndarray, params: Any) -> StructureFactorEngine:
     return StructureFactorEngine(scattering_model(xray, table), hkl, _engine_params(params), device=_DEVICE["device"])
+
+
+def _handle_str(handle: Any) -> Optional[str]:
+    if handle is None:
+        return None
+    if isinstance(handle, dict):
+        handle = handle.get("handle")
+    text = str(handle).strip()
+    return text or None
+
+
+def _refresh_model(eng: Any, xray: PackedXray) -> None:
+    """Update scatterer arrays on a kept engine; do not rebuild grids or the group plan."""
+    from phridge.sfcalc.engine.symmetry import site_multiplicities
+
+    m = eng.model
+    n = m.n_scatterers
+    m.sites_frac = _np(xray.sites_frac, np.float64).reshape(n, 3)
+    m.occupancy = _np(xray.occupancy, np.float64).reshape(n)
+    m.u_iso = _np(xray.u_iso, np.float64).reshape(n)
+    m.u_star = _np(xray.u_star, np.float64).reshape(n, 6)
+    scatterers = xray.meta.scatterers
+    m.fp = np.array([0.0 if s.fp is None else s.fp for s in scatterers], dtype=np.float64)
+    m.fdp = np.array([0.0 if s.fdp is None else s.fdp for s in scatterers], dtype=np.float64)
+    m.multiplicity = site_multiplicities(m.sites_frac, m.rot, m.trans, m.unit_cell)
+
+
+def _bound_engine(handle: Any, xray: Optional[PackedXray] = None):
+    from phridge.sfcalc.sessions import get_engine_session
+
+    hid = _handle_str(handle)
+    if hid is None:
+        return None, None
+    sess = get_engine_session(hid)
+    eng = sess["engine"]
+    if xray is not None:
+        _refresh_model(eng, xray)
+    return eng, sess["hkl"]
+
+
+def _packed_grads(g: dict) -> PackedSfGradients:
+    return PackedSfGradients(
+        d_site_frac=g["site_frac"],
+        d_occupancy=g["occupancy"],
+        d_u_iso=g["u_iso"],
+        d_u_star=g["u_star"],
+        d_fp=g["fp"],
+        d_fdp=g["fdp"],
+    )
 
 
 def _miller_like(template: PackedMiller, data: np.ndarray, label: str) -> PackedMiller:
@@ -139,32 +190,64 @@ def _miller_like(template: PackedMiller, data: np.ndarray, label: str) -> Packed
 
 
 # --------------------------------------------------------------------- ops
-def sf_calc(xray: PackedXray, table: PackedScatteringTable, hkl: PackedMiller, params: Any) -> PackedMiller:
-    """F_calc on the indices of ``hkl`` (its data is ignored)."""
+def sf_bind(
+    xray: PackedXray,
+    table: PackedScatteringTable,
+    hkl: PackedMiller,
+    params: Any,
+) -> str:
+    """Build the stamp engine once; later ``sf_calc`` / ``sf_gradients`` pass ``handle``."""
+    from phridge.sfcalc.sessions import stash_engine
+
     eng = _engine(xray, table, _np(hkl.hkl), params)
-    return _miller_like(hkl, eng.f_calc_numpy(), "F_calc")
+    return stash_engine(eng, hkl)
+
+
+sf_bind.compute_dtype = "float64"
+
+
+def sf_calc(
+    xray: Optional[PackedXray] = None,
+    table: Optional[PackedScatteringTable] = None,
+    hkl: Optional[PackedMiller] = None,
+    params: Any = None,
+    handle: Any = None,
+) -> PackedMiller:
+    """F_calc on the indices of ``hkl`` (its data is ignored).
+
+    Pass ``handle`` from ``sf_bind`` to reuse grids. Optional ``xray`` then
+    refreshes sites/ADPs without rebuilding the engine.
+    """
+    eng, tmpl = _bound_engine(handle, xray)
+    if eng is None:
+        if xray is None or table is None or hkl is None or params is None:
+            raise TypeError("sf_calc needs xray, table, hkl, params (or a bound handle)")
+        eng = _engine(xray, table, _np(hkl.hkl), params)
+        tmpl = hkl
+    out_hkl = hkl if hkl is not None else tmpl
+    return _miller_like(out_hkl, eng.f_calc_numpy(), "F_calc")
 
 
 sf_calc.compute_dtype = "float64"
 
 
 def sf_gradients(
-    xray: PackedXray,
-    table: PackedScatteringTable,
-    d_target_d_f_calc: PackedMiller,
-    params: Any,
+    xray: Optional[PackedXray] = None,
+    table: Optional[PackedScatteringTable] = None,
+    d_target_d_f_calc: Optional[PackedMiller] = None,
+    params: Any = None,
+    handle: Any = None,
 ) -> PackedSfGradients:
     """d target / d scatterer parameters given d_target_d_f_calc (cctbx convention)."""
-    eng = _engine(xray, table, _np(d_target_d_f_calc.hkl), params)
+    if d_target_d_f_calc is None:
+        raise TypeError("sf_gradients needs d_target_d_f_calc")
+    eng, _tmpl = _bound_engine(handle, xray)
+    if eng is None:
+        if xray is None or table is None or params is None:
+            raise TypeError("sf_gradients needs xray, table, params (or a bound handle)")
+        eng = _engine(xray, table, _np(d_target_d_f_calc.hkl), params)
     g = eng.gradients(_np(d_target_d_f_calc.data, np.complex128))
-    return PackedSfGradients(
-        d_site_frac=g["site_frac"],
-        d_occupancy=g["occupancy"],
-        d_u_iso=g["u_iso"],
-        d_u_star=g["u_star"],
-        d_fp=g["fp"],
-        d_fdp=g["fdp"],
-    )
+    return _packed_grads(g)
 
 
 sf_gradients.compute_dtype = "float64"

@@ -719,3 +719,42 @@ def test_nufft_sf_calc_op_smoke():
     out = nufft_sf_calc(xray, table, miller, {"engine": "nufft", "d_min": 2.0, "n_max": 0, "tau": 1.0, "eps": 1e-6})
     assert out.data.shape == (len(hkl),)
     assert np.isfinite(out.data).all()
+
+
+def test_nufft_sf_bind_reuse():
+    from phridge.contrib.nufft_sf.op import nufft_sf_bind, nufft_sf_calc
+    from phridge.models import CrystalSymmetry, Scatterer, SymOp
+    from phridge.packing import PackedMiller
+    from phridge.packing_xtal import PackedXray
+    from phridge.sfcalc.packing import PackedScatteringTable
+    from phridge.sfcalc.sessions import clear_engines
+
+    model = _toy_carbon_p1(n_atoms=4, u_iso=0.04, seed=1)
+    crystal = CrystalSymmetry(
+        unit_cell=list(model.unit_cell),
+        space_group_hall=" P 1",
+        space_group_number=1,
+        symops=[SymOp(r=[1, 0, 0, 0, 1, 0, 0, 0, 1], t=[0, 0, 0])],
+    )
+    xray = PackedXray(
+        crystal=crystal,
+        sites_frac=model.sites_frac,
+        occupancy=model.occupancy,
+        u_iso=model.u_iso,
+        scatterers=[Scatterer(i=i, scattering_type="C") for i in range(model.n_scatterers)],
+        u_star=model.u_star,
+    )
+    table = PackedScatteringTable(
+        labels=["C"],
+        gauss_a=model.gauss_a,
+        gauss_b=model.gauss_b,
+        gauss_c=model.gauss_c,
+    )
+    hkl = _miller_sphere(2.0, model.unit_cell, max_index=4)
+    miller = PackedMiller(crystal=crystal, hkl=hkl, data=np.zeros(len(hkl), dtype=np.complex128))
+    params = {"engine": "nufft", "d_min": 2.0, "n_max": 0, "tau": 1.0, "eps": 1e-6}
+    clear_engines()
+    once = nufft_sf_calc(xray, table, miller, params)
+    handle = nufft_sf_bind(xray, table, miller, params)
+    kept = nufft_sf_calc(handle=handle)
+    assert np.allclose(once.data, kept.data)

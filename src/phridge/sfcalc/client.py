@@ -194,14 +194,25 @@ class RemoteStructureFactors:
         self.params = params
         self.table = table
         self._template = _miller_template(miller_set)
+        self._handle: Optional[str] = None
 
     def _inputs(self) -> dict:
         xray, table = _packed_xray(self.xray_structure, self.table)
         return {"xray": xray, "table": table, "params": self.params}
 
+    def _ensure_bound(self) -> str:
+        if self._handle is None:
+            self._handle = str(self.bridge.call("sf_bind", hkl=self._template, **self._inputs()))
+        return self._handle
+
     def f_calc(self):
         """Complex miller.array on ``miller_set``."""
-        packed = self.bridge.call("sf_calc", hkl=self._template, **self._inputs())
+        packed = self.bridge.call(
+            "sf_calc",
+            hkl=self._template,
+            handle=self._ensure_bound(),
+            **self._inputs(),
+        )
         from phridge.client.convert import miller_to_cctbx
 
         return miller_to_cctbx(packed if isinstance(packed, PackedMiller) else packed)
@@ -215,7 +226,12 @@ class RemoteStructureFactors:
             data=data,
             anomalous=self._template.meta.anomalous,
         )
-        packed = self.bridge.call("sf_gradients", d_target_d_f_calc=dtdf, **self._inputs())
+        packed = self.bridge.call(
+            "sf_gradients",
+            d_target_d_f_calc=dtdf,
+            handle=self._ensure_bound(),
+            **self._inputs(),
+        )
         return RemoteGradients(self.xray_structure, packed)
 
 

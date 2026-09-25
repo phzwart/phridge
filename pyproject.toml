@@ -70,3 +70,7 @@ markers = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "schema" = "phridge/schema"
+"src/phridge/sfcalc/engine/stamp_cpp/kernels.h" = "phridge/sfcalc/engine/stamp_cpp/kernels.h"
+"src/phridge/sfcalc/engine/stamp_cpp/stamp.cpp" = "phridge/sfcalc/engine/stamp_cpp/stamp.cpp"
+"src/phridge/sfcalc/engine/stamp_cuda/kernels.cuh" = "phridge/sfcalc/engine/stamp_cuda/kernels.cuh"
+"src/phridge/sfcalc/engine/stamp_cuda/stamp.cu" = "phridge/sfcalc/engine/stamp_cuda/stamp.cu"

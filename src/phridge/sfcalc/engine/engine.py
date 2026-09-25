@@ -10,10 +10,9 @@ is added to every atom before sampling and divided out in reciprocal space
 (cctbx ``u_base``), which also makes the constant form-factor term and
 fp/fdp samplable.
 
-Everything from the density builder to the gather is a torch function of
-the scatterer parameters, so ``torch.autograd`` / ``torch.func`` supply
-d F / d params, vector-Jacobian products (the Agarwal gradient-map trick)
-and Gauss-Newton Hessian-vector products.
+First-order ``gradients`` use a hand-coded Agarwal step (scatter
+``dQ/dF`` onto the FFT grid, IFFT, stamp VJP). ``jvp`` / Gauss-Newton
+still go through autograd so the graph can be differentiated again.
 """
 
 from __future__ import annotations
@@ -61,6 +60,7 @@ class ScatteringModel:
     rot: np.ndarray = field(default_factory=lambda: identity_ops()[0])
     trans: np.ndarray = field(default_factory=lambda: identity_ops()[1])
     multiplicity: Optional[np.ndarray] = None  # (N,) int; computed if None
+    space_group_hall: Optional[str] = None
 
     def __post_init__(self) -> None:
         n = self.sites_frac.shape[0]
@@ -90,14 +90,15 @@ class EngineParams:
     u_extra: Optional[float] = None  # override cctbx u_base
     n_real: Optional[tuple] = None  # override gridding
     max_chunk_points: int = 8_000_000  # atoms x box points per chunk
-    dtype: str = "float64"
+    dtype: str = "float64"  # float64 | float32 | float16
     # Default: torch.fft.fftn everywhere (CUDA cuFFT / CPU pocketfft via torch) so the
     # density→FFT→gather graph stays in PyTorch and per-atom grads use autograd.
     # Opt-in numpy FFT only for rare CPU torch/MKL threading bugs (see docs/engine.md).
     cpu_numpy_fft: bool = False
     n_radius_buckets: int = 4  # group expanded atoms by cutoff radius to shrink sampling boxes
     compile_stamp: bool = False  # torch.compile the per-chunk stamp (off in unit tests)
-    stamp_backend: str = "auto"  # auto | torch | triton | numba
+    stamp_backend: str = "auto"  # auto | torch | triton | numba | cpp | cuda
+    p1_expand: bool = False  # True: paint all sym copies; False: ASU + agentsg gather
 
 
 def _fft_friendly(n: int) -> int:
@@ -285,11 +286,53 @@ def _make_numpy_fftn():
 _NUMPY_FFTN = None
 
 
+def _full_flat_to_rfft(flat: np.ndarray, n0: int, n1: int, n2: int):
+    """Map full-grid flat index of ``-h`` to packed ``rfftn`` index + conj/unique."""
+    flat = np.asarray(flat, dtype=np.int64)
+    n2r = n2 // 2 + 1
+    i2 = flat % n2
+    tmp = flat // n2
+    i1 = tmp % n1
+    i0 = tmp // n1
+    conj = i2 >= n2r
+    j0 = np.where(conj, (-i0) % n0, i0)
+    j1 = np.where(conj, (-i1) % n1, i1)
+    j2 = np.where(conj, (-i2) % n2, i2)
+    idx = (j0 * n1 + j1) * n2r + j2
+
+    def _nyq(i, n):
+        return (i == 0) | ((n % 2 == 0) & (i == n // 2))
+
+    unique = _nyq(j0, n0) & _nyq(j1, n1) & _nyq(j2, n2)
+    return idx.astype(np.int64), conj, unique
+
+
+def _scatter_add_complex(y, index, contrib):
+    """``scatter_add_`` that works when MPS refuses complex scatter."""
+    try:
+        y.scatter_add_(0, index, contrib)
+        return y
+    except RuntimeError:
+        import torch
+
+        re = y.real.contiguous()
+        im = y.imag.contiguous()
+        re.scatter_add_(0, index, contrib.real)
+        im.scatter_add_(0, index, contrib.imag)
+        return torch.complex(re, im)
+
+
 def _fftn(x, cpu_numpy: bool = False):
-    """3D FFT of the density grid. Default: ``torch.fft.fftn`` (keeps autograd)."""
+    """3D FFT of the density grid. Real maps use ``rfftn``."""
     import torch
 
     global _NUMPY_FFTN
+    if not x.is_complex() and x.dtype == torch.float16:
+        x = x.to(torch.float32)
+    elif x.is_complex() and x.dtype not in (torch.complex64, torch.complex128):
+        x = x.to(torch.complex64)
+    if not x.is_complex():
+        return torch.fft.rfftn(x)
     if cpu_numpy and not x.is_cuda:
         if _NUMPY_FFTN is None:
             _NUMPY_FFTN = _make_numpy_fftn()
@@ -313,12 +356,19 @@ class StructureFactorEngine:
         self.model = model
         self.params = params
         self.device = device
-        if device.startswith("mps"):
+        name = (params.dtype or "float64").lower().replace("fp", "float")
+        if name in ("16", "half", "float16"):
+            self.dtype = torch.float16
+            self.cdtype = getattr(torch, "complex32", torch.complex64)
+        elif name in ("32", "float32"):
             self.dtype = torch.float32
             self.cdtype = torch.complex64
         else:
-            self.dtype = torch.float64 if params.dtype == "float64" else torch.float32
-            self.cdtype = torch.complex128 if params.dtype == "float64" else torch.complex64
+            self.dtype = torch.float64
+            self.cdtype = torch.complex128
+        if device.startswith("mps") and self.dtype == torch.float64:
+            self.dtype = torch.float32
+            self.cdtype = torch.complex64
         self.hkl = np.asarray(hkl, dtype=np.int64).reshape(-1, 3)
 
         cell = model.unit_cell
@@ -349,6 +399,27 @@ class StructureFactorEngine:
         self.gauss_c = torch.as_tensor(model.gauss_c[ti], dtype=self.dtype, device=device)
         self.aniso = torch.as_tensor(model.anisotropic.astype(bool), device=device)
 
+        self._asu_stamp = False
+        self.mate_index = None
+        self.mate_phase = None
+        if (not params.p1_expand) and model.n_sym > 1:
+            try:
+                from phridge.sfcalc.engine.sg_gather import agentsg_available, mate_tables
+
+                if agentsg_available():
+                    idx, ph = mate_tables(
+                        self.hkl,
+                        model.rot,
+                        model.trans,
+                        self.n_real,
+                        hall=model.space_group_hall,
+                    )
+                    self.mate_index = torch.as_tensor(idx, dtype=torch.int64, device=device)
+                    self.mate_phase = torch.as_tensor(ph, dtype=self.cdtype, device=device)
+                    self._asu_stamp = True
+            except Exception:
+                self._asu_stamp = False
+
         # reciprocal-space bookkeeping
         n = np.array(self.n_real)
         if np.any(np.abs(self.hkl) * 2 >= n[None, :]):
@@ -356,6 +427,23 @@ class StructureFactorEngine:
         neg = (-self.hkl) % n[None, :]
         flat = (neg[:, 0] * n[1] + neg[:, 1]) * n[2] + neg[:, 2]
         self.gather_index = torch.as_tensor(flat, dtype=torch.int64, device=device)
+        n0, n1, n2 = (int(v) for v in self.n_real)
+        self.n_rfft = (n0, n1, n2 // 2 + 1)
+        r_idx, r_conj, r_uniq = _full_flat_to_rfft(flat, n0, n1, n2)
+        self.rfft_index = torch.as_tensor(r_idx, dtype=torch.int64, device=device)
+        self.rfft_conj = torch.as_tensor(r_conj, dtype=torch.bool, device=device)
+        self.rfft_unique = torch.as_tensor(r_uniq, dtype=torch.bool, device=device)
+        if self._asu_stamp:
+            m_idx, m_conj, m_uniq = _full_flat_to_rfft(
+                self.mate_index.detach().cpu().numpy(), n0, n1, n2
+            )
+            self.rfft_mate_index = torch.as_tensor(m_idx, dtype=torch.int64, device=device)
+            self.rfft_mate_conj = torch.as_tensor(m_conj, dtype=torch.bool, device=device)
+            self.rfft_mate_unique = torch.as_tensor(m_uniq, dtype=torch.bool, device=device)
+        else:
+            self.rfft_mate_index = None
+            self.rfft_mate_conj = None
+            self.rfft_mate_unique = None
         dstar2 = np.sum(reciprocal_cartesian(cell, self.hkl) ** 2, axis=1)
         self.u_extra_correction = torch.as_tensor(np.exp(TWO_PI2 * self.u_extra * dstar2), dtype=self.dtype, device=device)
 
@@ -374,7 +462,8 @@ class StructureFactorEngine:
         b_max = m.gauss_b[m.type_index].max(axis=1)
         sigma2 = u_atom + b_max / EIGHT_PI2 + self.u_extra
         r_cut = np.sqrt(2.0 * math.log(1.0 / self.params.wing_cutoff) * sigma2)
-        r_cut_exp = np.repeat(r_cut, m.n_sym)  # symmetry does not change U eigenvalues
+        n_stamp = 1 if self._asu_stamp else m.n_sym
+        r_cut_exp = np.repeat(r_cut, n_stamp)
         self.r_cut = torch.as_tensor(r_cut, dtype=self.dtype, device=self.device)
         self.r_cut_exp = torch.as_tensor(r_cut_exp, dtype=self.dtype, device=self.device)
         o_inv = np.linalg.inv(o)
@@ -405,15 +494,20 @@ class StructureFactorEngine:
 
     # ---------------------------------------------------------------- forward
     def expand(self, sites_frac, u_star):
-        """Symmetry-expand sites (N,3)->(N*S,3) and u_star (N,6)->(N*S,3,3)."""
+        """Symmetry-expand sites (N,3)->(N*S,3) and u_star (N,6)->(N*S,3,3).
+
+        ASU stamp skips expansion: the FFT gather applies the group.
+        """
         torch = self.torch
+        if self._asu_stamp:
+            return sites_frac, sym6_to_mat(u_star)
         x = torch.einsum("sij,nj->nsi", self.rot, sites_frac) + self.trans[None]
         u = sym6_to_mat(u_star)
         u_exp = torch.einsum("sij,njk,slk->nsil", self.rot, u, self.rot)
         return x.reshape(-1, 3), u_exp.reshape(-1, 3, 3)
 
     def _stamp_kind(self) -> str:
-        """Resolved stamp implementation: ``torch``, ``triton``, or ``numba``."""
+        """Resolved stamp implementation: ``torch``, ``triton``, ``numba``, ``cpp``, or ``cuda``."""
         backend = (self.params.stamp_backend or "auto").lower()
         device = str(self.device)
         if backend == "torch":
@@ -430,13 +524,33 @@ class StructureFactorEngine:
             if numba_available() and not device.startswith(("cuda", "mps")):
                 return "numba"
             raise RuntimeError("stamp_backend='numba' requires CPU + numba")
+        if backend == "cpp":
+            from phridge.sfcalc.engine.stamp_cpp import cpp_available
+
+            if cpp_available():
+                return "cpp"
+            raise RuntimeError("stamp_backend='cpp' requires a C++ compiler")
+        if backend == "cuda":
+            from phridge.sfcalc.engine.stamp_cuda import cuda_available
+
+            if cuda_available() and device.startswith("cuda"):
+                return "cuda"
+            raise RuntimeError("stamp_backend='cuda' requires NVIDIA CUDA")
         if backend == "auto":
             if device.startswith("cuda"):
+                from phridge.sfcalc.engine.stamp_cuda import cuda_available
                 from phridge.sfcalc.engine.stamp_triton import triton_available
 
+                if cuda_available():
+                    return "cuda"
                 if triton_available():
                     return "triton"
-            elif not device.startswith("mps"):
+            elif device.startswith("mps"):
+                from phridge.sfcalc.engine.stamp_cpp import cpp_available
+
+                if cpp_available():
+                    return "cpp"
+            else:
                 from phridge.sfcalc.engine.stamp_numba import numba_available
 
                 if numba_available():
@@ -449,10 +563,11 @@ class StructureFactorEngine:
 
     def _expanded_stamp_inputs(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
         torch = self.torch
-        n_atoms, s = sites_frac.shape[0], self.rot.shape[0]
+        n_atoms = sites_frac.shape[0]
+        s = 1 if self._asu_stamp else self.rot.shape[0]
         x_exp, ustar_exp = self.expand(sites_frac, u_star)
         atom = torch.arange(n_atoms, device=self.device).repeat_interleave(s)
-        rep = lambda t: t.repeat_interleave(s, dim=0)  # noqa: E731
+        rep = (lambda t: t) if self._asu_stamp else (lambda t: t.repeat_interleave(s, dim=0))
         return {
             "x_exp": x_exp,
             "u_cart_aniso": self.o_mat @ ustar_exp @ self.o_mat.T,
@@ -524,17 +639,50 @@ class StructureFactorEngine:
             from phridge.sfcalc.engine.stamp_numba import numba_density
 
             return numba_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
+        if kind == "cpp":
+            from phridge.sfcalc.engine.stamp_cpp import cpp_density
+
+            return cpp_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
+        if kind == "cuda":
+            from phridge.sfcalc.engine.stamp_cuda import cuda_density
+
+            return cuda_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
         return self._density_torch(sites_frac, occupancy, u_iso, u_star, fp, fdp)
 
     def f_calc(self, sites_frac, occupancy, u_iso, u_star, fp, fdp):
         """Structure factors at self.hkl, complex tensor (N_refl,)."""
         torch = self.torch
         rho = self.density(sites_frac, occupancy, u_iso, u_star, fp, fdp)
-        if not torch.is_complex(rho):
-            rho = rho.to(self.cdtype)
         ft = _fftn(rho, self.params.cpu_numpy_fft).reshape(-1)
+        return self._f_from_fft(ft)
+
+    def _f_from_fft(self, ft):
+        """Gather F_h from the FFT grid; ASU path sums agentsg mates.
+
+        Real-density ``rfftn`` stores the last axis as ``n2//2+1``; missing
+        ``-h`` bins are the conjugate of the stored Hermitian partner.
+        """
+        torch = self.torch
         scale = self.volume / float(np.prod(self.n_real))
-        return ft[self.gather_index] * (scale * self.u_extra_correction)
+        corr = scale * self.u_extra_correction.to(device=ft.device, dtype=ft.real.dtype)
+        n_full = int(np.prod(self.n_real))
+        if ft.numel() != n_full:
+            if self._asu_stamp:
+                idx = self.rfft_mate_index.to(device=ft.device)
+                conj = self.rfft_mate_conj.to(device=ft.device)
+                phase = self.mate_phase.to(device=ft.device, dtype=ft.dtype)
+                vals = ft[idx]
+                vals = torch.where(conj, vals.conj(), vals)
+                return (vals * phase).sum(dim=-1) * corr
+            idx = self.rfft_index.to(device=ft.device)
+            vals = ft[idx]
+            vals = torch.where(self.rfft_conj.to(device=ft.device), vals.conj(), vals)
+            return vals * corr
+        if self._asu_stamp:
+            idx = self.mate_index.to(device=ft.device)
+            phase = self.mate_phase.to(device=ft.device, dtype=ft.dtype)
+            return (ft[idx] * phase).sum(dim=-1) * corr
+        return ft[self.gather_index.to(device=ft.device)] * corr
 
     # ---------------------------------------------------------------- helpers
     def tensors(self, requires_grad: bool = False):
@@ -550,19 +698,115 @@ class StructureFactorEngine:
 
     def f_calc_numpy(self) -> np.ndarray:
         torch = self.torch
+        kind = self._stamp_kind()
+        if kind == "cpp":
+            from phridge.sfcalc.engine.stamp_cpp import cpp_f_calc_numpy
+
+            return cpp_f_calc_numpy(self)
+        if kind == "cuda":
+            from phridge.sfcalc.engine.stamp_cuda import cuda_f_calc_numpy
+
+            return cuda_f_calc_numpy(self)
         with torch.no_grad():
             return self.f_calc(*self.tensors()).cpu().numpy().astype(np.complex128)
 
-    def gradients(self, d_target_d_f_calc: np.ndarray, params=None):
-        """dQ/d(params) for Q with given per-reflection complex gradient.
+    def _agarwal_grad_rho(self, d_target_d_f_calc):
+        """Gradient map ∂Q/∂ρ from G_h: scatter onto FFT[-h], N·IFFT.
 
-        Convention (cctbx d_target_d_f_calc): G_h = dQ/dA_h + i dQ/dB_h, so
-        dQ/dp = sum_h Re[conj(G_h) dF_h/dp].
-        Returns dict of numpy arrays keyed site_frac, occupancy, u_iso, u_star, fp, fdp.
+        ``F_h = (V/N) u_extra(h) FFT[ρ]_{-h}``. Adjoint of ``torch.fft.fftn``
+        (norm='backward') is ``N · ifftn``.
         """
         torch = self.torch
+        # CPU C++ stamp (including MPS auto) stays on host; f16 IFFT uses f32.
+        if self._stamp_kind() == "cpp":
+            device = "cpu"
+            if self.dtype == torch.float16:
+                dtype = torch.float32
+                cdtype = torch.complex64
+            else:
+                dtype = self.dtype
+                cdtype = self.cdtype
+        else:
+            device = self.device
+            dtype = self.dtype
+            cdtype = self.cdtype
+        g = torch.as_tensor(np.asarray(d_target_d_f_calc, dtype=np.complex128), dtype=cdtype, device=device)
+        n_grid = float(np.prod(self.n_real))
+        scale = self.volume / n_grid
+        slot = g * (scale * self.u_extra_correction.to(device=device, dtype=dtype))
+        use_rfft = not bool(np.any(np.asarray(self.model.fdp)))
+        if use_rfft:
+            n0, n1, n2r = self.n_rfft
+            y = torch.zeros(n0 * n1 * n2r, dtype=cdtype, device=device)
+            if self._asu_stamp:
+                phase = self.mate_phase.to(device=device, dtype=cdtype)
+                contrib = (slot.to(cdtype)[:, None] * phase.conj()).reshape(-1)
+                idx = self.rfft_mate_index.to(device=device).reshape(-1)
+                conj = self.rfft_mate_conj.to(device=device).reshape(-1)
+                uniq = self.rfft_mate_unique.to(device=device).reshape(-1)
+            else:
+                contrib = slot.to(cdtype)
+                idx = self.rfft_index.to(device=device)
+                conj = self.rfft_conj.to(device=device)
+                uniq = self.rfft_unique.to(device=device)
+            contrib = torch.where(conj, contrib.conj(), contrib)
+            y = _scatter_add_complex(y, idx, contrib)
+            rho0 = torch.zeros(self.n_real, dtype=dtype, device=device, requires_grad=True)
+            r = torch.fft.rfftn(rho0).reshape(-1)
+            (r * y.conj()).real.sum().backward()
+            return rho0.grad.detach()
+        y = torch.zeros(int(n_grid), dtype=cdtype, device=device)
+        if self._asu_stamp:
+            phase = self.mate_phase.to(device=device, dtype=cdtype)
+            idx = self.mate_index.to(device=device)
+            contrib = (slot.to(cdtype)[:, None] * phase.conj()).reshape(-1)
+            y = _scatter_add_complex(y, idx.reshape(-1), contrib)
+        else:
+            y = _scatter_add_complex(y, self.gather_index.to(device=device), slot.to(cdtype))
+        return torch.fft.ifftn(y.reshape(self.n_real)) * n_grid
+
+    def _vjp_from_grad_rho(self, grad_rho, params):
+        """Stamp adjoint: ∂Q/∂(sites, occ, U, f', f'') given ∂Q/∂ρ."""
+        torch = self.torch
+        names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
+        kind = self._stamp_kind()
+        if kind == "numba":
+            from phridge.sfcalc.engine.stamp_numba import _vjp_numpy
+
+            gx, gocc, gu, gustar, gfp, gfdp = _vjp_numpy(self, grad_rho, *params)
+            arrays = (gx, gocc, gu, gustar, gfp, gfdp)
+            return {k: np.asarray(a, dtype=np.float64) for k, a in zip(names, arrays)}
+        if kind == "cpp":
+            from phridge.sfcalc.engine.stamp_cpp import _vjp_numpy as _vjp_cpp
+
+            gx, gocc, gu, gustar, gfp, gfdp = _vjp_cpp(self, grad_rho, *params)
+            arrays = (gx, gocc, gu, gustar, gfp, gfdp)
+            return {k: np.asarray(a, dtype=np.float64) for k, a in zip(names, arrays)}
+        if kind == "cuda":
+            from phridge.sfcalc.engine.stamp_cuda import _vjp_numpy as _vjp_cuda
+
+            gx, gocc, gu, gustar, gfp, gfdp = _vjp_cuda(self, grad_rho, *params)
+            arrays = (gx, gocc, gu, gustar, gfp, gfdp)
+            return {k: np.asarray(a, dtype=np.float64) for k, a in zip(names, arrays)}
+        leaves = tuple(p.detach().clone().requires_grad_(True) for p in params)
+        rho = self.density(*leaves)
+        if not torch.is_complex(rho) and torch.is_complex(grad_rho):
+            grad_out = grad_rho.real.to(dtype=rho.dtype)
+        else:
+            grad_out = grad_rho.to(dtype=rho.dtype)
+        grads = torch.autograd.grad(rho, leaves, grad_outputs=grad_out, allow_unused=True)
+        return {
+            k: (torch.zeros_like(p) if gr is None else gr).detach().cpu().numpy().astype(np.float64)
+            for k, p, gr in zip(names, leaves, grads)
+        }
+
+    def _gradients_autograd(self, d_target_d_f_calc: np.ndarray, params=None):
+        """Full-tape VJP (used by ``jvp`` / tests). Prefer :meth:`gradients`."""
+        torch = self.torch
         params = self.tensors(requires_grad=True) if params is None else params
-        g = torch.as_tensor(np.asarray(d_target_d_f_calc, dtype=np.complex128), dtype=self.cdtype, device=self.device)
+        g = torch.as_tensor(
+            np.asarray(d_target_d_f_calc, dtype=np.complex128), dtype=self.cdtype, device=self.device
+        )
         f = self.f_calc(*params)
         q = (f * g.conj()).real.sum()
         grads = torch.autograd.grad(q, params, allow_unused=True)
@@ -571,6 +815,23 @@ class StructureFactorEngine:
             k: (torch.zeros_like(p) if gr is None else gr).detach().cpu().numpy().astype(np.float64)
             for k, p, gr in zip(names, params, grads)
         }
+
+    def gradients(self, d_target_d_f_calc: np.ndarray, params=None):
+        """dQ/d(params) for Q with given per-reflection complex gradient.
+
+        Convention (cctbx d_target_d_f_calc): G_h = dQ/dA_h + i dQ/dB_h, so
+        dQ/dp = sum_h Re[conj(G_h) dF_h/dp].
+        Uses a hand-coded Agarwal IFFT + stamp VJP (no autograd tape).
+        Returns dict of numpy arrays keyed site_frac, occupancy, u_iso, u_star, fp, fdp.
+        """
+        if params is None:
+            if self._stamp_kind() in ("cpp", "cuda"):
+                m = self.model
+                params = (m.sites_frac, m.occupancy, m.u_iso, m.u_star, m.fp, m.fdp)
+            else:
+                params = self.tensors(requires_grad=False)
+        grad_rho = self._agarwal_grad_rho(d_target_d_f_calc)
+        return self._vjp_from_grad_rho(grad_rho, params)
 
     def jvp(self, tangents, params=None):
         """Directional derivative (dF/dp) . v as a complex tensor (N_refl,).

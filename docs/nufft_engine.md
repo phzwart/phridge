@@ -92,20 +92,31 @@ Install: `pip install 'phridge[nufft]'` (pulls `pytorch-finufft` / `finufft`).
 
 ## Benchmark
 
+Phenix / cctbx stays in `phenix.python`. Torch + FINUFFT stay in a phridge
+worker. Do not install FINUFFT into Phenix.
+
 ```bash
-# CPU (requires cctbx + pytorch-finufft)
-PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
+# Redis (once)
+redis-server --daemonize yes
+
+# torch worker (mamba / conda with pytorch-finufft)
+KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner \
+    --device cpu --preload phridge.contrib.nufft_sf
+
+# cctbx client
+PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark \
+    --redis-url redis://localhost:6379/0 \
     --cases 1ee2,6czg,synthetic \
     --d-min 2.5,2.0,1.5 \
     --device cpu \
     --out docs/nufft_engine.md
+```
 
-# CUDA if present
+In-process (same interpreter has both cctbx and FINUFFT):
+
+```bash
 PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
-    --cases 1ee2,6czg,synthetic \
-    --d-min 2.5,2.0,1.5 \
-    --device cuda \
-    --out docs/nufft_engine.md
+    --cases 1ee2,6czg,synthetic --d-min 2.5,2.0,1.5 --device cpu
 ```
 
 Results (this environment has no cctbx and no CUDA; 1ee2 / 6czg / cctbx-direct
@@ -124,6 +135,25 @@ full table):
 On this CPU smoke (80 atoms, dense P1 sphere, no GPU) NUFFT is **not** 5×
 faster than the stamp engine; the go/no-go for a CUDA default remains open
 until the 1ee2 / 6czg / 20k-atom suite is run with cctbx.
+
+The default worker engine is **not** changed in this PR. A go/no-go for
+making `engine: "nufft"` the CUDA default is a ≥5× `F+grad` speedup over
+the stamp engine at equal `R(F)` on the largest case.
+
+Results (fill after running the commands above):
+
+    KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner --device cpu --preload phridge.contrib.nufft_sf
+    PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark --redis-url redis://127.0.0.1:6379/1 --cases synthetic --d-min 2.0 --device cpu --repeats 3
+
+| engine | case | d_min | device | n_atoms | n_refl | n_groups | T | R(F) vs cctbx FFT | t(F) | t(F+grad) | peak mem (MB) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| stamp_qf100 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 3.148e-03 | 0.0186 | 0.0448 | n/a |
+| stamp_qf1000 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 4.949e-03 | 0.0201 | 0.0472 | n/a |
+| stamp_torch_qf1000 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 4.949e-03 | 0.1044 | 0.3282 | n/a |
+| stamp_cpp_qf1000 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 4.990e-03 | 0.0145 | 0.0412 | n/a |
+| nufft_tau1e-3 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 5.597e-03 | 0.3287 | 1.9522 | n/a |
+| nufft_tau1e-4 | synthetic_1000 | 2.0 | cpu+bridge | 1000 | 14098 | 0 | 0 | 5.597e-03 | 0.6584 | 3.9980 | n/a |
+| cctbx_fft | synthetic_1000 | 2.0 | cpu | 1000 | 14098 | 0 | 0 | 0.000e+00 | 0.0141 | n/a | n/a |
 
 The default worker engine is **not** changed in this PR. A go/no-go for
 making `engine: "nufft"` the CUDA default is a ≥5× `F+grad` speedup over

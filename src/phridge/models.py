@@ -364,7 +364,8 @@ class SfEngineParams(_Strict):
     wing_cutoff: float = 1e-4
     u_extra: Optional[float] = None
     n_real: Optional[list[int]] = None
-    dtype: str = "float64"
+    dtype: str = "float64"  # float64 | float32 | float16
+    stamp_backend: str = "auto"  # auto | torch | triton | numba | cpp | cuda
 
 
 class SfGradients(_Strict):

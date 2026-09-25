@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Large-N SF gradient benchmark: phridge (CUDA / MPS) vs CCTBX direct and FFT.
+"""LS site-grad check vs CCTBX direct (cosine / R(F)).
 
-Builds ~1000-atom random structures, computes F_obs from the true model,
-applies a small Gaussian Cartesian site perturbation, then compares LS
-site-gradient length and direction across several space groups. Writes::
+Timing tables in ``examples/sf_gradient_benchmark.md`` are produced by
+``phridge.contrib.nufft_sf.benchmark`` (P1 / P212121 / R3 / F423, kept
+engine, stamp backends). This script is the older in-process LS harness::
 
     python examples/sf_gradient_benchmark.py --device mps
-    # → examples/sf_gradient_benchmark.md
 
 Import cctbx before torch in the calling process.
 ``make test-sf-gpu`` runs the CUDA accuracy checks.

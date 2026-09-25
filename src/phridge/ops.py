@@ -247,9 +247,18 @@ _TARGET_INPUTS = {
 
 register(
     OpSpec(
-        name="sf_calc",
+        name="sf_bind",
         schema_version=SCHEMA_VERSION,
         inputs={**_XRAY_INPUTS, "hkl": "MillerArray"},
+        outputs={"handle": "json"},
+    )
+)
+
+register(
+    OpSpec(
+        name="sf_calc",
+        schema_version=SCHEMA_VERSION,
+        inputs={**_XRAY_INPUTS, "hkl": "MillerArray", "handle": "json"},
         outputs={"f_calc": "MillerArray"},
     )
 )
@@ -258,7 +267,7 @@ register(
     OpSpec(
         name="sf_gradients",
         schema_version=SCHEMA_VERSION,
-        inputs={**_XRAY_INPUTS, "d_target_d_f_calc": "MillerArray"},
+        inputs={**_XRAY_INPUTS, "d_target_d_f_calc": "MillerArray", "handle": "json"},
         outputs={"gradients": "SfGradients"},
     )
 )

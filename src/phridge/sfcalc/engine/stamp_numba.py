@@ -1,6 +1,7 @@
 """Optional CPU Numba Ten Eyck stamp (per-atom box loop).
 
-Forward paints the density with a scalar loop, matching the torch chunk path.
+Forward paints with a parallel loop and thread-local grids (reduction after).
+Iso terms use the cctbx ``a exp(b r²)`` form and a separable ``O @ Δx``.
 First-order backward is an analytical VJP over the same boxes. Higher-order
 autograd (``create_graph=True``, Gauss-Newton HVP) falls back to the torch stamp.
 """
@@ -109,6 +110,9 @@ def _compile():
         nf0 = float(n0)
         nf1 = float(n1)
         nf2 = float(n2)
+        o00, o01, o02 = o[0, 0], o[0, 1], o[0, 2]
+        o10, o11, o12 = o[1, 0], o[1, 1], o[1, 2]
+        o20, o21, o22 = o[2, 0], o[2, 1], o[2, 2]
         for tid in nb.prange(n_thr):
             start = (tid * n_exp) // n_thr
             end = ((tid + 1) * n_exp) // n_thr
@@ -129,29 +133,42 @@ def _compile():
                 fd = fdp[i]
                 if not aniso[i]:
                     s2b = u_iso[i] + u_extra
+                    nterm = k_max + 1
+                    as_real = np.empty(nterm, dtype=np.float64)
+                    bs_real = np.empty(nterm, dtype=np.float64)
+                    for kk in range(k_max):
+                        s2 = s2b + b[i, kk] / EIGHT_PI2
+                        as_real[kk] = wi * a[i, kk] * (TWOPI * s2) ** (-1.5)
+                        bs_real[kk] = -0.5 / s2
+                    as_real[k_max] = wi * cfp * (TWOPI * s2b) ** (-1.5)
+                    bs_real[k_max] = -0.5 / s2b
+                    as_im = wi * fd * (TWOPI * s2b) ** (-1.5) if has_imag else 0.0
                     for di in range(-h0, h0 + 1):
-                        gi0 = g0 + di
-                        rf0 = gi0 / nf0 - x0
+                        gi0 = wrap(g0 + di, n0)
+                        rf0 = (g0 + di) / nf0 - x0
+                        t0x, t0y, t0z = o00 * rf0, o10 * rf0, o20 * rf0
+                        row0 = gi0 * n1
                         for dj in range(-h1, h1 + 1):
-                            gi1 = g1 + dj
-                            rf1 = gi1 / nf1 - x1
+                            gi1 = wrap(g1 + dj, n1)
+                            rf1 = (g1 + dj) / nf1 - x1
+                            t1x, t1y, t1z = o01 * rf1, o11 * rf1, o21 * rf1
+                            row01 = (row0 + gi1) * n2
                             for dk in range(-h2, h2 + 1):
-                                gi2 = g2 + dk
-                                rf2 = gi2 / nf2 - x2
-                                rcx = o[0, 0] * rf0 + o[0, 1] * rf1 + o[0, 2] * rf2
-                                rcy = o[1, 0] * rf0 + o[1, 1] * rf1 + o[1, 2] * rf2
-                                rcz = o[2, 0] * rf0 + o[2, 1] * rf1 + o[2, 2] * rf2
+                                gi2 = wrap(g2 + dk, n2)
+                                rf2 = (g2 + dk) / nf2 - x2
+                                rcx = t0x + t1x + o02 * rf2
+                                rcy = t0y + t1y + o12 * rf2
+                                rcz = t0z + t1z + o22 * rf2
                                 r2 = rcx * rcx + rcy * rcy + rcz * rcz
                                 if r2 > rcut2:
                                     continue
-                                base = iso_gauss(r2, s2b)
-                                terms = 0.0
-                                for kk in range(k_max):
-                                    terms += a[i, kk] * iso_gauss(r2, s2b + b[i, kk] / EIGHT_PI2)
-                                flat = (wrap(gi0, n0) * n1 + wrap(gi1, n1)) * n2 + wrap(gi2, n2)
-                                local_re[tid, flat] += (terms + cfp * base) * wi
+                                contr = 0.0
+                                for kk in range(nterm):
+                                    contr += as_real[kk] * math.exp(bs_real[kk] * r2)
+                                flat = row01 + gi2
+                                local_re[tid, flat] += contr
                                 if has_imag:
-                                    local_im[tid, flat] += fd * base * wi
+                                    local_im[tid, flat] += as_im * math.exp(bs_real[k_max] * r2)
                 else:
                     u00 = u_cart[i, 0, 0]
                     u01 = u_cart[i, 0, 1]
@@ -160,17 +177,21 @@ def _compile():
                     u12 = u_cart[i, 1, 2]
                     u22 = u_cart[i, 2, 2]
                     for di in range(-h0, h0 + 1):
-                        gi0 = g0 + di
-                        rf0 = gi0 / nf0 - x0
+                        gi0 = wrap(g0 + di, n0)
+                        rf0 = (g0 + di) / nf0 - x0
+                        t0x, t0y, t0z = o00 * rf0, o10 * rf0, o20 * rf0
+                        row0 = gi0 * n1
                         for dj in range(-h1, h1 + 1):
-                            gi1 = g1 + dj
-                            rf1 = gi1 / nf1 - x1
+                            gi1 = wrap(g1 + dj, n1)
+                            rf1 = (g1 + dj) / nf1 - x1
+                            t1x, t1y, t1z = o01 * rf1, o11 * rf1, o21 * rf1
+                            row01 = (row0 + gi1) * n2
                             for dk in range(-h2, h2 + 1):
-                                gi2 = g2 + dk
-                                rf2 = gi2 / nf2 - x2
-                                rcx = o[0, 0] * rf0 + o[0, 1] * rf1 + o[0, 2] * rf2
-                                rcy = o[1, 0] * rf0 + o[1, 1] * rf1 + o[1, 2] * rf2
-                                rcz = o[2, 0] * rf0 + o[2, 1] * rf1 + o[2, 2] * rf2
+                                gi2 = wrap(g2 + dk, n2)
+                                rf2 = (g2 + dk) / nf2 - x2
+                                rcx = t0x + t1x + o02 * rf2
+                                rcy = t0y + t1y + o12 * rf2
+                                rcz = t0z + t1z + o22 * rf2
                                 r2 = rcx * rcx + rcy * rcy + rcz * rcz
                                 if r2 > rcut2:
                                     continue
@@ -192,7 +213,7 @@ def _compile():
                                         b[i, kk] / EIGHT_PI2 + u_extra,
                                     )
                                     terms += a[i, kk] * gk
-                                flat = (wrap(gi0, n0) * n1 + wrap(gi1, n1)) * n2 + wrap(gi2, n2)
+                                flat = row01 + gi2
                                 local_re[tid, flat] += (terms + cfp * base) * wi
                                 if has_imag:
                                     local_im[tid, flat] += fd * base * wi
@@ -502,7 +523,10 @@ def _reduce_expanded(
     gfdp_exp,
     n_atoms: int,
 ):
-    rot = np.asarray(engine.model.rot, dtype=np.float64)
+    if getattr(engine, "_asu_stamp", False):
+        rot = np.eye(3, dtype=np.float64)[None]
+    else:
+        rot = np.asarray(engine.model.rot, dtype=np.float64)
     o = _np(engine.o_mat).astype(np.float64, copy=False)
     w_wo = engine.model.multiplicity.astype(np.float64) / float(engine.model.n_sym)
     n_sym = int(rot.shape[0])

@@ -25,7 +25,7 @@ tensor, so the two conventions line up with no factors of two.
 |-------|-------|-----|
 | $F_h(\mathbf{x})$ | `phridge.sfcalc.engine` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
 | $G_h = \partial g/\partial F_h$ | `phridge.sfcalc.targets` | autograd of the target w.r.t. the complex `f_calc` tensor |
-| $\partial F_h/\partial x$ chain | `phridge.sfcalc.engine` | vector-Jacobian product through the FFT (the Agarwal gradient-map trick, for free) |
+| $\partial F_h/\partial x$ chain | `phridge.sfcalc.engine` | Agarwal map: scatter $G_h$ onto FFT[-h], $N\cdot\mathrm{IFFT}$, stamp VJP (no autograd tape) |
 | packing for a minimizer | `phridge.sfcalc.client` | cctbx `packing_order_convention == 2`, cartesian site / $U_{cart}$ gradients |
 
 ## Forward model
@@ -164,16 +164,39 @@ Sampling cost is (expanded atoms) x (box points) x (Gaussian terms); atoms
 are bucketed by cutoff radius and isotropic atoms take a spherical fast
 path. On CPU, `stamp_backend="auto"` uses a parallel Numba per-atom stamp
 when `numba` is installed (`pip install phridge[numba]`); the eager torch
-chunk path remains the differentiable reference and the fallback. A
-1000-atom P2₁2₁2₁ at 2 Å is ~0.05 s F / ~0.10 s site grads on a laptop
-(see `examples/sf_gradient_benchmark.md`). The older 2-core torch-only
-quote (~10 s F / ~45 s grads at 2000 atoms) is that fallback, not Numba.
+chunk path remains the differentiable reference and the fallback.
+`stamp_backend="cpp"` is a CPU C++ stamp (one grid, exp table,
+JIT via `torch.utils.cpp_extension`). `auto` does **not** select it on
+CPU (Numba stays the default). On **MPS**, `auto` selects C++ (no Metal
+kernel). `stamp_backend="cuda"` is the same stamp/VJP on NVIDIA
+(`atomicAdd` + cuFFT + algebraic gather); `auto` on CUDA prefers it
+when the extension builds, else Triton, else torch.
+`EngineParams.dtype` selects the stamp/`F` precision: `float64` (default),
+`float32`, or `float16` (half storage; box math in float; FFT promoted to
+float32 because `torch.fft` has no half). On MPS, `float64` is lowered to
+`float32`.
+When `agentsg` is installed and the model has more than the identity,
+the stamp paints the **ASU only** — the same split as cctbx
+`sampled_model_density` + `maptbx.structure_factors.from_map`. agentsg
+supplies the space group, the closed Seitz list (point-group rotations
+\(W\) plus translations \(w\) and centering), and the ASU→crystal map.
+After the FFT, mates are added algebraically:
+
+$$F(h)=\sum_s \mathrm{FFT}[\rho_\mathrm{ASU}]_{-hW_s}\,e^{2\pi i\,h\cdot w_s}$$
+
+`EngineParams.p1_expand=True` forces the old expand-to-P1 splat.
+Real density uses `torch.fft.rfftn`.
+A 1000-atom P2₁2₁2₁ at 2 Å is ~0.010 s F / ~0.033 s F+grad for the
+CPU C++ stamp (see `examples/sf_gradient_benchmark.md`). The older
+2-core torch-only quote (~10 s F / ~45 s grads at 2000 atoms) is that
+fallback, not Numba or C++.
 `SfEngineParams.wing_cutoff` (default 1e-4; cctbx uses 1e-3) and
 `quality_factor` trade accuracy for box size and grid size.
 
-The FFT is always `torch.fft.fftn` by default (CUDA cuFFT / CPU torch), so
-the density → FFT → gather graph stays in PyTorch and per-atom gradients
-come from the same autograd path. Gaussian quadratic forms are written out
+Real density uses `torch.fft.rfftn` (Hermitian packed gather / Agarwal);
+`fdp ≠ 0` stays on `fftn`. The graph is still PyTorch (CUDA cuFFT / CPU
+torch / Metal). First-order parameter grads are the hand Agarwal VJP,
+not autograd through the FFT. Gaussian quadratic forms are written out
 elementwise (no batched GEMM on the hot path). If a CPU torch/MKL build
 misbehaves on `torch.fft`, set `EngineParams.cpu_numpy_fft=True` to opt into
 a numpy FFT custom Function; that escape hatch is off by default and unused
