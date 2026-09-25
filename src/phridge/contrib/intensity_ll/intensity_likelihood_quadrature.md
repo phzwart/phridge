@@ -106,6 +106,8 @@ Autograd (window detached) against central differences of the dense reference, 2
 
 Single-threaded numpy prototype: 15 µs per reflection (1.5 s per 100 000), Newton alone 4 µs. PyTorch on two CPU threads, float64, 100 000 reflections: values 2.5 s; value plus gradients in $E_C$ and $\sigma_A$ 1.7 s; $t$ noise with 12 outer nodes 14 s. Every operation is elementwise over arrays of size $N$ or $N \times 24$, so CUDA cost should be low milliseconds per 100 000; float32 is adequate for the Legendre branch.
 
+Later vectorization, straggler peeling, and warm-started Newton: measured CPU times in [`quadrature_speed.md`](quadrature_speed.md).
+
 ## 4. Recommended algorithm
 
 Precompute once: Legendre nodes (24), Hermite nodes (7), log-gamma rules per $\nu$ (12–16). Per batch of reflections, vectorized:
