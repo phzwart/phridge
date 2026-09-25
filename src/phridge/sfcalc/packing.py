@@ -175,12 +175,24 @@ class PackedTargetResult:
         for arr in (self.curv_radial, self.curv_tangential):
             if arr is not None and arr.shape != (n,):
                 raise ValueError("curvature length mismatch")
+        v = float("nan") if value is None else float(value)
+        if not np.isfinite(v):
+            raise ValueError(
+                f"target {name!r} value is not finite ({value!r}); "
+                "JSON cannot carry NaN so this used to arrive as value=null"
+            )
+        vt = None if value_test is None else float(value_test)
+        if vt is not None and not np.isfinite(vt):
+            vt = None
+        sf = None if scale_factor is None else float(scale_factor)
+        if sf is not None and not np.isfinite(sf):
+            sf = None
         self.meta = TargetResult(
             name=name,
-            value=float(value),
-            value_test=None if value_test is None else float(value_test),
+            value=v,
+            value_test=vt,
             n_refl=int(n),
-            scale_factor=None if scale_factor is None else float(scale_factor),
+            scale_factor=sf,
             has_curvature=self.curv_radial is not None,
         )
 

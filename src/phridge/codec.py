@@ -159,7 +159,17 @@ def decode_ref(store: RedisStore, ref: ObjectRef) -> Any:
         cls = CCTBX_TYPES[ref.cctbx_type]
         if ref.meta is None:
             raise ValueError("cctbx ObjectRef missing meta")
-        meta = cls.model_validate(ref.meta)
+        raw_meta = dict(ref.meta) if isinstance(ref.meta, dict) else ref.meta
+        if (
+            ref.cctbx_type == "TargetResult"
+            and isinstance(raw_meta, dict)
+            and raw_meta.get("value") is None
+        ):
+            raise ValueError(
+                "TargetResult.value is null — the worker NLL was non-finite "
+                "(JSON cannot encode NaN). Often MPS float32 overflow."
+            )
+        meta = cls.model_validate(raw_meta)
         if ref.cctbx_type in _JSON_ONLY.values():
             return meta
         if ref.key is None:

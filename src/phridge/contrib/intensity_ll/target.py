@@ -244,15 +244,36 @@ class IntensityLogLikelihood(Target):
         return torch.where(ok, -ll, torch.zeros_like(ll))
 
     def evaluate(self, f_calc, obs: Observations, compute_curvature: bool = True) -> TargetEval:
+        import math
         import time
 
         from phridge.sfcalc.ops import _accel_like
 
+        def _finite(ev) -> bool:
+            return ev.value is not None and math.isfinite(float(ev.value))
+
+        def _cpu_f(f):
+            import torch
+
+            t = f.detach()
+            if t.device.type != "cpu":
+                t = t.cpu()
+            if t.is_complex() and t.dtype != torch.complex128:
+                t = t.to(torch.complex128)
+            elif (not t.is_complex()) and t.dtype != torch.float64:
+                t = t.to(torch.float64)
+            return t
+
         # C++ stamp leaves F on CPU; worker device may be MPS/CUDA. Lift the
         # 1-D miller arrays so Newton + quadrature run on the accelerator.
-        f_calc = _accel_like(f_calc)
+        f_acc = _accel_like(f_calc)
         t0 = time.perf_counter()
-        res = super().evaluate(f_calc, obs, compute_curvature=compute_curvature)
+        res = super().evaluate(f_acc, obs, compute_curvature=compute_curvature)
+        if not _finite(res):
+            # Metal float32 can overflow a sharp Rice factor; JSON then stores
+            # value=null and the client ValidationError's. Exact CPU path.
+            res = super().evaluate(_cpu_f(f_calc), obs, compute_curvature=compute_curvature)
+            f_acc = _cpu_f(f_calc)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         import os
@@ -272,7 +293,7 @@ class IntensityLogLikelihood(Target):
             curv_str = f"curv={'yes' if compute_curvature else 'no'}"
             print(
                 f">>> [mli_quad worker] Target (work) = {res.value:.6f} | Free = {test_val} | "
-                f"PyTorch eval: {elapsed_ms:.2f} ms | {f_calc.device} | {nu_str} | {curv_str}",
+                f"PyTorch eval: {elapsed_ms:.2f} ms | {f_acc.device} | {nu_str} | {curv_str}",
                 flush=True,
             )
         return res
