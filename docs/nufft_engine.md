@@ -1,0 +1,119 @@
+# NUFFT structure-factor engine
+
+A second, additive forward model (`NufftStructureFactorEngine`) that is
+API-compatible with `StructureFactorEngine`. It does **not** replace the
+stamp/FFT engine; `sf_calc` / `sf_gradients` are unchanged. Select it
+explicitly via the contrib ops `nufft_sf_calc` and `nufft_sf_gradients`.
+
+## Why NUFFT
+
+The stamp engine paints each atom as real-space Gaussians, FFTs, and
+divides out a *shared* extra smear `u_extra`. That reciprocal correction
+is only exact when the s-dependent factor is the same for every atom.
+Per-atom form factors and (an)isotropic ADPs cannot be pulled out of the
+sum, so a single shared-kernel splat is approximate for mixed atoms.
+
+The NUFFT engine groups atoms so that within a group the s-dependent
+factor is common, Taylor-expands the residual ADP `ΔU_j`, and evaluates
+every remaining sum `Σ_j w_j exp(2πi h·x_j)` as a type-1 NUFFT (Kaiser–Bessel
+spreader, no `u_extra`, no box, no aliasing correction).
+
+## Mathematics
+
+Conventions match the stamp engine. `s² = |d*|²`, `stol² = s²/4`, eltbx
+Gaussians `f_t(stol²) = Σ_k a_tk exp(-b_tk stol²) + c_t`. Expanded atoms
+carry `w_j = occ_j · multiplicity_j / n_sym`.
+
+```
+F(h) = Σ_g f_{t(g)}(s) exp(-2π² U_g s²)
+         · Σ_{j∈g} w_j (1 + (fp_j + i fdp_j)/f_t(s))
+                · exp(-2π² d*^T ΔU_j d*) exp(2πi h·x_j)
+```
+
+`U_j = U_g I + ΔU_j` with `U_g` the shell median. The residual Debye–Waller
+factor is expanded to order `N`. Isotropic terms use `(s²)^n · NUFFT[w δ^n]`.
+Anisotropic terms use the 6-component Voigt form (6 transforms at `n=1`,
+21 at `n=2`). `n ≥ 3` is not implemented for aniso; shells are tightened
+instead. `fp`/`fdp` add a second scalar-weight family per group.
+
+Truncation bound (per group, relative):
+
+```
+|R_{N+1}| ≤ (2π² s_max² λ_max(ΔU))^{N+1} / (N+1)!
+```
+
+This bound drives automatic U-shell construction (`GroupPlan.from_model`).
+
+## API
+
+```python
+from phridge.sfcalc.engine import NufftEngineParams, NufftStructureFactorEngine, GroupPlan
+
+eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=2.0, tau=1e-4, n_max=2, eps=1e-6))
+f = eng.f_calc_numpy()
+g = eng.gradients(d_target_d_f_calc)  # keys: site_frac, occupancy, u_iso, u_star, fp, fdp
+eng.replan()  # after large ADP changes
+```
+
+Public surface matches `StructureFactorEngine`: `f_calc`, `tensors`,
+`f_calc_numpy`, `gradients`, `jvp`, `gauss_newton_hvp`,
+`gauss_newton_diagonal`. `gauss_newton_blocks` raises `NotImplementedError`.
+
+`symmetry="expand"` expands to P1 with the same `expand()` as the stamp
+engine. `symmetry="asu"` is reserved and not implemented.
+
+### Plan / replan
+
+The group plan is built from the model at construction and reused.
+`U_g` is a detached constant; gradients w.r.t. `u_iso` / `u_star` flow
+through `ΔU_j` only. A stale plan degrades **accuracy**, never correctness
+of the derivative of the model actually evaluated. Call `replan()` after
+large ADP changes.
+
+## Contrib ops
+
+```python
+from phridge.contrib.nufft_sf import register
+register()  # or pip install + worker entry point phridge.ops:nufft_sf
+
+# inputs: xray, table, hkl, params (json NufftEngineOptions)
+# outputs: f_calc (MillerArray)
+bridge.call("nufft_sf_calc", xray=..., table=..., hkl=..., params={"engine": "nufft", "d_min": 2.0})
+
+# inputs: xray, table, d_target_d_f_calc, params
+# outputs: gradients (SfGradients)
+bridge.call("nufft_sf_gradients", ...)
+```
+
+`NufftEngineOptions` (`extra="forbid"`): `engine="nufft"`, `d_min`, `tau=1e-4`,
+`n_max=2`, `eps=1e-6`, `dtype="float64"`, `t_chunk=16`, `symmetry="expand"`.
+
+Install: `pip install 'phridge[nufft]'` (pulls `pytorch-finufft` / `finufft`).
+
+## Benchmark
+
+```bash
+# CPU (requires cctbx + pytorch-finufft)
+PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
+    --cases 1ee2,6czg,synthetic \
+    --d-min 2.5,2.0,1.5 \
+    --device cpu \
+    --out docs/nufft_engine.md
+
+# CUDA if present
+PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
+    --cases 1ee2,6czg,synthetic \
+    --d-min 2.5,2.0,1.5 \
+    --device cuda \
+    --out docs/nufft_engine.md
+```
+
+Results (fill after running the commands above):
+
+| engine | d_min | n_groups | T | R(F) vs cctbx direct | t(F) | t(F+grad) | peak mem |
+|--------|-------|----------|---|----------------------|------|-----------|----------|
+| *(run benchmark.py)* | | | | | | | |
+
+The default worker engine is **not** changed in this PR. A go/no-go for
+making `engine: "nufft"` the CUDA default is a ≥5× `F+grad` speedup over
+the stamp engine at equal `R(F)` on the largest case.

@@ -634,3 +634,88 @@ def test_jvp_finite_difference():
     denom = max(np.linalg.norm(fd), 1e-300)
     rel = float(np.linalg.norm(df_np - fd) / denom)
     assert rel < 1e-4, f"jvp vs FD rel {rel}"
+
+
+def test_register_is_idempotent():
+    from phridge.contrib.nufft_sf import CALC_OP, GRAD_OP, register
+    from phridge.ops import get_op, list_ops
+
+    register()
+    register()
+    names = {s.name for s in list_ops()}
+    assert CALC_OP in names
+    assert GRAD_OP in names
+    assert get_op(CALC_OP).inputs["xray"] == "XrayStructure"
+    assert get_op(GRAD_OP).outputs["gradients"] == "SfGradients"
+
+
+def test_options_pydantic_accept_reject():
+    from pydantic import ValidationError
+
+    from phridge.contrib.nufft_sf.options import NufftEngineOptions
+
+    NufftEngineOptions(d_min=2.0)
+    NufftEngineOptions(engine="nufft", d_min=1.5, tau=1e-3, n_max=1)
+    with pytest.raises(ValidationError):
+        NufftEngineOptions(d_min=2.0, extra_field=True)
+    with pytest.raises(ValidationError):
+        NufftEngineOptions(d_min=-1.0)
+    with pytest.raises(ValidationError):
+        NufftEngineOptions(d_min=2.0, engine="stamp")
+
+
+def test_job_envelope_nufft_sf_calc():
+    from phridge.contrib.nufft_sf import CALC_OP, register
+    from phridge.models import JobEnvelope, JobStatus, ObjectKind, ObjectRef, SCHEMA_VERSION
+
+    register()
+    envelope = JobEnvelope(
+        job_id="nufft-test",
+        op=CALC_OP,
+        schema_version=SCHEMA_VERSION,
+        inputs={
+            "xray": ObjectRef(kind=ObjectKind.cctbx, key="phridge:obj:n:xray", cctbx_type="XrayStructure"),
+            "table": ObjectRef(kind=ObjectKind.cctbx, key="phridge:obj:n:table", cctbx_type="ScatteringTable"),
+            "hkl": ObjectRef(kind=ObjectKind.cctbx, key="phridge:obj:n:hkl", cctbx_type="MillerArray"),
+            "params": ObjectRef(kind=ObjectKind.json, key="phridge:obj:n:params"),
+        },
+        status=JobStatus.queued,
+    )
+    loaded = JobEnvelope.model_validate_json(envelope.model_dump_json())
+    assert loaded.op == CALC_OP
+    assert loaded.inputs["hkl"].cctbx_type == "MillerArray"
+
+
+def test_nufft_sf_calc_op_smoke():
+    from phridge.contrib.nufft_sf.op import nufft_sf_calc
+    from phridge.models import CrystalSymmetry, Scatterer, SymOp
+    from phridge.packing import PackedMiller
+    from phridge.packing_xtal import PackedXray
+    from phridge.sfcalc.packing import PackedScatteringTable
+
+    model = _toy_carbon_p1(n_atoms=4, u_iso=0.04, seed=1)
+    crystal = CrystalSymmetry(
+        unit_cell=list(model.unit_cell),
+        space_group_hall=" P 1",
+        space_group_number=1,
+        symops=[SymOp(r=[1, 0, 0, 0, 1, 0, 0, 0, 1], t=[0, 0, 0])],
+    )
+    xray = PackedXray(
+        crystal=crystal,
+        sites_frac=model.sites_frac,
+        occupancy=model.occupancy,
+        u_iso=model.u_iso,
+        scatterers=[Scatterer(i=i, scattering_type="C") for i in range(model.n_scatterers)],
+        u_star=model.u_star,
+    )
+    table = PackedScatteringTable(
+        labels=["C"],
+        gauss_a=model.gauss_a,
+        gauss_b=model.gauss_b,
+        gauss_c=model.gauss_c,
+    )
+    hkl = _miller_sphere(2.0, model.unit_cell, max_index=4)
+    miller = PackedMiller(crystal=crystal, hkl=hkl, data=np.zeros(len(hkl), dtype=np.complex128))
+    out = nufft_sf_calc(xray, table, miller, {"engine": "nufft", "d_min": 2.0, "n_max": 0, "tau": 1.0, "eps": 1e-6})
+    assert out.data.shape == (len(hkl),)
+    assert np.isfinite(out.data).all()

@@ -52,6 +52,7 @@ intensity_ll = "phridge.contrib.intensity_ll:register"
 [project.entry-points."phridge.ops"]
 spatial_sigmaa_v2 = "phridge.contrib.spatial_sigmaa_v2:register"
 multixtal = "phridge.contrib.multixtal:register"
+nufft_sf = "phridge.contrib.nufft_sf:register"
 
 [tool.hatch.metadata]
 allow-direct-references = true
