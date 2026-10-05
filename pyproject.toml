@@ -45,6 +45,7 @@ phridge-intensity = "phridge.client.intensity_tool:main"
 phridge-refine = "phridge.client.intensity.phenix_hook:main"
 phridge-view = "phridge.client.viewer:main"
 phridge-multixtal = "phridge.contrib.multixtal.cli:main"
+phridge-ensemble = "phridge.contrib.ensemble.cli:main"
 
 [project.entry-points."phridge.targets"]
 intensity_ll = "phridge.contrib.intensity_ll:register"
@@ -53,6 +54,7 @@ intensity_ll = "phridge.contrib.intensity_ll:register"
 spatial_sigmaa_v2 = "phridge.contrib.spatial_sigmaa_v2:register"
 multixtal = "phridge.contrib.multixtal:register"
 nufft_sf = "phridge.contrib.nufft_sf:register"
+ensemble = "phridge.contrib.ensemble:register"
 
 [tool.hatch.metadata]
 allow-direct-references = true

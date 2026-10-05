@@ -55,7 +55,7 @@ def _module():
         name="phridge_stamp_cuda",
         sources=[str(here / "stamp.cu")],
         extra_include_paths=[str(here)],
-        extra_cuda_cflags=["-O3", "-std=c++17"],
+        extra_cuda_cflags=["-O3", "-std=c++20"],
         verbose=False,
     )
     return _MOD

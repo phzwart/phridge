@@ -154,6 +154,13 @@ void vjp_t(
   phridge_stamp_cuda::launch_vjp(raw<T>(gre), raw<T>(gim), in, out);
 }
 
+#if defined(__CUDACC_VER_MAJOR__) && __CUDACC_VER_MAJOR__ >= 13
+#define DISPATCH_HALF(fn) \
+  throw std::runtime_error("stamp cuda float16 is unsupported on CUDA 13+")
+#else
+#define DISPATCH_HALF(fn) fn(__half, float)
+#endif
+
 #define DISPATCH_PREC(fn)                                                                 \
   do {                                                                                    \
     auto st = grid_like.scalar_type();                                                    \
@@ -162,7 +169,7 @@ void vjp_t(
     } else if (st == torch::kFloat) {                                                     \
       fn(float, float);                                                                   \
     } else if (st == torch::kHalf) {                                                      \
-      fn(__half, float);                                                                  \
+      DISPATCH_HALF(fn);                                                                  \
     } else {                                                                              \
       throw std::runtime_error("stamp cuda dtype must be float64, float32, or float16"); \
     }                                                                                     \
@@ -243,6 +250,7 @@ void stamp_vjp(
 #undef CHECK_CUDA
 #undef CHECK_CONTIG
 #undef DISPATCH_PREC
+#undef DISPATCH_HALF
 
 }  // namespace
 

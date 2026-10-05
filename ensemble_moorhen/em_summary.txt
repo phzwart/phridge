@@ -1,0 +1,13 @@
+EM started at the mean model (z = 0, F_mu = F of the average coordinates).
+75 datasets, 4767 reflections to 2.50 A, rank 3, 24 sweeps.
+Training log-likelihood -138112.0 -> 37738.4.
+Principal angles (degrees) to the leading singular vectors of F_n - F_mu:
+  57.94  77.76  87.30
+The same angles against only the part of F_n - F_mu parallel to the mean-model phase:
+  37.64  55.27  69.77
+Multiple correlation of each planted amplitude with the EM scores of that mode's frames:
+  mode 1: 0.942
+  mode 2: 0.601
+  mode 3: 0.674
+mean_model.pdb and mean_fc.ccp4 are the kickstart. em_mode_XX.ccp4 are the fitted modes.
+Contour mean_fc near +1.5 and the EM modes near +/- 2.

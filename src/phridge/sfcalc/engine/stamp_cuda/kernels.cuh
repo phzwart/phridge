@@ -192,7 +192,7 @@ __global__ void stamp_forward_kernel(T* grid_re, T* grid_im, StampIn<T> in) {
           }
           double contr = 0.0;
           for (int kk = 0; kk < nterm; ++kk) {
-            contr += as_real[kk] * exp_lookup(in.exp_table, in.ntab, bs_real[kk] * r2);
+            contr += as_real[kk] * exp_lookup(in.exp_table, in.ntab, A(bs_real[kk] * r2));
           }
           const int flat = row01 + gi2;
           atomic_add_t(grid_re + flat, T(contr));
@@ -232,7 +232,7 @@ __global__ void stamp_forward_kernel(T* grid_re, T* grid_im, StampIn<T> in) {
           }
           const double q = p00 * rcx * rcx + p11 * rcy * rcy + p22 * rcz * rcz +
                            2.0 * (p01 * rcx * rcy + p02 * rcx * rcz + p12 * rcy * rcz);
-          const double base = kNorm0 * pow(det, -0.5) * exp_lookup(in.exp_table, in.ntab, -0.5 * q);
+          const double base = kNorm0 * pow(det, -0.5) * exp_lookup(in.exp_table, in.ntab, A(-0.5 * q));
           double terms = 0.0;
           for (int kk = 0; kk < k_max; ++kk) {
             const double extra = in.b[i * k_max + kk] / kEightPi2 + in.u_extra;
@@ -241,7 +241,7 @@ __global__ void stamp_forward_kernel(T* grid_re, T* grid_im, StampIn<T> in) {
             }
             const double qk = p00 * rcx * rcx + p11 * rcy * rcy + p22 * rcz * rcz +
                               2.0 * (p01 * rcx * rcy + p02 * rcx * rcz + p12 * rcy * rcz);
-            terms += in.a[i * k_max + kk] * (kNorm0 * pow(det, -0.5) * exp_lookup(in.exp_table, in.ntab, -0.5 * qk));
+              terms += in.a[i * k_max + kk] * (kNorm0 * pow(det, -0.5) * exp_lookup(in.exp_table, in.ntab, A(-0.5 * qk)));
           }
           const int flat = row01 + gi2;
           atomic_add_t(grid_re + flat, T((terms + cfp * base) * wi));

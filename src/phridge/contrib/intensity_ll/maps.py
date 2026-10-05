@@ -31,6 +31,7 @@ which is what a refinement of nu needs. See ``maps.md`` next to this module.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
@@ -90,6 +91,8 @@ class PosteriorMoments:
     log_lambda_mean: Tensor  # <log lambda>  (zeros for normal noise)
     d_loglik_d_nu: Optional[Tensor]  # None for normal noise
     stats: dict[str, Any] = field(default_factory=dict)
+    e_complex: Optional[Tensor] = None  # <E exp(i phi)> in the model frame; phase 0 when hl is None
+    log_lik_hl: Optional[Tensor] = None  # HL-reweighted normaliser; None when hl is None
 
 
 def _fom_at(E: Tensor, Ec: Tensor, sA: Tensor, centric: Tensor) -> Tensor:
@@ -105,6 +108,85 @@ def _score_from_Em(Em: Tensor, Ec: Tensor, sA: Tensor, centric: Tensor) -> Tenso
     a = 1 - sA**2
     pref = torch.where(centric, sA / a, 2 * sA / a)
     return pref * (Em - sA * Ec)
+
+
+def centric_two_point_moment(kappa: Tensor, axis: Tensor) -> Tensor:
+    """Centric phase moment as an explicit sum over the two allowed phases.
+
+    In the frame where the centric axis is real, the allowed phases are 0 and π.
+    With concentration ``kappa`` (model) and Hendrickson–Lattman projection
+    ``axis`` on that axis,
+
+        w+ ∝ exp(+kappa + axis),   w- ∝ exp(-kappa - axis),
+        <e^{iφ}> = (w+ - w-) / (w+ + w-) = tanh(kappa + axis).
+
+    ``axis`` is ``A cos φ_c + B sin φ_c`` after rotating the HL vector onto the
+    centric axis. The imaginary HL component does not enter once that rotation
+    is done, because sin(φ_c+π) = -sin φ_c and the two phases sit on one line.
+    """
+    plus = kappa + axis
+    minus = -kappa - axis
+    shift = torch.maximum(plus, minus)
+    wp = torch.exp(plus - shift)
+    wm = torch.exp(minus - shift)
+    return (wp - wm) / (wp + wm)
+
+
+def _log_i0(x: Tensor) -> Tensor:
+    ax = x.abs()
+    return ax + torch.log(torch.special.i0e(ax).clamp_min(1e-300))
+
+
+def _log_cosh(u: Tensor) -> Tensor:
+    au = u.abs()
+    return au + torch.log1p(torch.exp(-2.0 * au)) - math.log(2.0)
+
+
+def _hl_posterior(
+    nodes: Tensor,
+    terms: Tensor,
+    ec: Tensor,
+    sa: Tensor,
+    centric: Tensor,
+    hl: Tensor,
+) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """Reweight amplitude nodes by I0(|v|)/I0(κ) and return the complex moment.
+
+    ``hl`` is complex per reflection in the frame where arg μ = 0, so
+    ``v = κ + hl``. The unweighted ``mli`` log-likelihood is left to the caller.
+    """
+    hl_t = torch.as_tensor(hl, device=ec.device)
+    if hl_t.ndim == 0:
+        hl_t = hl_t.expand(ec.shape[0])
+    cdtype = torch.complex128 if ec.dtype == torch.float64 else torch.complex64
+    hl_t = hl_t.to(cdtype)
+    axis_a = hl_t.real.to(dtype=ec.dtype)
+    axis_b = hl_t.imag.to(dtype=ec.dtype)
+    amplitude = nodes
+    variance = (1.0 - sa**2).clamp_min(1e-8)
+    concentration = (sa * ec / variance)[:, None, None] * amplitude
+    kappa_ac = 2.0 * concentration
+    v_re = kappa_ac + axis_a[:, None, None]
+    v_im = axis_b[:, None, None].expand_as(v_re)
+    v_abs = torch.hypot(v_re, v_im)
+    log_ratio_ac = _log_i0(v_abs) - _log_i0(kappa_ac.abs())
+    log_ratio_cen = _log_cosh(concentration + axis_a[:, None, None]) - _log_cosh(concentration)
+    cen = centric[:, None, None]
+    log_ratio = torch.where(cen, log_ratio_cen, log_ratio_ac)
+    flat = (terms + log_ratio).reshape(terms.shape[0], -1)
+    log_lik_hl = torch.logsumexp(flat, dim=1)
+    posterior = torch.softmax(flat, dim=1).reshape(terms.shape)
+    fom_ac = _ratio(v_abs)
+    angle = torch.atan2(v_im, v_re)
+    phase_ac = torch.complex(fom_ac * torch.cos(angle), fom_ac * torch.sin(angle))
+    phase_cen = centric_two_point_moment(concentration, axis_a[:, None, None])
+    phase_factor = torch.where(cen, torch.complex(phase_cen, torch.zeros_like(phase_cen)), phase_ac)
+    e_complex = (posterior * amplitude.to(dtype=phase_factor.dtype) * phase_factor).sum(dim=(1, 2))
+    e_mean = (posterior * amplitude).sum(dim=(1, 2))
+    i_mean = (posterior * amplitude**2).sum(dim=(1, 2))
+    em_mean = e_complex.abs()
+    fom = em_mean / e_mean.clamp_min(1e-300)
+    return e_mean, i_mean, em_mean, e_complex, fom, log_lik_hl
 
 
 @dataclass
@@ -192,12 +274,20 @@ def posterior_moments(
     n_legendre: int = 24,
     k_window: float = 8.0,
     cache: Optional[PosteriorNodes] = None,
+    hl: Optional[Tensor] = None,
 ) -> PosteriorMoments:
     """Posterior averages of the true amplitude on the ``mli`` quadrature nodes.
 
     Same arguments as ``log_likelihood_normal`` / ``log_likelihood_t``. Nodes are frozen
     (no gradient through the window); the moments are returned detached. Pass ``cache``
     to reuse nodes already built by :func:`posterior_node_cache`.
+
+    ``hl`` is an optional complex Hendrickson–Lattman vector (A+iB) per reflection,
+    already rotated into the frame where arg μ = 0. ``None`` leaves the quadrature,
+    ``E_mean``, ``I_mean`` and ``log_lik`` on the original path. A supplied vector
+    reweights node probabilities by the phase-integral ratio ``I0(|v|)/I0(κ)``
+    (centric: ``cosh(κ+A)/cosh(κ)``) and sets ``e_complex`` and ``log_lik_hl``.
+    ``log_lik`` itself stays the unweighted ``mli`` normaliser.
     """
     with torch.no_grad():
         if cache is None:
@@ -236,6 +326,13 @@ def posterior_moments(
             half = nu_t / 2
             d_nu = 0.5 * (torch.log(half) + 1.0 - torch.special.digamma(half)) + 0.5 * (log_lambda_mean - lambda_mean)
 
+        e_complex = torch.complex(Em_mean, torch.zeros_like(Em_mean))
+        log_lik_hl: Optional[Tensor] = None
+        if hl is not None:
+            E_mean, I_mean, Em_mean, e_complex, fom, log_lik_hl = _hl_posterior(
+                nodes, cache.terms, Ec, sA, centric_t, hl
+            )
+
     return PosteriorMoments(
         log_lik=log_lik,
         E_mean=E_mean,
@@ -247,6 +344,8 @@ def posterior_moments(
         log_lambda_mean=log_lambda_mean,
         d_loglik_d_nu=d_nu,
         stats=stats,
+        e_complex=e_complex,
+        log_lik_hl=log_lik_hl,
     )
 
 
