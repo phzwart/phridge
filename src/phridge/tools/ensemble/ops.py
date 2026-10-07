@@ -197,6 +197,34 @@ def _result_dict(result: Any, heldout: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ensemble_holdout(opts, i_obs_a, mask_a, role_a, f_mu_vec, f_var_a, shells, n_data, n_h):
+    from phridge.legacy.ensemble_fit import known_f_target, phased_observed
+    from phridge.tools.ensemble.holdout import crystal_folds, half_split, k_scan
+
+    heldout: dict[str, Any] = {}
+    if not (opts.holdout.enabled and opts.likelihood == "known_f"):
+        return heldout
+    phase = np.angle(f_mu_vec)
+    f_obs = phased_observed(i_obs_a, np.broadcast_to(phase, (n_data, n_h)), mask_a)
+    target = known_f_target(f_obs, f_mu_vec, f_var_a, np.ones((n_data, n_h)))
+    weights = mask_a.astype(np.float64)
+    if role_a is not None:
+        weights = weights * (role_a == 0)
+        free_w = mask_a.astype(np.float64) * (role_a == 2)
+    else:
+        free_w = weights
+    k_values = opts.holdout.k_values or [opts.k]
+    heldout["k_scan"] = k_scan(
+        target, weights, k_values, n_folds=min(opts.holdout.n_folds, n_data), n_sweeps=opts.n_sweeps, seed=opts.holdout.seed, free_weights=free_w
+    )
+    if opts.holdout.half_split:
+        heldout["half_split"] = half_split(target, weights, shells, rank=opts.k, n_sweeps=opts.n_sweeps, seed=opts.holdout.seed)
+    heldout["crystal_folds"] = crystal_folds(
+        target, weights, rank=opts.k, n_folds=min(opts.holdout.n_folds, n_data), n_sweeps=opts.n_sweeps, seed=opts.holdout.seed, free_weights=free_w
+    )
+    return heldout
+
+
 def ensemble_fit(
     hkl: Any,
     centric: Any,
@@ -218,11 +246,11 @@ def ensemble_fit(
     sites_frac: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Shared Δ0, modes, and per-dataset scores."""
-    from phridge.contrib.ensemble.cloud import latent_cloud
+    from phridge.tools.ensemble.cloud import latent_cloud
     from phridge.legacy.ensemble_fit import em_fit, fit_known_f, phased_observed
-    from phridge.contrib.ensemble.holdout import crystal_folds, half_split, k_scan
-    from phridge.contrib.ensemble.mstep import expand_shells
-    from phridge.contrib.ensemble.options import EnsembleOptions
+    from phridge.tools.ensemble.holdout import crystal_folds, half_split, k_scan
+    from phridge.r.generators.perturbation_modes.mstep import expand_shells
+    from phridge.tools.ensemble.options import EnsembleOptions
 
     opts = EnsembleOptions.model_validate(options or {})
     hkl_a = _np(hkl, np.int32)
@@ -286,7 +314,7 @@ def ensemble_fit(
             eps_b = np.broadcast_to(eps, (n_data, n_h))
             hl_a = _hl_from_phase(phase_f, f_mu_vec, i_obs_a, eps_b, sw, sa, 1.0)
         if opts.fit_nuisance:
-            from phridge.contrib.ensemble.nuisance import fit_one_dataset
+            from phridge.tools.ensemble.nuisance import fit_one_dataset
 
             cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)
             if cells is not None:
@@ -335,24 +363,7 @@ def ensemble_fit(
                 sigma_a0=opts.sigma_a0,
                 ridge=opts.ridge,
             )
-    heldout: dict[str, Any] = {}
-    if opts.holdout.enabled and opts.likelihood == "known_f":
-        from phridge.legacy.ensemble_fit import known_f_target
-
-        phase = np.angle(f_mu_vec)
-        f_obs = phased_observed(i_obs_a, np.broadcast_to(phase, (n_data, n_h)), mask_a)
-        target = known_f_target(f_obs, f_mu_vec, f_var_a, np.ones((n_data, n_h)))
-        weights = mask_a.astype(np.float64)
-        if role_a is not None:
-            weights = weights * (role_a == 0)
-            free_w = mask_a.astype(np.float64) * (role_a == 2)
-        else:
-            free_w = weights
-        k_values = opts.holdout.k_values or [opts.k]
-        heldout["k_scan"] = k_scan(target, weights, k_values, n_folds=min(opts.holdout.n_folds, n_data), n_sweeps=opts.n_sweeps, seed=opts.holdout.seed, free_weights=free_w)
-        if opts.holdout.half_split:
-            heldout["half_split"] = half_split(target, weights, shells, rank=opts.k, n_sweeps=opts.n_sweeps, seed=opts.holdout.seed)
-        heldout["crystal_folds"] = crystal_folds(target, weights, rank=opts.k, n_folds=min(opts.holdout.n_folds, n_data), n_sweeps=opts.n_sweeps, seed=opts.holdout.seed, free_weights=free_w)
+    heldout = _ensemble_holdout(opts, i_obs_a, mask_a, role_a, f_mu_vec, f_var_a, shells, n_data, n_h)
     cloud = latent_cloud(result.scores, result.score_cov)
     result.stats["quadratic_r2"] = cloud["quadratic_r2"]
     result.stats["deconvolved_covariance"] = np.asarray(cloud["deconvolved_covariance"]).tolist()
@@ -379,8 +390,8 @@ def ensemble_scores(
 ) -> dict[str, Any]:
     """E-step and score update for one or more datasets with modes held fixed."""
     from phridge.legacy.ensemble_fit import _e_step, _mu_field
-    from phridge.contrib.ensemble.mstep import expand_shells, solve_scores_torch, work_weights
-    from phridge.contrib.ensemble.options import EnsembleOptions
+    from phridge.r.generators.perturbation_modes.mstep import expand_shells, solve_scores_torch, work_weights
+    from phridge.tools.ensemble.options import EnsembleOptions
 
     opts = EnsembleOptions.model_validate(options or {})
     i_obs_a = _np(i_obs, np.float64)

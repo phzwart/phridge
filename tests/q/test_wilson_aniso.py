@@ -283,7 +283,7 @@ def test_guard_raises_when_both_anisotropy_carriers_are_free():
 
     It fits well and means nothing, so it must raise rather than warn.
     """
-    from phridge.client.intensity.stats_report import AnisoScale
+    from phridge.report.s_family import AnisoScale
 
     engine = pytest.importorskip("phridge.legacy.intensity_engine")
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)

@@ -6,7 +6,7 @@ torch. Worker implementations live in ``ops`` and load torch lazily.
 
 from __future__ import annotations
 
-from phridge.contrib.ensemble.options import (
+from phridge.tools.ensemble.options import (
     BootstrapOptions,
     DatasetRoles,
     EnsembleOptions,
@@ -14,7 +14,7 @@ from phridge.contrib.ensemble.options import (
     PhaseInjectionOptions,
     ProjectionOptions,
 )
-from phridge.contrib.ensemble.ops import OP_NAME_FIT, OP_NAME_MAPS, OP_NAME_SCORES, register_ops
+from phridge.tools.ensemble.ops import OP_NAME_FIT, OP_NAME_MAPS, OP_NAME_SCORES, register_ops
 
 __all__ = [
     "BootstrapOptions",

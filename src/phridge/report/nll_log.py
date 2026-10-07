@@ -399,7 +399,7 @@ class NllJournal:
         return f"{self._prefix} | {label}" if self._prefix else label
 
     def _streams(self) -> list[TextIO]:
-        from phridge.client.intensity.heartbeat import output_streams
+        from phridge.report.heartbeat import output_streams
 
         log = self.log if self.log is not None and hasattr(self.log, "write") else None
         return output_streams(log)

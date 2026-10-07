@@ -40,6 +40,10 @@ def vec3_double(rows: Any) -> Any:
     return _flex().vec3_double(rows)
 
 
+def miller_index(rows: Any) -> Any:
+    return _cctbx_flex().miller_index(rows)
+
+
 def sym_mat3_double(rows: Any) -> Any:
     return _flex().sym_mat3_double(rows)
 

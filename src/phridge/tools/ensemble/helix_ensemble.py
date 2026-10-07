@@ -88,19 +88,11 @@ def ideal_helix(
     cell: Sequence[float] = CELL,
 ) -> Helix:
     """Build an ideal poly-Ala α-helix and center it on ``cell`` along c."""
-    import iotbx.pdb
-    from mmtbx.secondary_structure.build import ss_idealization as ssb
+    from phridge.shims.cctbx.pdb import ideal_helix_tables
 
-    built = ssb.secondary_structure_from_sequence(ssb.alpha_helix_str, "A" * int(n_res))
-    raw = iotbx.pdb.input(source_info=None, lines=built.as_pdb_string().splitlines())
-    hierarchy = raw.construct_hierarchy()
-    atoms = list(hierarchy.atoms())
-    xyz = np.array(list(hierarchy.atoms().extract_xyz()), dtype=np.float64)
-    name = np.array([atom.name for atom in atoms])
-    resseq = np.array([atom.parent().parent().resseq_as_int() for atom in atoms], dtype=np.int32)
-    element = np.array([atom.element.strip() or atom.name.strip()[:1] for atom in atoms])
+    xyz, name, resseq, element = ideal_helix_tables(int(n_res))
 
-    ca = np.array([atom.name.strip() == "CA" for atom in atoms])
+    ca = np.array([str(label).strip() == "CA" for label in name])
     centered = xyz[ca] - xyz[ca].mean(axis=0)
     _u, _s, vh = np.linalg.svd(centered, full_matrices=False)
     axis = vh[0]
@@ -403,21 +395,12 @@ def write_pdb(path: Path, helix: Helix, frames: Iterable[np.ndarray], cell: Sequ
 
 def write_reference_map(path: Path, helix: Helix, cell: Sequence[float] = CELL, d_min: float = 2.0) -> None:
     """Sigma-scaled Fc of the ideal helix, for the same cell as the PDBs."""
-    from cctbx import crystal, miller
-    import iotbx.pdb
+    from phridge.shims.cctbx.pdb import sigma_scaled_ccp4
 
     buf = Path(path).with_name("_helix_ref_tmp.pdb")
     write_pdb(buf, helix, [helix.xyz], cell)
     try:
-        inp = iotbx.pdb.input(file_name=str(buf))
-        cs = crystal.symmetry(unit_cell=tuple(float(x) for x in cell), space_group_symbol="P 1")
-        xrs = inp.xray_structure_simple(crystal_symmetry=cs)
-        xrs.set_b_iso(value=15.0)
-        miller_set = miller.build_set(crystal_symmetry=cs, anomalous_flag=False, d_min=float(d_min))
-        fc = miller_set.structure_factors_from_scatterers(xray_structure=xrs, algorithm="direct").f_calc()
-        fft = fc.fft_map(resolution_factor=0.33)
-        fft.apply_sigma_scaling()
-        fft.as_ccp4_map(file_name=str(path), labels=["poly-Ala alpha helix Fc; sigma = 1"])
+        sigma_scaled_ccp4(str(buf), str(path), cell, d_min)
     finally:
         buf.unlink(missing_ok=True)
 
@@ -472,7 +455,7 @@ def load_frames(directory: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     Reads ``mode_01.pdb``, ``mode_02.pdb``, ``mode_03.pdb`` and the amplitude
     column of ``scores.txt``.
     """
-    import iotbx.pdb
+    from phridge.shims.cctbx.pdb import pdb_model_coordinates
 
     directory = Path(directory)
     amplitudes: list[float] = []
@@ -484,9 +467,7 @@ def load_frames(directory: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             amplitudes.append(float(parts[2]))
     frames: list[np.ndarray] = []
     for index in (1, 2, 3):
-        hierarchy = iotbx.pdb.input(file_name=str(directory / f"mode_{index:02d}.pdb")).construct_hierarchy()
-        for model in hierarchy.models():
-            frames.append(np.array(list(model.atoms().extract_xyz()), dtype=np.float64))
+        frames.extend(pdb_model_coordinates(str(directory / f"mode_{index:02d}.pdb")))
     xyz = np.stack(frames)
     if xyz.shape[0] != len(amplitudes):
         raise RuntimeError(f"{xyz.shape[0]} models but {len(amplitudes)} score rows")
@@ -501,27 +482,9 @@ def _f_calc_many(
     d_min: float = 2.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Direct-summation structure factors for each frame. Returns hkl, F, centric, epsilon."""
-    from cctbx import crystal, miller
-    from cctbx.array_family import flex
-    import iotbx.pdb
+    from phridge.shims.cctbx.pdb import direct_f_calc_frames
 
-    cs = crystal.symmetry(unit_cell=tuple(float(x) for x in cell), space_group_symbol="P 1")
-    inp = iotbx.pdb.input(file_name=str(reference_pdb))
-    xrs = inp.xray_structure_simple(crystal_symmetry=cs)
-    xrs.scattering_type_registry(table="wk1995")
-    miller_set = miller.build_set(crystal_symmetry=cs, anomalous_flag=False, d_min=float(d_min))
-    if xrs.scatterers().size() != frames.shape[1]:
-        raise RuntimeError("reference PDB atom count does not match the trajectory")
-    columns = []
-    for xyz in frames:
-        moved = xrs.deep_copy_scatterers()
-        moved.set_sites_cart(flex.vec3_double(np.asarray(xyz, dtype=np.float64)))
-        fc = miller_set.structure_factors_from_scatterers(xray_structure=moved, algorithm="direct").f_calc()
-        columns.append(np.array(fc.data(), dtype=np.complex128))
-    hkl = np.array([tuple(h) for h in fc.indices()], dtype=np.int32)
-    centric = np.array(fc.centric_flags().data(), dtype=bool)
-    epsilon = np.array(fc.epsilons().data().as_double(), dtype=np.float64)
-    return hkl, np.stack(columns), centric, epsilon
+    return direct_f_calc_frames(str(reference_pdb), frames, cell, d_min)
 
 
 def intensities_from_frames(
@@ -570,8 +533,8 @@ def fit_from_mean_model(
     ``Δ0``, the modes, and the scores.
     """
     from phridge.legacy.ensemble_fit import em_fit
-    from phridge.contrib.ensemble.gauge import principal_angles
-    from phridge.contrib.ensemble.synthetic import equal_count_shells
+    from phridge.r.generators.perturbation_modes.gauge import principal_angles
+    from phridge.tools.ensemble.synthetic import equal_count_shells
 
     directory = Path(directory)
     frames, mode_id, amplitude = load_frames(directory)
@@ -662,32 +625,9 @@ def _write_mean_pdb(path: Path, reference_pdb: Path, xyz: np.ndarray) -> None:
 
 
 def _write_mode_maps(directory: Path, hkl: np.ndarray, modes: np.ndarray, f_mu: np.ndarray) -> None:
-    from cctbx import crystal, miller
-    from cctbx.array_family import flex
+    from phridge.shims.cctbx.pdb import write_mode_ccp4
 
-    cs = crystal.symmetry(unit_cell=CELL, space_group_symbol="P 1")
-    indices = flex.miller_index([tuple(int(x) for x in row) for row in hkl])
-    miller_set = miller.set(crystal_symmetry=cs, indices=indices, anomalous_flag=False)
-    base = miller.array(miller_set=miller_set, data=flex.complex_double(np.asarray(f_mu, dtype=np.complex128)))
-    fft = base.fft_map(resolution_factor=0.5)
-    fft.apply_sigma_scaling()
-    fft.as_ccp4_map(file_name=str(directory / "mean_fc.ccp4"), labels=["mean model Fc; sigma = 1"])
-    grids = []
-    for coeff in modes:
-        arr = base.customized_copy(data=flex.complex_double(np.asarray(coeff, dtype=np.complex128)))
-        mode_fft = arr.fft_map(resolution_factor=0.5)
-        mode_fft.apply_volume_scaling()
-        rm = mode_fft.real_map_unpadded()
-        grids.append(np.array(rm, dtype=np.float64).reshape(tuple(int(v) for v in rm.focus())))
-    scale = float(np.sqrt(np.mean(np.stack(grids) ** 2)))
-    for index, coeff in enumerate(modes, start=1):
-        arr = base.customized_copy(data=flex.complex_double(np.asarray(coeff / scale, dtype=np.complex128)))
-        mode_fft = arr.fft_map(resolution_factor=0.5)
-        mode_fft.apply_volume_scaling()
-        mode_fft.as_ccp4_map(
-            file_name=str(directory / f"em_mode_{index:02d}.ccp4"),
-            labels=[f"EM mode {index}; pooled mode RMS = 1"],
-        )
+    write_mode_ccp4(directory, hkl, modes, f_mu, CELL)
 
 
 def _em_summary(

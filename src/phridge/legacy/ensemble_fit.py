@@ -7,9 +7,9 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.ensemble.gauge import fix_gauge, reconstruction
-from phridge.contrib.ensemble.moments import difference_coefficients, fisher_mu_gradient, posterior_f_moments
-from phridge.contrib.ensemble.mstep import (
+from phridge.r.generators.perturbation_modes.gauge import fix_gauge, reconstruction
+from phridge.r.generators.perturbation_modes.moments import difference_coefficients, fisher_mu_gradient, posterior_f_moments
+from phridge.r.generators.perturbation_modes.mstep import (
     als_known_f,
     expand_shells,
     initialize_from_residuals,
@@ -215,7 +215,7 @@ def _maybe_project(
         return delta0, modes
     if hkl is None or cell is None:
         return delta0, modes
-    from phridge.contrib.ensemble.projection import project_modes
+    from phridge.r.generators.perturbation_modes.projection import project_modes
 
     return project_modes(
         hkl,

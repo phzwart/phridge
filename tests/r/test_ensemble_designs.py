@@ -14,7 +14,7 @@ torch = pytest.importorskip("torch")
 
 
 def test_v13_projectors_are_idempotent_and_friedel():
-    from phridge.contrib.ensemble.projection import (
+    from phridge.r.generators.perturbation_modes.projection import (
         complete_friedel,
         density_to_grid,
         dilate_mask,
@@ -60,9 +60,9 @@ def test_v13_projectors_are_idempotent_and_friedel():
 
 
 def test_holdout_k_scan_and_half_split():
-    from phridge.contrib.ensemble.gauge import optimistic_correlation
-    from phridge.contrib.ensemble.holdout import half_split, k_scan
-    from phridge.contrib.ensemble.synthetic import simulate_campaign
+    from phridge.r.generators.perturbation_modes.gauge import optimistic_correlation
+    from phridge.tools.ensemble.holdout import half_split, k_scan
+    from phridge.tools.ensemble.synthetic import simulate_campaign
 
     camp = simulate_campaign(n_datasets=8, k_true=2, hmax=1, seed=7, noise=0.0, resolution_noise=True)
     target = camp.f_true - camp.f_mu
@@ -81,8 +81,8 @@ def test_holdout_k_scan_and_half_split():
 
 
 def test_roles_and_pit_and_cloud():
-    from phridge.contrib.ensemble.cloud import latent_cloud, positivity_margin, quadratic_r2
-    from phridge.contrib.ensemble.holdout import assign_roles, calibration_curve, pit_values
+    from phridge.tools.ensemble.cloud import latent_cloud, positivity_margin, quadratic_r2
+    from phridge.tools.ensemble.holdout import assign_roles, calibration_curve, pit_values
 
     mask = np.ones((4, 10), dtype=bool)
     roles = assign_roles(mask, audit_fraction=0.2, calibration_fraction=0.2, seed=1)
@@ -106,8 +106,8 @@ def test_roles_and_pit_and_cloud():
 
 
 def test_pca_phase_gap_is_qualitative():
-    from phridge.contrib.ensemble.gauge import principal_angles, real_embedding
-    from phridge.contrib.ensemble.synthetic import simulate_campaign
+    from phridge.r.generators.perturbation_modes.gauge import principal_angles, real_embedding
+    from phridge.tools.ensemble.synthetic import simulate_campaign
 
     camp = simulate_campaign(n_datasets=12, k_true=2, hmax=2, seed=5, noise=0.02)
     # Oracle phases: the true complex difference. Model phases: project onto F_mu.
@@ -138,8 +138,8 @@ def test_note_numbers_xfail_until_reference():
 @pytest.mark.slow
 def test_slow_campaign_qualitative_gates():
     from phridge.legacy.ensemble_fit import em_fit
-    from phridge.contrib.ensemble.gauge import principal_angles
-    from phridge.contrib.ensemble.synthetic import N_NOTE, simulate_campaign
+    from phridge.r.generators.perturbation_modes.gauge import principal_angles
+    from phridge.tools.ensemble.synthetic import N_NOTE, simulate_campaign
 
     camp = simulate_campaign(n_datasets=12, k_true=3, hmax=2, seed=0, noise=0.05)
     wilson = np.full_like(camp.i_obs, float(np.mean(np.abs(camp.f_mu) ** 2)))
@@ -167,7 +167,7 @@ def test_slow_campaign_qualitative_gates():
 def test_alignment_recovers_origin_and_laue_index():
     cctbx = pytest.importorskip("cctbx")
     del cctbx
-    from phridge.contrib.ensemble.align import (
+    from phridge.r.generators.perturbation_modes.align import (
         apply_origin_phase,
         best_origin_shift,
         canonical_laue_hkl,
@@ -203,7 +203,7 @@ def test_alignment_recovers_origin_and_laue_index():
 def test_report_names_s_post():
     import re
 
-    from phridge.contrib.ensemble.report import format_report, write_report
+    from phridge.tools.ensemble.report import format_report, write_report
 
     text = format_report(
         {"stats": {"likelihood": "intensity", "k": 2, "hl_weight": 0.0}, "loglik_history": [1.0, 2.0]},
@@ -223,13 +223,13 @@ def test_report_names_s_post():
 
 
 def test_campaign_difference_maps_are_real_and_linear(tmp_path):
-    from phridge.contrib.ensemble.projection import (
+    from phridge.r.generators.perturbation_modes.projection import (
         coefficients_from_grid,
         complete_friedel,
         density_to_grid,
         grid_to_density,
     )
-    from phridge.contrib.ensemble.synthetic import campaign_difference_maps, simulate_campaign, write_difference_maps
+    from phridge.tools.ensemble.synthetic import campaign_difference_maps, simulate_campaign, write_difference_maps
 
     camp = simulate_campaign(n_datasets=4, k_true=2, hmax=2, seed=3, noise=0.0)
     maps = campaign_difference_maps(camp)
@@ -255,7 +255,7 @@ def test_campaign_difference_maps_are_real_and_linear(tmp_path):
 
 
 def test_engine_campaign_shape():
-    from phridge.contrib.ensemble.synthetic import campaign_with_engine, half_set
+    from phridge.tools.ensemble.synthetic import campaign_with_engine, half_set
 
     f_calc = campaign_with_engine(hmax=1, n_atoms=3)
     assert f_calc.shape == (half_set(1).shape[0],)
@@ -263,8 +263,8 @@ def test_engine_campaign_shape():
 
 
 def test_dof_factor_and_identities():
-    from phridge.contrib.ensemble.mstep import update_shell_scales
-    from phridge.contrib.ensemble.nuisance import identities
+    from phridge.r.generators.perturbation_modes.mstep import update_shell_scales
+    from phridge.tools.ensemble.nuisance import identities
 
     n, h, k = 8, 5, 2
     mean_f = np.zeros((n, h), dtype=np.complex128)
@@ -323,8 +323,8 @@ def _write_fixed_cell_campaign(out_dir: Path):
 
 
 def test_cli_holdout_writes_s_post(tmp_path):
-    from phridge.contrib.ensemble.cli import main
-    from phridge.contrib.ensemble.synthetic import simulate_campaign
+    from phridge.tools.ensemble.cli import main
+    from phridge.tools.ensemble.synthetic import simulate_campaign
 
     camp = simulate_campaign(n_datasets=4, k_true=1, hmax=1, seed=2)
     job = tmp_path / "job.npz"
@@ -339,7 +339,7 @@ def test_cli_holdout_writes_s_post(tmp_path):
 
 @pytest.mark.skipif(not __import__("importlib").util.find_spec("cctbx"), reason="cctbx required")
 def test_cli_fit_on_pdb_campaign(tmp_path):
-    from phridge.contrib.ensemble.cli import main
+    from phridge.tools.ensemble.cli import main
 
     try:
         from phridge.legacy.multixtal.synthetic import write_synthetic_benchmark

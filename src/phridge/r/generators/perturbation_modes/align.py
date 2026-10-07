@@ -26,15 +26,9 @@ def canonical_laue_hkl(hkl: np.ndarray) -> np.ndarray:
 
 
 def _origin_preserves_group(symbol: str, shift: tuple[float, float, float]) -> bool:
-    from cctbx import sgtbx
+    from phridge.shims.cctbx.pdb import origin_preserves_group
 
-    group = sgtbx.space_group_info(symbol=symbol).group()
-    origin = sgtbx.tr_vec([int(round(12 * x)) for x in shift], tr_den=12)
-    try:
-        changed = group.change_basis(sgtbx.change_of_basis_op(sgtbx.rt_mx(sgtbx.rot_mx(), origin)))
-    except Exception:
-        return False
-    return changed == group
+    return origin_preserves_group(symbol, shift)
 
 
 def permissible_origin_shifts(symbol: str = "P 1") -> list[tuple[float, float, float]]:
@@ -96,6 +90,6 @@ def gemmi_origin_crosscheck(*_args: Any, **_kwargs: Any) -> Optional[dict[str, A
     """Compare against ``cascan_pipeline`` when that module and gemmi import."""
     if not gemmi_crosscheck_available():
         return None
-    import cascan_pipeline  # type: ignore
+    from phridge.tools.ensemble.cascan import module_file
 
-    return {"module": getattr(cascan_pipeline, "__file__", "cascan_pipeline")}
+    return {"module": module_file()}

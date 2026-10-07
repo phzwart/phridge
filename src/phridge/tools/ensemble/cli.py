@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 from typing import Optional, Sequence
 
-from phridge.contrib.ensemble.options import EnsembleOptions
-from phridge.contrib.ensemble.ops import OP_NAME_FIT, OP_NAME_MAPS, OP_NAME_SCORES, register_ops
-from phridge.contrib.ensemble.report import format_report, write_report
+from phridge.tools.ensemble.options import EnsembleOptions
+from phridge.tools.ensemble.ops import OP_NAME_FIT, OP_NAME_MAPS, OP_NAME_SCORES, register_ops
+from phridge.tools.ensemble.report import format_report, write_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,7 +68,7 @@ def run(args: argparse.Namespace) -> dict:
 
     register_ops()
     if args.command == "prepare":
-        from phridge.contrib.ensemble.client import prepare_ensemble_job
+        from phridge.tools.ensemble.client import prepare_ensemble_job
 
         job = prepare_ensemble_job(args.model, args.data, EnsembleOptions(d_min=args.d_min, labels=args.labels))
         path = Path(args.out)
@@ -86,7 +86,7 @@ def run(args: argparse.Namespace) -> dict:
         return {"out": str(path), "n_data": int(job.i_obs.shape[0])}
     if args.command == "fit":
         from phridge.client import Bridge
-        from phridge.contrib.ensemble.client import job_to_op_kwargs, prepare_ensemble_job
+        from phridge.tools.ensemble.client import job_to_op_kwargs, prepare_ensemble_job
 
         options = _options_from_fit(args)
         job = prepare_ensemble_job(args.model, args.data, options)
@@ -153,7 +153,7 @@ def run(args: argparse.Namespace) -> dict:
         return {"out": str(path)}
     if args.command == "holdout":
         from phridge.legacy.ensemble_fit import known_f_target, phased_observed
-        from phridge.contrib.ensemble.holdout import k_scan
+        from phridge.tools.ensemble.holdout import k_scan
 
         blob = np.load(args.job)
         phase = np.zeros(blob["i_obs"].shape[1])

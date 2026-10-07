@@ -213,7 +213,7 @@ def _map_grid(hkl: np.ndarray, grid: Optional[tuple[int, int, int]]) -> tuple[in
 
 
 def _real_map(hkl: np.ndarray, coeff: np.ndarray, grid: tuple[int, int, int]) -> np.ndarray:
-    from phridge.contrib.ensemble.projection import complete_friedel, grid_to_density
+    from phridge.r.generators.perturbation_modes.projection import complete_friedel, grid_to_density
 
     return np.real(grid_to_density(complete_friedel(hkl, coeff, grid)))
 

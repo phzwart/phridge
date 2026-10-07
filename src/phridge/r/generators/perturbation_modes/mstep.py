@@ -11,7 +11,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.contrib.ensemble.gauge import absorb_score_mean, fix_gauge
+from phridge.r.generators.perturbation_modes.gauge import absorb_score_mean, fix_gauge
 
 
 def initialize_from_residuals(

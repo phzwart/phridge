@@ -11,7 +11,7 @@ del mmtbx
 def test_refinement_repairs_bonds_and_holds_the_mode():
     import numpy as np
 
-    from phridge.contrib.ensemble.helix_ensemble import (
+    from phridge.tools.ensemble.helix_ensemble import (
         elastic_modes,
         ideal_helix,
         scan_mode,

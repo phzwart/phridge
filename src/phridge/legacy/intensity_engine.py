@@ -587,7 +587,7 @@ class IntensityElectronDensityMap:
             fc = eng.f_model_scaled_with_k1() if hasattr(eng, "f_model_scaled_with_k1") else eng.f_model()
         kw = eng._common_eval_kwargs()
         kw["target"] = eng.target_spec
-        from phridge.client.intensity.stats_report import stats_bin_size
+        from phridge.report.s_family import stats_bin_size
 
         kw["maps"] = {
             "newton_damping": self.newton_damping,
@@ -1037,7 +1037,7 @@ class IntensityTargetFunctor:
             label += "+grad"
         else:
             label += " (line-search)"
-        from phridge.client.intensity.heartbeat import mli_heartbeat, maybe_progress_eval
+        from phridge.report.heartbeat import mli_heartbeat, maybe_progress_eval
 
         with mli_heartbeat(label, log=getattr(self.manager, "log", None), announce=False):
             raw = self._engine.bridge.call("target_eval", f_calc=f_calc, **kw)
@@ -1301,7 +1301,7 @@ class IntensityFModelInfo:
         from ``k_anisotropic`` itself, and the provenance is stated in the block so a
         depositor is not left guessing.
         """
-        from phridge.client.intensity.stats_report import format_aniso_scale_remark_3
+        from phridge.report.s_family import format_aniso_scale_remark_3
 
         try:
             aniso = self.fmodel.aniso_scale() if hasattr(self.fmodel, "aniso_scale") else None
@@ -1407,7 +1407,7 @@ class IntensityFModelInfo:
         # same panel as the other scale parameters it was fitted alongside.
         aniso = self.fmodel.aniso_scale() if hasattr(self.fmodel, "aniso_scale") else None
         if aniso is not None and getattr(aniso, "is_valid", False):
-            from phridge.client.intensity.stats_report import b_field
+            from phridge.report.s_family import b_field
 
             # b_field, not %7.3f: a symmetry-fixed component comes back as -1e-17 and
             # would otherwise read "-0.000", which looks like a measurement.
@@ -2850,7 +2850,7 @@ class IntensityFModel(
                 f"[interleaved] {when}: interleaving enabled -- inner blocks in this cycle "
                 "run on the surrogate and each is adjudicated by an exact evaluation"
             )
-        from phridge.client.intensity.heartbeat import output_streams
+        from phridge.report.heartbeat import output_streams
 
         sink = log if log is not None and hasattr(log, "write") else None
         for out in output_streams(sink):
@@ -3453,7 +3453,7 @@ class IntensityFModel(
         the same functor call already produced, which matters here because the weight
         scans ask for this pair once per trial.
         """
-        from phridge.client.intensity.nll_log import NllPoint
+        from phridge.report.nll_log import NllPoint
 
         res = self.target_functor()(compute_gradients=False)
         work = float(res.target_work())
@@ -3488,7 +3488,7 @@ class IntensityFModel(
 
     def _normalization_offset(self) -> tuple[Optional[float], Optional[float]]:
         """``(mean log(εΣ) on work, mean log(εΣ) on free)``. ``(None, None)`` if unavailable."""
-        from phridge.client.intensity.nll_log import normalization_offset
+        from phridge.report.nll_log import normalization_offset
 
         try:
             eps = self._i_obs.epsilons().data().as_double()
@@ -3499,7 +3499,7 @@ class IntensityFModel(
 
     def nll_journal(self, log: Any = None) -> Any:
         """The run's NLL journal, created on first use and kept for the whole run."""
-        from phridge.client.intensity.nll_log import NllJournal
+        from phridge.report.nll_log import NllJournal
 
         if self._nll_journal is None:
             self._nll_journal = NllJournal(self.nll_point, log=log)
@@ -3626,7 +3626,7 @@ class IntensityFModel(
 
         # The NLL journal: this is the run's first chance to measure the target, and the
         # two stages below are the only ones that refit nuisances rather than move atoms.
-        from phridge.client.intensity.nll_log import StageKind
+        from phridge.report.nll_log import StageKind
 
         journal = self.nll_journal(log=log)
         cycle_label = (
@@ -3641,7 +3641,7 @@ class IntensityFModel(
         scale_t0 = time.monotonic()
 
         # 1. Run CCTBX bulk solvent and scaling if enabled
-        from phridge.client.intensity.heartbeat import mli_heartbeat
+        from phridge.report.heartbeat import mli_heartbeat
 
         if bulk_solvent_and_scaling and mmtbx is not None:
             try:
@@ -4005,7 +4005,7 @@ class IntensityFModel(
 
     def _print_stats_report(self, log: Any = None, label: str = "") -> Optional[Any]:
         """Print resolution-binned I/σ + σ_A(s) + S_post/S_prior report (PHRIDGE_STATS_REPORT, default on)."""
-        from phridge.client.intensity.stats_report import (
+        from phridge.report.s_family import (
             merge_sstat_bins_into_report,
             report_from_fmodel,
             stats_report_enabled,
@@ -4068,8 +4068,8 @@ class IntensityFModel(
             self._last_stats_report = report
             # Phenix's log already writes to the terminal. Printing to stdout and
             # handing that log in as an extra stream emits the whole table twice.
-            from phridge.client.intensity.heartbeat import output_streams
-            from phridge.client.intensity.stats_report import format_intensity_stats_report
+            from phridge.report.heartbeat import output_streams
+            from phridge.report.s_family import format_intensity_stats_report
 
             text = format_intensity_stats_report(report)
             for stream in output_streams(log):
@@ -4275,7 +4275,7 @@ class IntensityFModel(
 
     def _report_aniso_scale(self, log: Any = None) -> None:
         """Print the overall anisotropic B right after the global scaling that set it."""
-        from phridge.client.intensity.stats_report import format_aniso_scale_summary
+        from phridge.report.s_family import format_aniso_scale_summary
 
         aniso = self.aniso_scale(refresh=True)
         if aniso is None:
@@ -4315,7 +4315,7 @@ class IntensityFModel(
         it reports the anisotropy the target sees rather than what a scaling object claims
         to have fitted. Cached; pass ``refresh=True`` after re-scaling.
         """
-        from phridge.client.intensity.stats_report import fit_aniso_scale
+        from phridge.report.s_family import fit_aniso_scale
 
         cached = getattr(self, "_aniso_scale", None)
         if cached is not None and not refresh:
@@ -4366,7 +4366,7 @@ class IntensityFModel(
         the banner value. ``sigma_a`` is passed through so each resolution shell reports
         the sigma_A that goes with it -- reading down a column is then a sigma_A scan.
         """
-        from phridge.client.intensity.stats_report import compute_cc_isig_table
+        from phridge.report.s_family import compute_cc_isig_table
 
         try:
             i_obs = self._i_obs
@@ -4395,7 +4395,7 @@ class IntensityFModel(
 
     def stats_report(self, *, bin_size: Optional[int] = None, label: str = "") -> Any:
         """Compute (and return) the resolution-binned intensity / σ_A report."""
-        from phridge.client.intensity.stats_report import report_from_fmodel
+        from phridge.report.s_family import report_from_fmodel
 
         return report_from_fmodel(self, bin_size=bin_size, label=label)
 
@@ -4542,7 +4542,7 @@ class IntensityFModel(
                 file=target_out,
             )
         try:
-            from phridge.client.intensity.stats_report import format_nu_grid_profiles
+            from phridge.report.s_family import format_nu_grid_profiles
 
             for line in format_nu_grid_profiles(nu_p):
                 print(line, file=target_out)

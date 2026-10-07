@@ -24,8 +24,8 @@ import pytest
 
 pytestmark = pytest.mark.legacy
 
-from phridge.client.intensity import nll_log as NL
-from phridge.client.intensity.nll_log import NllJournal, NllPoint, StageKind
+from phridge.report import nll_log as NL
+from phridge.report.nll_log import NllJournal, NllPoint, StageKind
 
 
 class _Probe:
@@ -626,7 +626,7 @@ def test_a_log_that_already_writes_to_the_terminal_is_not_written_twice():
     import io
     import sys
 
-    from phridge.client.intensity.heartbeat import output_streams
+    from phridge.report.heartbeat import output_streams
 
     class _Multi:
         def __init__(self, *handles):

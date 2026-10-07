@@ -8,8 +8,8 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.contrib.ensemble.holdout import assign_roles
-from phridge.contrib.ensemble.options import EnsembleOptions
+from phridge.tools.ensemble.holdout import assign_roles
+from phridge.tools.ensemble.options import EnsembleOptions
 from phridge.redis_store import DEFAULT_MAX_OBJECT_BYTES
 
 
@@ -60,19 +60,9 @@ def _merge_intensity(job: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def _f_calc_pdb(path: str, hkl: np.ndarray, cell: Sequence[float], space_group: Optional[str]) -> np.ndarray:
-    import iotbx.pdb
-    from cctbx import crystal, miller
-    from cctbx.array_family import flex
+    from phridge.shims.cctbx.pdb import direct_f_calc_pdb
 
-    pdb = iotbx.pdb.input(file_name=str(path))
-    xs = pdb.xray_structure_simple()
-    symbol = space_group or "P 1"
-    cs = crystal.symmetry(unit_cell=tuple(float(x) for x in cell), space_group_symbol=symbol)
-    indices = flex.miller_index([tuple(int(v) for v in row) for row in np.asarray(hkl)])
-    miller_set = miller.set(crystal_symmetry=cs, indices=indices, anomalous_flag=False)
-    xs = xs.customized_copy(crystal_symmetry=cs)
-    fc = xs.structure_factors(miller_set=miller_set, algorithm="direct").f_calc()
-    return np.asarray(list(fc.data()), dtype=np.complex128)
+    return direct_f_calc_pdb(path, hkl, cell, space_group)
 
 
 def prepare_ensemble_job(
@@ -217,7 +207,7 @@ class RemoteEnsembleFit:
 
     def fit(self, job: EnsembleJob) -> EnsembleFitResult:
         from phridge.client import Bridge
-        from phridge.contrib.ensemble.ops import OP_NAME_FIT, register_ops
+        from phridge.tools.ensemble.ops import OP_NAME_FIT, register_ops
 
         register_ops()
         bridge = self.bridge if self.bridge is not None else Bridge(memory=True)

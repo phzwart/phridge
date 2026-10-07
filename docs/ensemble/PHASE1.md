@@ -11,7 +11,7 @@ op, maps, and the CLI. The intensity E-step is Phase 2.
   `DatasetRoles`), all `extra="forbid"`.
 - Ops `ensemble_fit`, `ensemble_scores`, and `ensemble_maps`, each with
   `compute_dtype = "float64"`. `register()` is idempotent and runs at import.
-- Entry point `ensemble = "phridge.contrib.ensemble:register"` under
+- Entry point `ensemble = "phridge.tools.ensemble:register"` under
   `phridge.ops`, and script `phridge-ensemble`.
 - `prepare_ensemble_job` wraps `multixtal.client.prepare_job` (common set,
   reindexing, `f_mask`, optional per-dataset models packed as `f_var`).

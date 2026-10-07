@@ -12,8 +12,8 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.contrib.ensemble.gauge import fix_gauge, principal_angles, procrustes_align, reconstruction
-from phridge.contrib.ensemble.mstep import als_known_f, solve_scores_torch
+from phridge.r.generators.perturbation_modes.gauge import fix_gauge, principal_angles, procrustes_align, reconstruction
+from phridge.r.generators.perturbation_modes.mstep import als_known_f, solve_scores_torch
 
 
 def assign_roles(
@@ -200,7 +200,7 @@ def half_split(
                 corr = float(np.corrcoef(a, b)[0, 1])
             rows.append({"shell": int(shell), "correlation": corr})
         per_mode.append(rows)
-    from phridge.contrib.ensemble.gauge import optimistic_correlation
+    from phridge.r.generators.perturbation_modes.gauge import optimistic_correlation
 
     flat = [item["correlation"] for mode in per_mode for item in mode]
     optimistic = optimistic_correlation(np.asarray(flat, dtype=np.float64)).tolist() if flat else []

@@ -71,14 +71,14 @@ def _adp_r_percent_vs_nll(a: Any, b: Any, eps: float = 1.0e-6) -> bool:
 
 
 def _nll_point(fmodel: Any) -> Any:
-    """One exact evaluation as an :class:`~phridge.client.intensity.nll_log.NllPoint`.
+    """One exact evaluation as an :class:`~phridge.report.nll_log.NllPoint`.
 
     Prefers the engine's ``nll_point``, which produces the work and free means from a
     single functor call. ``target_w()`` followed by ``target_t()`` is two full
     quadratures for two numbers one call already computed, and a weight scan asks for
     the pair once per trial, so the difference is a scan's worth of evaluations.
     """
-    from phridge.client.intensity.nll_log import NllPoint
+    from phridge.report.nll_log import NllPoint
 
     probe = getattr(fmodel, "nll_point", None)
     if callable(probe):
@@ -157,7 +157,7 @@ def _xyz_trial_group(scorer: Any) -> Optional[Any]:
     ``finalize`` selects in place, so after it runs the arrays hold only the winner and
     the scan is gone. This has to be taken on the way in.
     """
-    from phridge.client.intensity.nll_log import NllPoint
+    from phridge.report.nll_log import NllPoint
 
     journal = getattr(scorer, "_phridge_journal", None)
     if journal is None or not getattr(scorer, "_phridge_nll", False):
@@ -195,7 +195,7 @@ def _adp_trial_line(result: Any) -> str:
     Upstream prints ``xray_target`` at three decimals and the free value not at all,
     which is the one number the selection is made on.
     """
-    from phridge.client.intensity.nll_log import fmt_value
+    from phridge.report.nll_log import fmt_value
 
     weight = getattr(result, "weight", None)
     return (
@@ -207,7 +207,7 @@ def _adp_trial_line(result: Any) -> str:
 
 def _log_adp_trial(refiner: Any, result: Any) -> None:
     """Print one ADP trial's NLL and record it in the scan, if a scan is open."""
-    from phridge.client.intensity.nll_log import NllPoint
+    from phridge.report.nll_log import NllPoint
 
     try:
         if not getattr(result, "_phridge_printed", False):
@@ -847,7 +847,7 @@ def _journalled_block(
     interleaved telemetry uses, so the two modes name the stages identically and their
     logs can be compared line for line. A journal failure must never cost the block.
     """
-    from phridge.client.intensity.nll_log import StageKind
+    from phridge.report.nll_log import StageKind
 
     try:
         site = _block_site(engine, orig_init, instance, args, kwargs)

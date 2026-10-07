@@ -441,7 +441,7 @@ class InterleavedController:
     def _emit(self, text: str) -> None:
         if not self.options.verbose:
             return
-        from phridge.client.intensity.heartbeat import output_streams
+        from phridge.report.heartbeat import output_streams
 
         log = self.log if self.log is not None and hasattr(self.log, "write") else None
         for out in output_streams(log):
@@ -478,7 +478,7 @@ class InterleavedController:
         """Mirror the block into the run-wide NLL journal, free of charge."""
         if self.journal is None:
             return
-        from phridge.client.intensity.nll_log import NllPoint, StageKind
+        from phridge.report.nll_log import NllPoint, StageKind
 
         try:
             # The ladder's NLL is -log p(Z). Σ_W does not move inside a block, so adding

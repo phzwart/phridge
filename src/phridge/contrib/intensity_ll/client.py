@@ -129,7 +129,7 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
         maps = dict(self.maps)
         if "bin_size" not in maps:
             try:
-                from phridge.client.intensity.stats_report import stats_bin_size
+                from phridge.report.s_family import stats_bin_size
 
                 maps["bin_size"] = stats_bin_size()
             except Exception:

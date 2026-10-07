@@ -7,7 +7,7 @@ import pytest
 
 pytestmark = pytest.mark.legacy
 
-from phridge.client.intensity.stats_report import (
+from phridge.report.s_family import (
     AnisoScale,
     IntensityStatsReport,
     compute_cc_isig_table,
@@ -15,10 +15,12 @@ from phridge.client.intensity.stats_report import (
     fit_aniso_scale,
     format_aniso_scale_remark_3,
     format_aniso_scale_summary,
+    stats_report_enabled,
+)
+from phridge.report.s_family_format import (
     format_cc_isig_table,
     format_intensity_stats_report,
     format_nu_grid_profiles,
-    stats_report_enabled,
 )
 
 
@@ -196,7 +198,7 @@ def test_cc_isig_bins_are_the_fixed_boundaries_not_quantiles():
 
 
 def test_cc_isig_custom_edges_and_env_override(monkeypatch):
-    from phridge.client.intensity.stats_report import cc_isig_edges
+    from phridge.report.s_family import cc_isig_edges
 
     p = _cc_problem(n=3000)
     t = compute_cc_isig_table(**p, edges=[0.0, 2.0, 6.0], n_shells=3)
@@ -663,7 +665,7 @@ def test_engine_reports_the_aniso_b_in_the_scaling_log(capsys):
     probe = _aniso_probe(np.diag([3.0, 3.0, -6.0]))
     probe._report_aniso_scale()
     out = capsys.readouterr().out
-    assert "global scaling: overall anisotropic B" in out
+    assert "overall anisotropic B" in out
     assert "anisotropy=" in out
     assert "fitted from k_anisotropic" in out
 
@@ -700,7 +702,7 @@ def test_engine_aniso_b_never_raises_on_a_broken_scale_array(capsys):
 
 
 def test_cc_shell_env_knob(monkeypatch):
-    from phridge.client.intensity.stats_report import cc_shell_count
+    from phridge.report.s_family import cc_shell_count
 
     monkeypatch.delenv("PHRIDGE_CC_SHELLS", raising=False)
     assert cc_shell_count() == 8

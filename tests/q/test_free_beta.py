@@ -675,7 +675,7 @@ def test_engine_defaults_to_free_beta_and_fixes_the_stage_2_scale(monkeypatch):
 
 
 def test_report_shows_beta_and_the_normalization_consistency_column():
-    from phridge.client.intensity.stats_report import format_shell_nuisance
+    from phridge.report.s_family_format import format_shell_nuisance
 
     params = {
         "mode": "bins",

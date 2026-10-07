@@ -19,12 +19,12 @@ import pytest
 pytestmark = pytest.mark.legacy
 
 from phridge.legacy.intensity_engine import IntensityFModelInfo
-from phridge.client.intensity.stats_report import (
+from phridge.report.s_family import (
     IntensityStatsReport,
     ResolutionBinStats,
     compute_cc_isig_table,
-    format_intensity_stats_report,
 )
+from phridge.report.s_family_format import format_intensity_stats_report
 
 # The sanctioned R lines: anything that names French-Wilson explicitly (the
 # amplitude bridge that fills the mandated PDB fields), and the direct-intensity R,
@@ -407,7 +407,7 @@ def test_cctbx_r_fields_computed_from_the_scaffold_are_flagged():
 
 def _aniso_fixture():
     """An AnisoScale with a known tensor, built the way the engine builds it."""
-    from phridge.client.intensity.stats_report import fit_aniso_scale
+    from phridge.report.s_family import fit_aniso_scale
     from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
     cell = (78.1, 78.1, 37.0, 90.0, 90.0, 90.0)
@@ -450,7 +450,7 @@ def test_remark_3_carries_the_overall_anisotropic_b_value(with_cctbx):
 
 def test_aniso_b_banner_lines_stay_inside_the_panel():
     """A large anisotropy must not push the panel border out of alignment."""
-    from phridge.client.intensity.stats_report import AnisoScale
+    from phridge.report.s_family import AnisoScale
 
     fmodel = _FakeFModel(_r_values())
     huge = AnisoScale(

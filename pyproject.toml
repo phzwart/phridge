@@ -43,7 +43,7 @@ phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"
 phridge-view = "phridge.client.viewer:main"
 phridge-multixtal = "phridge.legacy.multixtal.cli:main"
-phridge-ensemble = "phridge.contrib.ensemble.cli:main"
+phridge-ensemble = "phridge.tools.ensemble.cli:main"
 
 [project.entry-points."phridge.targets"]
 intensity_ll = "phridge.d.rules.mli_quad:register"
@@ -52,7 +52,7 @@ intensity_ll = "phridge.d.rules.mli_quad:register"
 spatial_sigmaa_v2 = "phridge.q.error_models.spatial:register"
 multixtal = "phridge.legacy.multixtal:register"
 nufft_sf = "phridge.transforms.fourier.nufft:register"
-ensemble = "phridge.contrib.ensemble:register"
+ensemble = "phridge.tools.ensemble:register"
 
 [tool.hatch.metadata]
 allow-direct-references = true

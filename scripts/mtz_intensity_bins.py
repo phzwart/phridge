@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.client.intensity.stats_report import (
+from phridge.report.s_family import (
     compute_intensity_stats_report,
     print_intensity_stats_report,
 )

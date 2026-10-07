@@ -12,15 +12,15 @@ import pytest
 pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
-from phridge.contrib.ensemble import (
+from phridge.tools.ensemble import (
     OP_NAME_FIT,
     OP_NAME_MAPS,
     EnsembleOptions,
     register,
 )
-from phridge.contrib.ensemble.gauge import fix_gauge, principal_angles, procrustes_align, reconstruction
-from phridge.contrib.ensemble.latent import ComplexGLS
-from phridge.contrib.ensemble.loadings import FullComplexLoadings
+from phridge.r.generators.perturbation_modes.gauge import fix_gauge, principal_angles, procrustes_align, reconstruction
+from phridge.r.generators.perturbation_modes.latent import ComplexGLS
+from phridge.r.generators.perturbation_modes.loadings import FullComplexLoadings
 from phridge.ops import get_op
 
 torch = pytest.importorskip("torch")
@@ -45,8 +45,8 @@ def test_pydantic_accept_reject():
 
 
 def test_client_import_is_torch_free():
-    import phridge.contrib.ensemble.client as client
-    import phridge.contrib.ensemble.options as options
+    import phridge.tools.ensemble.client as client
+    import phridge.tools.ensemble.options as options
 
     assert "torch" not in client.__dict__
     assert "torch" not in options.__dict__
@@ -140,7 +140,7 @@ def _numpy_solve_scores(y, delta0, modes, w, ridge):
 
 
 def test_known_f_matches_numpy_transcription():
-    from phridge.contrib.ensemble.mstep import als_known_f, solve_modes_torch, solve_scores_torch
+    from phridge.r.generators.perturbation_modes.mstep import als_known_f, solve_modes_torch, solve_scores_torch
 
     target, weights, _d0, _modes, _z = _planted()
     y = target
@@ -154,7 +154,7 @@ def test_known_f_matches_numpy_transcription():
     td, tm, ts, _tc = als_known_f(y, weights, 2, n_iter=12, ridge=1e-10)
     # Independent ALS using the numpy normal equations and the same gauge.
     delta0, modes, scores = td * 0, tm * 0, ts * 0
-    from phridge.contrib.ensemble.mstep import initialize_from_residuals
+    from phridge.r.generators.perturbation_modes.mstep import initialize_from_residuals
 
     delta0, modes, scores = initialize_from_residuals(y, weights, 2)
     for _ in range(12):
@@ -274,7 +274,7 @@ def test_v2_gaussian_amplitude_quadrature():
 
 
 def test_v3_fisher_matches_finite_difference():
-    from phridge.contrib.ensemble.moments import fisher_mu_gradient, fixed_grid_posterior
+    from phridge.r.generators.perturbation_modes.moments import fisher_mu_gradient, fixed_grid_posterior
 
     sa = 0.7
     ec = np.array([1.6])
@@ -302,7 +302,7 @@ def test_v3_fisher_matches_finite_difference():
 
 
 def _tiny_intensity(n=4, hmax=1, k=1, seed=1):
-    from phridge.contrib.ensemble.synthetic import simulate_campaign
+    from phridge.tools.ensemble.synthetic import simulate_campaign
 
     camp = simulate_campaign(n_datasets=n, k_true=k, hmax=hmax, seed=seed, noise=0.02)
     wilson = np.full((n, camp.hkl.shape[0]), float(np.mean(np.abs(camp.f_mu) ** 2)))
@@ -351,7 +351,7 @@ def test_v14_missing_reflections_have_zero_weight():
 
 def test_v16_audit_reflections_do_not_enter():
     from phridge.legacy.ensemble_fit import fit_known_f
-    from phridge.contrib.ensemble.holdout import assign_roles
+    from phridge.tools.ensemble.holdout import assign_roles
 
     camp, _wilson = _tiny_intensity(n=5, k=1)
     phase = np.angle(camp.f_true)
@@ -375,7 +375,7 @@ def test_reference_oracles_absent():
 
 def test_op_roundtrip_known_f():
     from phridge.client import Bridge
-    from phridge.contrib.ensemble.synthetic import simulate_campaign
+    from phridge.tools.ensemble.synthetic import simulate_campaign
 
     register()
     camp = simulate_campaign(n_datasets=4, k_true=1, hmax=1, seed=4, noise=0.01)
@@ -400,7 +400,7 @@ def test_op_roundtrip_known_f():
 
 
 def test_chunk_and_cap():
-    from phridge.contrib.ensemble.client import chunk_dataset_indices, payload_nbytes
+    from phridge.tools.ensemble.client import chunk_dataset_indices, payload_nbytes
 
     assert chunk_dataset_indices(10, row_nbytes=100, max_bytes=250) == [(0, 2), (2, 4), (4, 6), (6, 8), (8, 10)]
     assert payload_nbytes({"a": np.zeros(4, dtype=np.float64)}) == 32
