@@ -271,7 +271,7 @@ def remote_f_and_site_grads(
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
     """Bridge ``RemoteStructureFactors`` path: ``(f_calc, site_frac, t_f, t_grad)``."""
     from phridge.sfcalc.client import RemoteStructureFactors
-    from phridge.models import SfEngineParams
+    from phridge.contracts.models import SfEngineParams
 
     engine = RemoteStructureFactors(
         bridge,

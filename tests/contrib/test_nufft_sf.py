@@ -666,7 +666,7 @@ def test_options_pydantic_accept_reject():
 
 def test_job_envelope_nufft_sf_calc():
     from phridge.contrib.nufft_sf import CALC_OP, register
-    from phridge.models import JobEnvelope, JobStatus, ObjectKind, ObjectRef, SCHEMA_VERSION
+    from phridge.contracts.models import JobEnvelope, JobStatus, ObjectKind, ObjectRef, SCHEMA_VERSION
 
     register()
     envelope = JobEnvelope(
@@ -688,7 +688,7 @@ def test_job_envelope_nufft_sf_calc():
 
 def test_nufft_sf_calc_op_smoke():
     from phridge.contrib.nufft_sf.op import nufft_sf_calc
-    from phridge.models import CrystalSymmetry, Scatterer, SymOp
+    from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
     from phridge.packing import PackedMiller
     from phridge.packing_xtal import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
@@ -723,7 +723,7 @@ def test_nufft_sf_calc_op_smoke():
 
 def test_nufft_sf_bind_reuse():
     from phridge.contrib.nufft_sf.op import nufft_sf_bind, nufft_sf_calc
-    from phridge.models import CrystalSymmetry, Scatterer, SymOp
+    from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
     from phridge.packing import PackedMiller
     from phridge.packing_xtal import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable

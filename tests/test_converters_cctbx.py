@@ -26,7 +26,7 @@ from phridge.client.convert_xtal import (  # noqa: E402
     xray_from_cctbx,
     xray_to_cctbx,
 )
-from phridge.models import CrystalSymmetry  # noqa: E402
+from phridge.contracts.models import CrystalSymmetry  # noqa: E402
 
 
 def test_crystal_symmetry_cctbx_roundtrip():
@@ -263,7 +263,7 @@ def test_em_map_and_density_at_sites():
     from phridge.client.geometry import model_geometry
     from phridge.packing_geometry import PackedRestraints
     from phridge.packing_xtal import PackedHierarchy
-    from phridge.models import Atom, CoordinateFrame
+    from phridge.contracts.models import Atom, CoordinateFrame
 
     packed2 = em_map_from_numpy(packed.data, packed.meta.crystal, wrapping=False, label="half1")
     real = em_map_as_real_map(packed2)

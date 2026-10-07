@@ -13,7 +13,7 @@ import json
 import sys
 from typing import Any, Callable, Iterable, Optional, Union
 
-from phridge.models import SCHEMA_VERSION, OpSpec, WorkerRuntime
+from phridge.contracts.models import SCHEMA_VERSION, OpSpec, WorkerRuntime
 
 _SPECS: dict[str, OpSpec] = {}
 # External / late-bound implementations (avoids importing worker.ops on the client).

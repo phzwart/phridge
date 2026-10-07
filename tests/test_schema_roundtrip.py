@@ -3,7 +3,7 @@ from datetime import timezone
 import pytest
 from pydantic import ValidationError
 
-from phridge.models import (
+from phridge.contracts.models import (
     SCHEMA_VERSION,
     CCTBX_TYPES,
     AnomalousLayout,

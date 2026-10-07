@@ -13,7 +13,7 @@ torch = pytest.importorskip("torch")
 from phridge.client import Bridge  # noqa: E402
 from phridge.client.convert import crystal_from_cctbx  # noqa: E402
 from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx  # noqa: E402
-from phridge.models import SfEngineParams  # noqa: E402
+from phridge.contracts.models import SfEngineParams  # noqa: E402
 from phridge.sfcalc.client import (  # noqa: E402
     RemoteRefinementTarget,
     RemoteStructureFactors,

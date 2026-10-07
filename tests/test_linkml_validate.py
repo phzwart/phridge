@@ -9,7 +9,7 @@ import pytest
 
 jsonschema = pytest.importorskip("jsonschema")
 
-from phridge.models import (
+from phridge.contracts.models import (
     CrystalSymmetry,
     JobEnvelope,
     JobStatus,
@@ -18,7 +18,9 @@ from phridge.models import (
     ObjectRef,
 )
 
-GENERATED = Path(__file__).resolve().parents[1] / "schema" / "generated"
+GENERATED = (
+    Path(__file__).resolve().parents[1] / "src" / "phridge" / "contracts" / "schema" / "generated"
+)
 
 
 def _schema(name: str) -> dict:

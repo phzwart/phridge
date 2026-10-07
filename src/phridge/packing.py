@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.models import (
+from phridge.contracts.models import (
     AnomalousLayout,
     CrystalSymmetry,
     MapSpace,

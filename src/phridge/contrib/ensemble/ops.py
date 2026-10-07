@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.models import CrystalSymmetry, ObservationType
+from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.ops import register_op
 from phridge.packing import PackedMiller
 

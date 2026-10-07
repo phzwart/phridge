@@ -17,7 +17,7 @@ torch = pytest.importorskip("torch")
 from phridge.client import Bridge  # noqa: E402
 from phridge.client.geometry import RemoteGeometry  # noqa: E402
 from phridge.legacy.client_joint import JointSiteRefinement  # noqa: E402
-from phridge.models import Atom, CoordinateFrame, SfEngineParams  # noqa: E402
+from phridge.contracts.models import Atom, CoordinateFrame, SfEngineParams  # noqa: E402
 from phridge.packing_geometry import PackedRestraints  # noqa: E402
 from phridge.packing_xtal import PackedHierarchy  # noqa: E402
 from phridge.sfcalc.client import RemoteRefinementTarget  # noqa: E402

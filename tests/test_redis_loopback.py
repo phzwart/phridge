@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from phridge.client import Bridge, JobFailed
-from phridge.models import JobStatus
+from phridge.contracts.models import JobStatus
 from phridge.ops import get_op, list_ops
 from phridge.redis_store import ObjectTooLargeError, RedisStore
 from phridge.worker.runner import consume_one, process_envelope
@@ -73,7 +73,7 @@ def test_unknown_op_errors_before_enqueue():
 
 def test_worker_unknown_op_writes_error_envelope():
     store = _store()
-    from phridge.models import JobEnvelope, utcnow
+    from phridge.contracts.models import JobEnvelope, utcnow
 
     envelope = JobEnvelope(job_id="x", op="missing", created_at=utcnow(), updated_at=utcnow())
     store.put_envelope(envelope)

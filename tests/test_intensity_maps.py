@@ -208,7 +208,7 @@ def test_include_free_masks_coefficients():
 # ------------------------------------------------------------------ op round trip (memory bridge)
 def test_ml_i_maps_op_round_trip_memory_bridge():
     from phridge.client import Bridge
-    from phridge.models import CrystalSymmetry, ObservationType
+    from phridge.contracts.models import CrystalSymmetry, ObservationType
     from phridge.packing import PackedMiller
 
     register()

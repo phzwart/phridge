@@ -10,7 +10,7 @@ torch = pytest.importorskip("torch")
 from phridge.client import Bridge, RemoteGeometry  # noqa: E402
 from phridge.packing_geometry import PackedRestraints  # noqa: E402
 from phridge.packing_xtal import PackedCartesian, PackedHierarchy  # noqa: E402
-from phridge.models import Atom, CoordinateFrame  # noqa: E402
+from phridge.contracts.models import Atom, CoordinateFrame  # noqa: E402
 from phridge.worker.geometry.energy import energy_and_sites  # noqa: E402
 
 

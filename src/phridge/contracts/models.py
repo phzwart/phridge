@@ -1,4 +1,4 @@
-"""Pydantic models matching schema/phridge.yaml and schema/cctbx.yaml.
+"""Pydantic models matching src/phridge/contracts/schema/phridge.yaml and src/phridge/contracts/schema/cctbx.yaml.
 
 Regenerate after schema edits with ``python scripts/generate_models.py``
 (or edit this file to stay aligned). Generated output is committed so a

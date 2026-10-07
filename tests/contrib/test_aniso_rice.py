@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from phridge.contrib.intensity_ll import aniso_rice as ar
-from phridge.models import CrystalSymmetry, ObservationType
+from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.packing import PackedMiller
 
 

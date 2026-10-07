@@ -681,7 +681,7 @@ class IntensityRefineMixin:
         """Compute diagonal Hessian preconditioners for Cartesian sites and isotropic B-factors."""
         from phridge.sfcalc.client import _packed_xray
         from phridge.sfcalc.ops import _engine
-        from phridge.models import SfEngineParams
+        from phridge.contracts.models import SfEngineParams
 
         hkl = np.asarray(list(self.i_obs.indices()), dtype=np.int32)
         px, table = _packed_xray(self.xray_structure, None)

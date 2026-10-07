@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from phridge.models import AnomalousLayout, CrystalSymmetry, ObservationType
+from phridge.contracts.models import AnomalousLayout, CrystalSymmetry, ObservationType
 from phridge.packing import PackedMap, PackedMiller, unpack_map, unpack_miller
 
 

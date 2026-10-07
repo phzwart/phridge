@@ -23,7 +23,7 @@ import numpy as np
 
 from phridge.client.convert import crystal_from_cctbx, miller_from_cctbx
 from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
-from phridge.models import SfEngineParams
+from phridge.contracts.models import SfEngineParams
 from phridge.packing import PackedMiller
 from phridge.sfcalc.packing import PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 

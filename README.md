@@ -21,13 +21,13 @@ LinkML schemas are the source of truth (`schema_version` / LinkML `version` = `1
 
 | Schema | Types |
 |--------|--------|
-| [`schema/phridge.yaml`](schema/phridge.yaml) | job envelope, `ObjectRef`, op specs |
-| [`schema/cctbx.yaml`](schema/cctbx.yaml) | `CrystalSymmetry` |
-| [`schema/cctbx_reflections.yaml`](schema/cctbx_reflections.yaml) | miller, HL, MTZ-like `ReflectionFile` |
-| [`schema/cctbx_maps.yaml`](schema/cctbx_maps.yaml) | real/complex maps, gridding, `EmMap` |
-| [`schema/cctbx_coordinates.yaml`](schema/cctbx_coordinates.yaml) | sites, `Hierarchy`, `XrayStructure` |
-| [`schema/cctbx_geometry.yaml`](schema/cctbx_geometry.yaml) | `GeometryRestraints`, `ModelGeometry` |
-| [`schema/cctbx_scattering.yaml`](schema/cctbx_scattering.yaml) | `ScatteringTable`, `SfEngineParams`, `SfGradients`, `SfCurvatures`, `TargetResult` |
+| [`src/phridge/contracts/schema/phridge.yaml`](src/phridge/contracts/schema/phridge.yaml) | job envelope, `ObjectRef`, op specs |
+| [`src/phridge/contracts/schema/cctbx.yaml`](src/phridge/contracts/schema/cctbx.yaml) | `CrystalSymmetry` |
+| [`src/phridge/contracts/schema/cctbx_reflections.yaml`](src/phridge/contracts/schema/cctbx_reflections.yaml) | miller, HL, MTZ-like `ReflectionFile` |
+| [`src/phridge/contracts/schema/cctbx_maps.yaml`](src/phridge/contracts/schema/cctbx_maps.yaml) | real/complex maps, gridding, `EmMap` |
+| [`src/phridge/contracts/schema/cctbx_coordinates.yaml`](src/phridge/contracts/schema/cctbx_coordinates.yaml) | sites, `Hierarchy`, `XrayStructure` |
+| [`src/phridge/contracts/schema/cctbx_geometry.yaml`](src/phridge/contracts/schema/cctbx_geometry.yaml) | `GeometryRestraints`, `ModelGeometry` |
+| [`src/phridge/contracts/schema/cctbx_scattering.yaml`](src/phridge/contracts/schema/cctbx_scattering.yaml) | `ScatteringTable`, `SfEngineParams`, `SfGradients`, `SfCurvatures`, `TargetResult` |
 
 Redis stores science objects with `kind=cctbx` and `cctbx_type` set to the
 class name. There is no `sparse_miller` or `map_grid` kind.
@@ -87,7 +87,7 @@ be assumed to `pip install` into the bundle. Pip has no aarch64
 `cctbx-base` wheel.
 
 Runtime needs `numpy`, `redis`, and `pydantic` v2. `linkml-runtime` is
-not required at runtime; [`src/phridge/models.py`](src/phridge/models.py)
+not required at runtime; [`src/phridge/contracts/models.py`](src/phridge/contracts/models.py)
 is committed. After editing YAML, update `models.py` and regenerate JSON
 Schema plus the class catalog:
 
@@ -96,7 +96,7 @@ make schema-docs
 # or: python scripts/generate_models.py --all
 ```
 
-That writes [`schema/generated/*.schema.json`](schema/generated/) and
+That writes [`src/phridge/contracts/schema/generated/*.schema.json`](src/phridge/contracts/schema/generated/) and
 [`docs/schema/`](docs/schema/). `linkml-validate` / pytest check JSON
 metadata only (not packed npz).
 
@@ -224,10 +224,10 @@ built-in ops; the agentsg demo is the canonical **external package** path
 ## Layout
 
 ```
-schema/                      LinkML (source of truth)
+src/phridge/contracts/schema/ LinkML (source of truth)
 docs/                        Contract, packing, client helpers, extending
 examples/                    demos + examples/plugins/ (third-party ops)
-src/phridge/models.py        committed pydantic
+src/phridge/contracts/models.py  committed pydantic
 src/phridge/packing*.py      npz encode/decode
 src/phridge/client/          Bridge, converters, EM + geometry helpers
 src/phridge/worker/          stream loop, torch helpers, science ops

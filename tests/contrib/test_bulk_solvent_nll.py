@@ -7,7 +7,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from phridge.models import CrystalSymmetry, ObservationType
+from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.packing import PackedMiller
 
 pytestmark = pytest.mark.skipif(

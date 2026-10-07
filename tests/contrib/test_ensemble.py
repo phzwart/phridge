@@ -55,7 +55,7 @@ def test_client_import_is_torch_free():
 
 def test_job_envelope_validates():
     jsonschema = pytest.importorskip("jsonschema")
-    from phridge.models import SCHEMA_VERSION, JobEnvelope, JobStatus, ObjectKind, ObjectRef
+    from phridge.contracts.models import SCHEMA_VERSION, JobEnvelope, JobStatus, ObjectKind, ObjectRef
 
     register()
     envelope = JobEnvelope(
@@ -68,7 +68,15 @@ def test_job_envelope_validates():
         },
         status=JobStatus.queued,
     )
-    schema_path = Path(__file__).resolve().parents[2] / "schema" / "generated" / "JobEnvelope.schema.json"
+    schema_path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "phridge"
+        / "contracts"
+        / "schema"
+        / "generated"
+        / "JobEnvelope.schema.json"
+    )
     if not schema_path.is_file():
         pytest.skip("generated JobEnvelope schema is absent")
     schema = json.loads(schema_path.read_text())

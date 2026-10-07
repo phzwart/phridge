@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from phridge.models import (
+from phridge.contracts.models import (
     CCTBX_TYPES,
     ArrayMeta,
     CrystalGridding,

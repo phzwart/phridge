@@ -7,7 +7,7 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.client.convert import crystal_from_cctbx, crystal_to_cctbx, miller_from_cctbx, miller_to_cctbx
-from phridge.models import (
+from phridge.contracts.models import (
     AnomalousLayout,
     Atom,
     CoordinateFrame,

@@ -9,7 +9,7 @@ from typing import Optional
 
 import redis
 
-from phridge.models import JobEnvelope, JobStatus
+from phridge.contracts.models import JobEnvelope, JobStatus
 from phridge.ops import get_op
 from phridge.redis_store import RedisStore, jobs_stream
 

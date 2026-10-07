@@ -320,7 +320,7 @@ def test_op_wire_n1():
     pytest.importorskip("torch")
     from phridge.legacy.multixtal.op import multixtal_fit
     from phridge.legacy.multixtal.structure import f_calc_s_g
-    from phridge.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
+    from phridge.contracts.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
     from phridge.packing_xtal import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
 

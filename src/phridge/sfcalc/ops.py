@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.models import ObservationType, SfEngineParams
+from phridge.contracts.models import ObservationType, SfEngineParams
 from phridge.packing import PackedMiller
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 from phridge.packing_xtal import PackedXray

@@ -185,7 +185,7 @@ def test_geometry_curvature_ops_round_trip():
 
 def test_remote_geometry_curvature_api():
     from phridge.client import RemoteGeometry
-    from phridge.models import Atom, CoordinateFrame
+    from phridge.contracts.models import Atom, CoordinateFrame
     from phridge.packing_xtal import PackedHierarchy
 
     xyz, pr = _ring()

@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.models import (
+from phridge.contracts.models import (
     AnomalousLayout,
     Atom,
     CartesianSites,
@@ -406,7 +406,7 @@ class PackedEmMap:
         label: Optional[str] = None,
         space: MapSpace = MapSpace.p1,
     ) -> None:
-        from phridge.models import EmMap, ExperimentType
+        from phridge.contracts.models import EmMap, ExperimentType
 
         self.data = as_canonical_float(np.asarray(data))
         if self.data.ndim != 3:

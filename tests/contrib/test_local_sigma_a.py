@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from phridge.contrib.intensity_ll import local_sigma_a as LSA
-from phridge.models import CrystalSymmetry, ObservationType
+from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.packing import PackedMiller
 
 requires_torch = pytest.mark.skipif(

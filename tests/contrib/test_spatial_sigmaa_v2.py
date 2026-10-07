@@ -59,12 +59,14 @@ from phridge.contrib.spatial_sigmaa_v2.target import (
     log_i0,
     rice_nll_intensity,
 )
-from phridge.models import CCTBX_TYPES, SpatialSigmaAV2, SpatialSigmaAV2Result
+from phridge.contracts.models import CCTBX_TYPES, SpatialSigmaAV2, SpatialSigmaAV2Result
 from phridge.sfcalc.engine.cell import orthogonalization_matrix
 from phridge.sfcalc.engine.engine import ScatteringModel
 from phridge.sfcalc.engine.symmetry import identity_ops
 
-GENERATED = Path(__file__).resolve().parents[2] / "schema" / "generated"
+GENERATED = (
+    Path(__file__).resolve().parents[2] / "src" / "phridge" / "contracts" / "schema" / "generated"
+)
 
 
 def test_register_is_idempotent():
@@ -935,7 +937,7 @@ def test_job_input_from_state_flag_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_apply_frozen_modified_model():
-    from phridge.models import CrystalSymmetry, Scatterer
+    from phridge.contracts.models import CrystalSymmetry, Scatterer
     from phridge.packing_xtal import PackedXray
 
     n = 3
@@ -1026,7 +1028,7 @@ def test_flag_off_kwargs_omit_fitted_state(monkeypatch: pytest.MonkeyPatch) -> N
 def test_apply_hosts_torch_result_arrays():
     """Apply pulls w / U off the compute device before touching PackedXray."""
     torch = pytest.importorskip("torch")
-    from phridge.models import CrystalSymmetry, Scatterer
+    from phridge.contracts.models import CrystalSymmetry, Scatterer
     from phridge.packing_xtal import PackedXray
 
     n = 2

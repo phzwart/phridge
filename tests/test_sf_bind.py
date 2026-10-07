@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from phridge.client import Bridge
-from phridge.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
+from phridge.contracts.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
 from phridge.packing import PackedMiller
 from phridge.packing_xtal import PackedXray
 from phridge.sfcalc.ops import sf_bind, sf_calc

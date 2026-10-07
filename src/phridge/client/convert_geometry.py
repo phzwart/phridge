@@ -334,7 +334,7 @@ def model_geometry(
     restraints: Any = None,
 ) -> Any:
     """Assert one i_seq space across hierarchy, xray scatterers, and restraints."""
-    from phridge.models import ModelGeometry
+    from phridge.contracts.models import ModelGeometry
     from phridge.packing_geometry import PackedRestraints
     from phridge.packing_xtal import PackedHierarchy, PackedXray
 

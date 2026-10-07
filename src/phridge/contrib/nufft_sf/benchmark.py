@@ -385,7 +385,7 @@ def run_case_via_bridge(
 ) -> list[Row]:
     """Phenix/cctbx client: local FFT, stamp + NUFFT on the torch worker."""
     from phridge.contrib.nufft_sf import register
-    from phridge.models import SfEngineParams
+    from phridge.contracts.models import SfEngineParams
     from phridge.packing import PackedMiller
     from phridge.sfcalc.client import _miller_template, _packed_xray
 

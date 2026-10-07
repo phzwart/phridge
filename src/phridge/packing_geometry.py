@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.models import CrystalSymmetry, GeometryRestraints
+from phridge.contracts.models import CrystalSymmetry, GeometryRestraints
 from phridge.packing import as_canonical_float, as_canonical_int
 
 

@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from phridge.client import StructureFactorServer  # noqa: E402
-from phridge.models import SfEngineParams  # noqa: E402
+from phridge.contracts.models import SfEngineParams  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_MD = HERE / "sf_server_demo.md"

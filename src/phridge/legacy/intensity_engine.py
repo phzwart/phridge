@@ -233,7 +233,7 @@ from phridge.contrib.intensity_ll.ops import (
 from phridge.contrib.intensity_ll.wilson import (
     wilson_carries_anisotropy as _wilson_carries_anisotropy,
 )
-from phridge.models import SfEngineParams
+from phridge.contracts.models import SfEngineParams
 from phridge.sfcalc.client import RemoteGradients, RemoteTargetResult
 
 

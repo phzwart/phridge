@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.models import ScatteringTable, SfCurvatures, SfGradients, TargetResult
+from phridge.contracts.models import ScatteringTable, SfCurvatures, SfGradients, TargetResult
 from phridge.packing import as_canonical_complex, as_canonical_float
 from phridge.packing_xtal import _load_npz, _savez
 

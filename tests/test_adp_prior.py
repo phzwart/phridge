@@ -25,7 +25,7 @@ from phridge.client.adp_restraints import (  # noqa: E402
     fit_adp_hyperparameters,
 )
 from phridge.legacy.client_joint import JointSiteRefinement, _extract_adp_vec  # noqa: E402
-from phridge.models import SfEngineParams  # noqa: E402
+from phridge.contracts.models import SfEngineParams  # noqa: E402
 from phridge.packing_geometry import PackedRestraints, unpack_restraints  # noqa: E402
 from phridge.packing_xtal import Atom, CoordinateFrame, PackedCartesian, PackedHierarchy  # noqa: E402
 from phridge.sfcalc.client import RemoteRefinementTarget  # noqa: E402

@@ -11,7 +11,7 @@ Also mirrored by `.cursor/rules/phridge-contrib.mdc`.
 
 ## Pydantic
 
-- Any JSON / options / target-spec dict that crosses the contrib boundary must be validated with a pydantic `BaseModel` (or an existing LinkML-generated model from `phridge.models` via `model_validate`).
+- Any JSON / options / target-spec dict that crosses the contrib boundary must be validated with a pydantic `BaseModel` (or an existing LinkML-generated model from `phridge.contracts.models` via `model_validate`).
 - Prefer `model_config = {"extra": "forbid"}` on contrib option models.
 - Do not read ad-hoc keys from raw `dict`s in public constructors.
 

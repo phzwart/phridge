@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from phridge.client.convert import from_canonical, is_cctbx_object, to_canonical
 from phridge.codec import decode_ref, encode_value
-from phridge.models import JobEnvelope, JobStatus, WorkerRuntime, utcnow
+from phridge.contracts.models import JobEnvelope, JobStatus, WorkerRuntime, utcnow
 from phridge.ops import get_op
 from phridge.protocol import Protocol
 from phridge.redis_store import (

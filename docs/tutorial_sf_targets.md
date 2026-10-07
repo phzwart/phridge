@@ -19,7 +19,7 @@ phridge-worker --redis-url redis://0.0.0.0:6379/0 --device cuda
 ```python
 # import cctbx before torch in one process
 from phridge.sfcalc import StructureFactorServer  # or phridge.client
-from phridge.models import SfEngineParams
+from phridge.contracts.models import SfEngineParams
 
 # production: Redis on the GPU server (other machine OK)
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")

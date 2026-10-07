@@ -16,7 +16,7 @@ from phridge.cctbx_worker.sessions import (
     stash_restraints_manager,
 )
 from phridge.memory_redis import MemoryRedis
-from phridge.models import JobEnvelope, WorkerRuntime
+from phridge.contracts.models import JobEnvelope, WorkerRuntime
 from phridge.protocol import Protocol
 from phridge.redis_store import RedisStore, jobs_stream, worker_group
 

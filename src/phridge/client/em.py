@@ -34,7 +34,7 @@ def em_map_from_numpy(
     label: Optional[str] = None,
 ) -> PackedEmMap:
     from phridge.client.convert import crystal_from_cctbx
-    from phridge.models import CrystalSymmetry
+    from phridge.contracts.models import CrystalSymmetry
 
     if not isinstance(crystal, CrystalSymmetry):
         crystal = crystal_from_cctbx(crystal)

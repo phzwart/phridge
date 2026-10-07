@@ -233,7 +233,7 @@ def prepare_job(
 ) -> MultixtalJob:
     """Read PDB + MTZs, reindex, build the common set, compute F_mask, pack arrays."""
     from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
-    from phridge.models import SfEngineParams
+    from phridge.contracts.models import SfEngineParams
 
     specs: list[DatasetSpec]
     if manifest is not None:

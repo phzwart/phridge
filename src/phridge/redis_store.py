@@ -15,7 +15,7 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 from phridge.memory_redis import MemoryRedis
-from phridge.models import JobEnvelope, WorkerRuntime
+from phridge.contracts.models import JobEnvelope, WorkerRuntime
 
 DEFAULT_TTL_SECONDS = 3600
 DEFAULT_MAX_OBJECT_BYTES = 64 * 1024 * 1024

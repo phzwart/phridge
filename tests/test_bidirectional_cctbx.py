@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from phridge.client import Bridge
-from phridge.models import WorkerRuntime
+from phridge.contracts.models import WorkerRuntime
 from phridge.ops import get_op, list_ops
 from phridge.redis_store import (
     JOBS_STREAM_CCTBX,

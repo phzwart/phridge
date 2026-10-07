@@ -17,7 +17,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.models import CrystalSymmetry, ObservationType
+from phridge.contracts.models import CrystalSymmetry, ObservationType
 
 
 def identities(
