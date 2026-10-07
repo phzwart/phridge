@@ -24,7 +24,7 @@ tensor, so the two conventions line up with no factors of two.
 | Stage | Where | How |
 |-------|-------|-----|
 | $F_h(\mathbf{x})$ | `phridge.transforms.fourier.ten_eyck` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
-| $G_h = \partial g/\partial F_h$ | `phridge.sfcalc.targets` | autograd of the target w.r.t. the complex `f_calc` tensor |
+| $G_h = \partial g/\partial F_h$ | `phridge.d.rules.amplitude` | autograd of the target w.r.t. the complex `f_calc` tensor |
 | $\partial F_h/\partial x$ chain | `phridge.transforms.fourier.ten_eyck` | Agarwal map: scatter $G_h$ onto FFT[-h], $N\cdot\mathrm{IFFT}$, stamp VJP (no autograd tape) |
 | packing for a minimizer | `phridge.sfcalc.client` | cctbx `packing_order_convention == 2`, cartesian site / $U_{cart}$ gradients |
 
@@ -85,7 +85,7 @@ Targets are registered by name and built from a JSON spec:
 | `ml_f` | `scale_factor` | `cctbx.xray.ext.mlf_target_and_gradients` (needs `alpha`, `beta`, `epsilon`, `centric`) |
 | `ml_i` | `sigma_a`, `sigma_wilson`, `sigma`, `use_sigmas`, `nu`, quadrature knobs | contrib intensity ML (`phridge.contrib.intensity_ll`; needs `alpha`≡σ_A / `beta`≡Σ or scalars; `epsilon`, `centric`). Map coefficients (posterior-based mFo−DFc / 2mFo−DFc / gradient / Newton analogues, robust weights, ∂log L/∂ν) via the `ml_i_maps` op — see [`contrib/intensity_ll/maps.md`](../src/phridge/contrib/intensity_ll/maps.md) |
 
-A new target is a subclass of `phridge.sfcalc.targets.Target` with a
+A new target is a subclass of `phridge.d.rules.amplitude.Target` with a
 `per_reflection(f_calc, obs)` method; autograd supplies `d_target_d_f_calc`
 and the curvatures. In-tree extras live under `phridge.contrib` (see
 [extending.md](extending.md)). Short tutorial (call path + custom likelihood):

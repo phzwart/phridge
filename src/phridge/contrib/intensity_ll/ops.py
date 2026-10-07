@@ -126,12 +126,12 @@ def ml_i_maps(
     """Worker implementation (torch side)."""
     import torch
 
-    from phridge.contrib.intensity_ll.maps import IntensityMapOptions, intensity_map_coefficients
-    from phridge.contrib.intensity_ll.mli import normalize
-    from phridge.contrib.intensity_ll.rint import integrated_s_report
-    from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
+    from phridge.d.maps import IntensityMapOptions, intensity_map_coefficients
+    from phridge.d.rules.mli_quad import normalize
+    from phridge.d.rules.mli_quad.rint import integrated_s_report
+    from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
     from phridge.sfcalc.ops import _DEVICE, _miller_like, _np, _observations
-    from phridge.sfcalc.targets import build_target
+    from phridge.d.rules.amplitude import build_target
 
     if _np(f_calc.hkl).shape != _np(f_obs.hkl).shape or not np.array_equal(_np(f_calc.hkl), _np(f_obs.hkl)):
         raise ValueError("f_calc and f_obs must be on identical hkl lists")
@@ -580,7 +580,7 @@ def _data_frac_spread_by_shell(
     an isotropic Σ_W the anisotropy shows up here as a wide p90−p10; under a correct
     tensor it should collapse. Reported per shell and pooled.
     """
-    from phridge.contrib.intensity_ll.wilson import data_frac_spread
+    from phridge.q.error_models.wilson_aniso import data_frac_spread
 
     denom = np.maximum(epsilon * sigma_w, 1e-30)
     sz = np.asarray(sigma_i, dtype=np.float64) / denom
@@ -810,7 +810,7 @@ def ml_i_nuisance_fit(
          equal-count bins), so every bin keeps its observed mean intensity and only
          ``B`` is fitted, on all reflections. ``wilson_model="anisotropic"`` is the
          single-curve tensor ``Σ₀ exp(-0.5 s_cartᵀ B s_cart)`` and ``"isotropic"`` the
-         scalar ``Σ₀ exp(-0.5 B_W s²)`` (see :mod:`phridge.contrib.intensity_ll.wilson`).
+         scalar ``Σ₀ exp(-0.5 B_W s²)`` (see :mod:`phridge.q.error_models.wilson_aniso`).
          The curve forms are initialized by a moment Wilson plot, then refined by
          maximizing the intensity likelihood under a pure Wilson prior
          (``σ_A → 0``) times Gaussian measurement noise — so noisy / negative
@@ -856,12 +856,12 @@ def ml_i_nuisance_fit(
     import torch
     from scipy.optimize import minimize_scalar
 
-    from phridge.contrib.intensity_ll import aniso_rice as _ar
-    from phridge.contrib.intensity_ll import free_beta as _fb
-    from phridge.contrib.intensity_ll import local_sigma_a as _lsa
-    from phridge.contrib.intensity_ll import wilson as _wilson
-    from phridge.contrib.intensity_ll.maps import posterior_moments
-    from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
+    from phridge.d.rules.mli_quad import aniso_rice as _ar
+    from phridge.q.error_models import local_sigma_a as _lsa
+    from phridge.q.error_models import sigma_a_beta as _fb
+    from phridge.q.error_models import wilson_aniso as _wilson
+    from phridge.d.maps import posterior_moments
+    from phridge.d.rules.mli_quad import log_likelihood_normal, log_likelihood_t, normalize
     from phridge.sfcalc.ops import _DEVICE, _np
 
     if _np(f_calc.hkl).shape != _np(f_obs.hkl).shape or not np.array_equal(_np(f_calc.hkl), _np(f_obs.hkl)):
@@ -2238,7 +2238,7 @@ def ml_i_target_and_gradients(
     """
     import torch
 
-    from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
+    from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
     from phridge.sfcalc.ops import (
         _DEVICE,
         _bound_engine,
@@ -2250,7 +2250,7 @@ def ml_i_target_and_gradients(
         _to_like,
     )
     from phridge.sfcalc.packing import PackedSfCurvatures, PackedSfGradients
-    from phridge.sfcalc.targets import build_target
+    from phridge.d.rules.amplitude import build_target
 
     do_precond = bool(precondition)
     damp_val = float(damping) if damping is not None else 0.05
@@ -2258,7 +2258,7 @@ def ml_i_target_and_gradients(
 
     d0_v2 = None
     w_v2 = None
-    from phridge.contrib.spatial_sigmaa_v2.apply import (
+    from phridge.q.error_models.spatial.apply import (
         d0_from_block,
         frozen_from_result,
         occupancy_grads_to_model,
@@ -2440,7 +2440,7 @@ def register_ops() -> None:
 
     register_op(OMIT_OP_NAME, ml_i_omit_windows, inputs=dict(_OMIT_INPUTS), outputs=dict(_OMIT_OUTPUTS))
 
-    from phridge.contrib.intensity_ll.bulk_solvent_op import (
+    from phridge.q.scales.solvent import (
         _BULK_SOLVENT_INPUTS,
         _BULK_SOLVENT_OUTPUTS,
         BULK_SOLVENT_OP_NAME,

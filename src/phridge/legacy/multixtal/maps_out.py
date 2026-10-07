@@ -23,7 +23,7 @@ class MapCoefficients:
 
 def plugin_fom(e_c: np.ndarray, sigma_a: np.ndarray, centric: np.ndarray) -> np.ndarray:
     """Classical FOM ``m(E=E_c)`` averaged over datasets."""
-    from phridge.contrib.intensity_ll.maps import _fom_at
+    from phridge.d.maps import _fom_at
 
     ec = np.asarray(e_c, dtype=np.float64)
     sa = np.asarray(sigma_a, dtype=np.float64)

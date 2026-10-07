@@ -78,7 +78,7 @@ def apply_bulk_solvent(
 
 
 def _s_sq(unit_cell: Sequence[float], hkl: np.ndarray) -> np.ndarray:
-    from phridge.contrib.intensity_ll.wilson import reciprocal_cartesian
+    from phridge.q.error_models.wilson_aniso import reciprocal_cartesian
 
     s_cart = reciprocal_cartesian(unit_cell, hkl)
     return np.sum(np.asarray(s_cart, dtype=np.float64) ** 2, axis=1)
@@ -89,7 +89,7 @@ def resolution_s2(unit_cell: Sequence[float], hkl: np.ndarray) -> np.ndarray:
 
 
 def s_hat(unit_cell: Sequence[float], hkl: np.ndarray) -> np.ndarray:
-    from phridge.contrib.intensity_ll.aniso_rice import unit_directions
-    from phridge.contrib.intensity_ll.wilson import reciprocal_cartesian
+    from phridge.d.rules.mli_quad.aniso_rice import unit_directions
+    from phridge.q.error_models.wilson_aniso import reciprocal_cartesian
 
     return unit_directions(reciprocal_cartesian(unit_cell, hkl))

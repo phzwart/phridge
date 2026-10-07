@@ -188,7 +188,7 @@ def beam_frame_vectors(
 
     ``s_inc`` is the (constant) beam direction; ``s_dif = s_inc + λ s_rot``.
     """
-    from phridge.contrib.intensity_ll.wilson import reciprocal_cartesian
+    from phridge.q.error_models.wilson_aniso import reciprocal_cartesian
 
     s = reciprocal_cartesian(unit_cell, np.asarray(hkl, dtype=np.float64))
     axis = np.asarray(spindle, dtype=np.float64)

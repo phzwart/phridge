@@ -592,8 +592,8 @@ def test_hessian_preconditioners():
     model.estimate_sigma_a()
 
     import torch
-    from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
-    from phridge.sfcalc.targets.base import Observations
+    from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
+    from phridge.d.rules.amplitude.base import Observations
 
     fmod_t = torch.as_tensor(np.asarray(model.f_model.data(), dtype=np.complex128))
     obs = Observations.from_numpy(
@@ -731,8 +731,8 @@ def test_four_way_refinement_modes():
 def test_hessian_xray_weighting_and_intact_geometry():
     """Verify that leaving geometry scale intact and reweighting X-ray via Hessian ratios works."""
     import torch
-    from phridge.sfcalc.targets.maximum_likelihood import MaximumLikelihoodAmplitude
-    from phridge.sfcalc.targets.base import Observations
+    from phridge.d.rules.amplitude.maximum_likelihood import MaximumLikelihoodAmplitude
+    from phridge.d.rules.amplitude.base import Observations
 
     xs, i_obs, hierarchy, r_free = _make_synthetic_model(n_atoms=15, d_min=2.5)
     model = IntensityModel(xs, i_obs, hierarchy=hierarchy, r_free_flags=r_free, n_bins=4, estimate_nu=False)

@@ -393,8 +393,8 @@ def intensity_map_coefficients_batch(
     """
     import torch
 
-    from phridge.contrib.intensity_ll.maps import posterior_moments
-    from phridge.contrib.intensity_ll.mli import normalize
+    from phridge.d.maps import posterior_moments
+    from phridge.d.rules.mli_quad import normalize
 
     fo = obs.data
     device = fo.device

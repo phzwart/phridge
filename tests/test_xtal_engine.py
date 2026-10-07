@@ -21,7 +21,7 @@ from phridge.sfcalc.client import (  # noqa: E402
 )
 from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import scattering_model  # noqa: E402
-from phridge.sfcalc.targets import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
+from phridge.d.rules.amplitude import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
 
 
 def _structure(space_group="P21", elements=("C", "N", "O", "S"), n_repeat=3, aniso=False, anomalous=False, seed=0):

@@ -10,10 +10,10 @@ import numpy as np
 import torch
 
 from phridge.client.intensity.math_utils import golden_section_search_torch, isotonic_non_increasing, tv_denoise_1d
-from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
-from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
-from phridge.sfcalc.targets import Observations
-from phridge.sfcalc.targets.maximum_likelihood import MaximumLikelihoodAmplitude
+from phridge.d.rules.mli_quad import log_likelihood_normal, log_likelihood_t, normalize
+from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
+from phridge.d.rules.amplitude import Observations
+from phridge.d.rules.amplitude.maximum_likelihood import MaximumLikelihoodAmplitude
 from phridge.shims.cctbx._flex import complex_double as flex_complex_double
 from phridge.shims.cctbx._flex import double as flex_double
 

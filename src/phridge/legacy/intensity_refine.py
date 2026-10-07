@@ -13,7 +13,7 @@ try:
 except ImportError:
     flex = None
 
-from phridge.sfcalc.targets import Observations
+from phridge.d.rules.amplitude import Observations
 
 
 class IntensityRefineMixin:
@@ -742,8 +742,8 @@ class IntensityRefineMixin:
         verbose: bool = True,
     ) -> Dict[str, Any]:
         """Refine scale, solvent parameters, isotropic B-factors, and atomic coordinates with Adam."""
-        from phridge.sfcalc.targets.maximum_likelihood import MaximumLikelihoodAmplitude
-        from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
+        from phridge.d.rules.amplitude.maximum_likelihood import MaximumLikelihoodAmplitude
+        from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
 
         # Ensure isotropic B-factors
         if any(sc.flags.use_u_aniso() for sc in self.xray_structure.scatterers()):

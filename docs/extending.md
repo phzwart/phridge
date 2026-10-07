@@ -93,7 +93,7 @@ Preferred imports:
 
 ```python
 from phridge.sfcalc import StructureFactorServer
-from phridge.sfcalc.targets import Target, register_target
+from phridge.d.rules.amplitude import Target, register_target
 ```
 
 Compatibility shims still exist (`phridge.worker.targets`, `phridge.client.xtal_engine`, …).
@@ -130,7 +130,7 @@ process — still call `register_op` (with impl) first.
 ## Custom targets (existing SF ops)
 
 For a new reciprocal-space target used by `target_eval` /
-`refine_gradients`, subclass `phridge.sfcalc.targets.Target` and
+`refine_gradients`, subclass `phridge.d.rules.amplitude.Target` and
 `@register_target("my_name")`. Prefer an in-tree package under
 `phridge.contrib` (see above) or an external module; the worker must load
 it via entry points or `--preload`. Step-by-step:

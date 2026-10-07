@@ -55,7 +55,7 @@ from phridge.sfcalc.packing import (
     unpack_sf_gradients,
     unpack_target_result,
 )
-from phridge.contrib.spatial_sigmaa_v2.packing import (
+from phridge.q.error_models.spatial.packing import (
     PackedSpatialSigmaAV2,
     PackedSpatialSigmaAV2Result,
     unpack_spatial_sigma_a_v2,

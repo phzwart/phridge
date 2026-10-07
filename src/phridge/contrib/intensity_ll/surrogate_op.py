@@ -87,7 +87,7 @@ def ml_i_surrogate_fit(
         fit_surrogate_for_observations,
     )
     from phridge.sfcalc.ops import _DEVICE, _np, _observations, _target_result
-    from phridge.sfcalc.targets import build_target
+    from phridge.d.rules.amplitude import build_target
 
     if _np(f_calc.hkl).shape != _np(f_obs.hkl).shape or not np.array_equal(
         _np(f_calc.hkl), _np(f_obs.hkl)

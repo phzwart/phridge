@@ -14,7 +14,7 @@ from phridge.shims.cctbx._flex import double as flex_double
 from phridge.shims.cctbx._flex import flex_mean
 
 from phridge.client import StructureFactorServer
-from phridge.client.intensity.maps import IntensityMapMixin
+from phridge.d.map_coefficients import IntensityMapMixin
 from phridge.tools.intensity.steps import IntensityStepsMixin
 from phridge.client.intensity.math_utils import (
     golden_section_search_torch,
@@ -23,10 +23,10 @@ from phridge.client.intensity.math_utils import (
 )
 from phridge.legacy.intensity_refine import IntensityRefineMixin
 from phridge.contrib.intensity_ll import register
-from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
-from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
-from phridge.sfcalc.targets import Observations
-from phridge.sfcalc.targets.maximum_likelihood import MaximumLikelihoodAmplitude
+from phridge.d.rules.mli_quad import log_likelihood_normal, log_likelihood_t, normalize
+from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
+from phridge.d.rules.amplitude import Observations
+from phridge.d.rules.amplitude.maximum_likelihood import MaximumLikelihoodAmplitude
 
 
 class IntensityModel(IntensityStepsMixin, IntensityRefineMixin, IntensityMapMixin):

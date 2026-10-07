@@ -3,7 +3,7 @@
 What this is
 ------------
 The exact target integrates a Rice/Woolfson prior on the true normalized amplitude
-``E`` against the intensity noise model (:mod:`phridge.contrib.intensity_ll.mli`).
+``E`` against the intensity noise model (:mod:`phridge.d.rules.mli_quad`).
 That marginal costs one adaptive quadrature per evaluation, and a refinement macro
 cycle asks for it hundreds of times (bulk-solvent scaling, weight scans, minimizer
 line searches, simulated annealing). This module builds a **surrogate** that speaks
@@ -106,7 +106,7 @@ Hard rule
 ``F_p`` and ``beta_p`` are internal arrays. They must never appear in any printed
 report, output file, or user-visible label. ``F_p`` is one paste away from being
 mistaken for an observed amplitude and ``beta_p`` for an experimental variance. Same
-discipline as the S-family naming (see :mod:`phridge.contrib.intensity_ll.rint`).
+discipline as the S-family naming (see :mod:`phridge.d.rules.mli_quad.rint`).
 """
 
 from __future__ import annotations
@@ -119,13 +119,13 @@ import numpy as np
 import torch
 from pydantic import BaseModel, Field
 
-from phridge.contrib.intensity_ll.maps import (
+from phridge.d.maps import (
     PosteriorNodes,
     posterior_moments,
     posterior_node_cache,
 )
-from phridge.contrib.intensity_ll.mli import _ratio, normalize
-from phridge.sfcalc.targets.base import Observations
+from phridge.d.rules.mli_quad import _ratio, normalize
+from phridge.d.rules.amplitude.base import Observations
 
 Tensor = torch.Tensor
 
@@ -206,7 +206,7 @@ def rice_log_derivatives(
     """First and second derivative in ``t`` of the ``ml_f`` log-likelihood.
 
     Acentric Rice and centric Woolfson, matching
-    :class:`phridge.sfcalc.targets.maximum_likelihood.MaximumLikelihoodAmplitude`
+    :class:`phridge.d.rules.amplitude.maximum_likelihood.MaximumLikelihoodAmplitude`
     term for term in normalized units.
     """
     c_a = 2.0 * alpha_p * f_p / beta_p
@@ -235,7 +235,7 @@ def rice_log_likelihood(
     centric: Tensor,
 ) -> Tensor:
     """The surrogate log-likelihood itself (used for the predicted-delta diagnostic)."""
-    from phridge.sfcalc.targets.maximum_likelihood import ln_cosh, ln_i0
+    from phridge.d.rules.amplitude.maximum_likelihood import ln_cosh, ln_i0
 
     x = 2.0 * alpha_p * f_p * t / beta_p
     acen = (
@@ -638,7 +638,7 @@ def fit_surrogate_for_observations(
 ) -> SurrogateFitResult:
     """Fit the surrogate at the current model, reusing the exact target's own nuisance arrays.
 
-    ``target`` is an :class:`~phridge.contrib.intensity_ll.target.IntensityLogLikelihood`,
+    ``target`` is an :class:`~phridge.d.rules.mli_quad.target.IntensityLogLikelihood`,
     so ``sigma_A``, ``Sigma_W``, ``sigma(I)`` and ``nu`` come from exactly the same
     place the exact NLL reads them: the surrogate and the exact target share one
     posterior at the checkpoint.

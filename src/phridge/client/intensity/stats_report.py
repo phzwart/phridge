@@ -40,7 +40,7 @@ from typing import Any, Optional, Sequence, TextIO
 
 import numpy as np
 
-from phridge.contrib.intensity_ll.wilson import data_frac_spread
+from phridge.q.error_models.wilson_aniso import data_frac_spread
 
 
 def stats_report_enabled(default: bool = True) -> bool:

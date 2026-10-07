@@ -25,8 +25,8 @@ from phridge.contrib.intensity_ll.omit_windows import (  # noqa: E402
     run_omit_windows_core,
     sigma_omit_raw,
 )
-from phridge.contrib.intensity_ll.maps import intensity_map_coefficients  # noqa: E402
-from phridge.contrib.intensity_ll.target import IntensityLogLikelihood  # noqa: E402
+from phridge.d.maps import intensity_map_coefficients  # noqa: E402
+from phridge.d.rules.mli_quad.target import IntensityLogLikelihood  # noqa: E402
 from phridge.contracts.models import CrystalSymmetry, ObservationType, Scatterer, SfEngineParams, SymOp  # noqa: E402
 from phridge.ops import get_implementation, get_op  # noqa: E402
 from phridge.contracts.packing import PackedMiller  # noqa: E402
@@ -34,7 +34,7 @@ from phridge.contracts.packing import PackedXray  # noqa: E402
 from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import _observations, scattering_model  # noqa: E402
 from phridge.sfcalc.packing import PackedScatteringTable  # noqa: E402
-from phridge.sfcalc.targets import Observations  # noqa: E402
+from phridge.d.rules.amplitude import Observations  # noqa: E402
 
 
 def _p1_crystal(cell=(40.0, 40.0, 40.0, 90.0, 90.0, 90.0)):

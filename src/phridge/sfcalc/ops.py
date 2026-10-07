@@ -14,7 +14,7 @@ from phridge.contracts.models import ObservationType, SfEngineParams
 from phridge.contracts.packing import PackedMiller
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 from phridge.contracts.packing import PackedXray
-from phridge.sfcalc.targets import Observations, TargetEval, build_target
+from phridge.d.rules.amplitude import Observations, TargetEval, build_target
 from phridge.transforms.fourier.ten_eyck import EngineParams, ScatteringModel, StructureFactorEngine
 
 _DEVICE = {"device": "cpu"}

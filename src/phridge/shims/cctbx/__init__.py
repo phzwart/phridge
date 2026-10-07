@@ -26,7 +26,7 @@ from phridge.contracts.packing import (
     PackedRestraints,
     PackedXray,
 )
-from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2, PackedSpatialSigmaAV2Result
+from phridge.q.error_models.spatial.packing import PackedSpatialSigmaAV2, PackedSpatialSigmaAV2Result
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 from phridge.shims.cctbx._adptbx import grad_u_star_as_u_cart
 from phridge.shims.cctbx._flex import is_numeric_flex

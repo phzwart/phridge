@@ -349,7 +349,7 @@ S_{\mathrm{post}} = \frac{\sum_S \langle |E - k_S E_C|\rangle}{\sum_S \langle E\
 $$
 
 Expectations use the same quadrature nodes as map coefficients / NLL
-(`phridge.contrib.intensity_ll.rint`). Work and free each get their own $k_S$;
+(`phridge.d.rules.mli_quad.rint`). Work and free each get their own $k_S$;
 resolution shells **reuse the parent set's $k_S$**. $k_S$ is least squares on the
 posterior means and converges to $\sigma_A$ in the no-data limit.
 

@@ -3,7 +3,7 @@
 All functionality has been modularized into ``phridge.client.intensity.*``:
   - ``phridge.tools.intensity.model.IntensityModel``
   - ``phridge.client.intensity.cli``: ``from_files``, ``run_intensity_pipeline``, ``main``
-  - ``phridge.client.intensity.maps.IntensityMapMixin``
+  - ``phridge.d.map_coefficients.IntensityMapMixin``
   - ``phridge.client.intensity.refine.IntensityRefineMixin``
   - ``phridge.client.intensity.math_utils``: ``tv_denoise_1d``, ``isotonic_non_increasing``
 """

@@ -145,7 +145,7 @@ def _reference_f(
 def _shell_index(hkl: np.ndarray, cells: Optional[np.ndarray], bin_size: int) -> np.ndarray:
     import torch
 
-    from phridge.contrib.intensity_ll.rint import equal_count_shell_indices
+    from phridge.d.rules.mli_quad.rint import equal_count_shell_indices
     from phridge.legacy.multixtal.structure import resolution_s2
 
     cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)

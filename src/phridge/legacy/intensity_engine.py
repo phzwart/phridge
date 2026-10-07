@@ -222,7 +222,7 @@ def amplitude_scaffold_from_intensities(i_obs: Any) -> Any:
 from phridge.client.api import Bridge
 from phridge.shims.cctbx import crystal_from_cctbx, miller_from_cctbx, miller_to_cctbx
 from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
-from phridge.contrib.intensity_ll.bulk_solvent_op import BULK_SOLVENT_OP_NAME
+from phridge.q.scales.solvent import BULK_SOLVENT_OP_NAME
 from phridge.contrib.intensity_ll.client import RemoteIntensityMapResult
 from phridge.contrib.intensity_ll.ops import (
     MAPS_OP_NAME,
@@ -230,7 +230,7 @@ from phridge.contrib.intensity_ll.ops import (
     TARGET_AND_GRADIENTS_OP_NAME,
     register_ops,
 )
-from phridge.contrib.intensity_ll.wilson import (
+from phridge.q.error_models.wilson_aniso import (
     wilson_carries_anisotropy as _wilson_carries_anisotropy,
 )
 from phridge.contracts.models import SfEngineParams
@@ -2938,7 +2938,7 @@ class IntensityFModel(
 
     def _spatial_sigma_a_v2_kwargs(self) -> dict[str, Any]:
         """Optional v2 block + fitted result. Empty when the flag is off."""
-        from phridge.contrib.spatial_sigmaa_v2.options import job_input_from_state, options_from_env
+        from phridge.q.error_models.spatial.options import job_input_from_state, options_from_env
 
         return job_input_from_state(
             getattr(self, "_spatial_sigma_a_v2_block", None),
@@ -2952,14 +2952,14 @@ class IntensityFModel(
         (w_j, U_j) are frozen for the subsequent xyz/ADP cycle (spec §10).
         Failures never abort the macrocycle.
         """
-        from phridge.contrib.spatial_sigmaa_v2 import block_from_env, options_from_env
+        from phridge.q.error_models.spatial import block_from_env, options_from_env
 
         opts = options_from_env()
         if not opts.enabled:
             return
         try:
             from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
-            from phridge.contrib.spatial_sigmaa_v2.alternate import run_macrocycle_step
+            from phridge.q.error_models.spatial.alternate import run_macrocycle_step
             from phridge.sfcalc.ops import scattering_model
 
             model = scattering_model(
@@ -2993,7 +2993,7 @@ class IntensityFModel(
                 pass
 
     def _spatial_options_from_env(self) -> Any:
-        from phridge.contrib.intensity_ll.local_sigma_a import LocalSigmaAOptions
+        from phridge.q.error_models.local_sigma_a import LocalSigmaAOptions
 
         return LocalSigmaAOptions(
             enabled=self._spatial_sigma_a_enabled(),
@@ -3089,7 +3089,7 @@ class IntensityFModel(
     ) -> None:
         """CCP4 λ / κ / w volumes and a diagnostic PDB. Never fails refinement."""
         try:
-            from phridge.contrib.spatial_sigmaa_v2.viz import atom_display_columns, field_volumes
+            from phridge.q.error_models.spatial.viz import atom_display_columns, field_volumes
 
             prefix = (
                 os.environ.get("PHRIDGE_SPATIAL_SIGMA_A_V2_PREFIX")
@@ -3170,7 +3170,7 @@ class IntensityFModel(
             fm = masks[0]
             d = np.asarray(self._i_obs.d_spacings().data(), dtype=np.float64)
             s_sq = 1.0 / np.maximum(d, 1e-12) ** 2
-            from phridge.contrib.intensity_ll.local_sigma_a import phi_on_full_list
+            from phridge.q.error_models.local_sigma_a import phi_on_full_list
 
             hkl = np.asarray(fm.indices(), dtype=np.int32)
             phi = phi_on_full_list(
@@ -4133,7 +4133,7 @@ class IntensityFModel(
         cached = getattr(self, "_wilson_model", None)
         if cached is not None:
             return str(cached)
-        from phridge.contrib.intensity_ll.wilson import normalize_wilson_model
+        from phridge.q.error_models.wilson_aniso import normalize_wilson_model
 
         value = normalize_wilson_model(os.environ.get("PHRIDGE_WILSON_MODEL"))
         self._wilson_model = value
@@ -4150,7 +4150,7 @@ class IntensityFModel(
         cached = getattr(self, "_beta_mode", None)
         if cached is not None:
             return str(cached)
-        from phridge.contrib.intensity_ll.free_beta import normalize_beta_mode
+        from phridge.q.error_models.sigma_a_beta import normalize_beta_mode
 
         value = normalize_beta_mode(os.environ.get("PHRIDGE_BETA_MODE"))
         self._beta_mode = value
@@ -4167,7 +4167,7 @@ class IntensityFModel(
         cached = getattr(self, "_sigma_a_shape", None)
         if cached is not None:
             return str(cached)
-        from phridge.contrib.intensity_ll.free_beta import normalize_sigma_a_shape
+        from phridge.q.error_models.sigma_a_beta import normalize_sigma_a_shape
 
         value = normalize_sigma_a_shape(os.environ.get("PHRIDGE_SIGMA_A_SHAPE"))
         self._sigma_a_shape = value
@@ -4196,7 +4196,7 @@ class IntensityFModel(
         """Disable anisotropic scale-matrix refinement when Σ_W carries the anisotropy.
 
         An anisotropic Σ_W and ``k_anisotropic`` absorb the same directional falloff, so
-        exactly one may be free (see :mod:`phridge.contrib.intensity_ll.wilson`). The
+        exactly one may be free (see :mod:`phridge.q.error_models.wilson_aniso`). The
         normalization is the one that must carry it, because ``data%``, β and the
         posterior weights are only interpretable if the *prior* describes the
         observations' falloff.
@@ -4252,7 +4252,7 @@ class IntensityFModel(
         """
         if not _wilson_carries_anisotropy(self.wilson_model):
             return
-        from phridge.contrib.intensity_ll.wilson import ANISO_NEGLIGIBLE_DELTA_B
+        from phridge.q.error_models.wilson_aniso import ANISO_NEGLIGIBLE_DELTA_B
 
         applied = self.aniso_scale()
         if applied is None or not getattr(applied, "is_valid", False):

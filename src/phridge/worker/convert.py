@@ -78,7 +78,7 @@ def from_torch(value: Any) -> Any:
 
 def _spatial_sigma_a_v2_types() -> tuple[type, ...]:
     try:
-        from phridge.contrib.spatial_sigmaa_v2.packing import (
+        from phridge.q.error_models.spatial.packing import (
             PackedSpatialSigmaAV2,
             PackedSpatialSigmaAV2Result,
         )

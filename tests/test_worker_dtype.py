@@ -16,7 +16,7 @@ def test_float32_compute_casts_back_to_float64():
 
 
 def test_to_torch_leaves_spatial_sigma_a_v2_on_host():
-    from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2
+    from phridge.q.error_models.spatial.packing import PackedSpatialSigmaAV2
 
     packed = PackedSpatialSigmaAV2.empty(field_cutoff=15.0)
     out = to_torch(packed, device="cpu", compute_dtype=torch.float32)
@@ -25,7 +25,7 @@ def test_to_torch_leaves_spatial_sigma_a_v2_on_host():
 
 
 def test_from_torch_hosts_spatial_sigma_a_v2_result_arrays():
-    from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2Result
+    from phridge.q.error_models.spatial.packing import PackedSpatialSigmaAV2Result
 
     result = PackedSpatialSigmaAV2Result(
         d_lambda_c=np.zeros(0),

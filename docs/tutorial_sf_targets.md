@@ -104,7 +104,7 @@ curvatures. The FFT chain then turns that into per-atom gradients.
 
 ```python
 # mypkg/my_likelihood.py  — must run on the *worker* (preload / entry point / memory Bridge)
-from phridge.sfcalc.targets import Observations, Target, register_target
+from phridge.d.rules.amplitude import Observations, Target, register_target
 
 
 @register_target("my_nll")
@@ -163,7 +163,7 @@ Tips:
 
 - Put anything that needs torch in `per_reflection` / `prepare` / `reduce`.
 - Use `obs.data`, `obs.weights`, `obs.r_free`, `obs.alpha`, `obs.beta`, …
-  (see `Observations` in `phridge.sfcalc.targets`). Pass extras through
+  (see `Observations` in `phridge.d.rules.amplitude`). Pass extras through
   `sf.target_and_gradients(..., alpha=..., beta=..., weights=...)`.
 - Override `reduce` if you do not want the default mean over work reflections.
 - Set `amplitude_only = False` if your loss uses the complex \(F_h\) (phase),
@@ -207,6 +207,6 @@ scitbx.lbfgs.run(target_evaluator=m)
 | Grads given \(G_h\) | `sf.gradients(xs, miller_set, dtdf, ...)` |
 | Target on fixed \(F_c\) | `sf.target_functor(...)(f_calc)` |
 | Full step (FFT + target + grads) | `sf.target_and_gradients(...)` |
-| Custom likelihood | `@register_target` in `phridge.sfcalc.targets` / `phridge.contrib` |
+| Custom likelihood | `@register_target` in `phridge.d.rules.amplitude` / `phridge.contrib` |
 | Intensity ML (Rice × noise) | `{"name": "ml_i", ...}` (`phridge.contrib.intensity_ll`) |
 | Architecture write-up | [sf_server.md](sf_server.md) |

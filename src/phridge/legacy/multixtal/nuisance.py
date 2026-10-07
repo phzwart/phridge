@@ -12,7 +12,7 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.contrib.intensity_ll.aniso_rice import (
+from phridge.d.rules.mli_quad.aniso_rice import (
     A_MAX,
     LaueClass,
     a_from_params,

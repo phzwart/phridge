@@ -71,9 +71,9 @@ def ml_i_omit_windows(
     Solvent and scales stay those of the full ``f_model``. See
     :mod:`phridge.contrib.intensity_ll.omit_windows` for the math.
     """
-    from phridge.contrib.intensity_ll.target import IntensityLogLikelihood
+    from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
     from phridge.sfcalc.ops import _engine, _np, _observations
-    from phridge.sfcalc.targets import build_target
+    from phridge.d.rules.amplitude import build_target
 
     opts = OmitWindowOptions.model_validate(omit or {})
     if _np(f_model.hkl).shape != _np(f_obs.hkl).shape or not np.array_equal(_np(f_model.hkl), _np(f_obs.hkl)):

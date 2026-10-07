@@ -46,10 +46,10 @@ phridge-multixtal = "phridge.legacy.multixtal.cli:main"
 phridge-ensemble = "phridge.contrib.ensemble.cli:main"
 
 [project.entry-points."phridge.targets"]
-intensity_ll = "phridge.contrib.intensity_ll:register"
+intensity_ll = "phridge.d.rules.mli_quad:register"
 
 [project.entry-points."phridge.ops"]
-spatial_sigmaa_v2 = "phridge.contrib.spatial_sigmaa_v2:register"
+spatial_sigmaa_v2 = "phridge.q.error_models.spatial:register"
 multixtal = "phridge.legacy.multixtal:register"
 nufft_sf = "phridge.transforms.fourier.nufft:register"
 ensemble = "phridge.contrib.ensemble:register"

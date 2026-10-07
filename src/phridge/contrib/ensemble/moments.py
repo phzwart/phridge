@@ -77,7 +77,7 @@ def posterior_f_moments(
     """Marginal intensity moments. ``mean_f`` is ``E[F | I]`` in F units."""
     import torch
 
-    from phridge.contrib.intensity_ll.maps import posterior_moments
+    from phridge.d.maps import posterior_moments
 
     mu_c = np.asarray(mu, dtype=np.complex128)
     flat = mu_c.reshape(-1)
@@ -148,7 +148,7 @@ def fixed_grid_posterior(
     """
     import torch
 
-    from phridge.contrib.intensity_ll.mli import _legendre, acen_E_log
+    from phridge.d.rules.mli_quad import _legendre, acen_E_log
 
     ec_t = torch.as_tensor(np.asarray(ec, dtype=np.float64))
     zo_t = torch.as_tensor(np.asarray(zo, dtype=np.float64))

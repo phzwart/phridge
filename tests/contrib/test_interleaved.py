@@ -31,11 +31,11 @@ from phridge.legacy.intensity_interleaved import (  # noqa: E402
     TorchOptimBlockRunner,
 )
 from phridge.contrib.intensity_ll import SURROGATE_FIT_OP_NAME, register_ops  # noqa: E402
-from phridge.contrib.intensity_ll.maps import (  # noqa: E402
+from phridge.d.maps import (  # noqa: E402
     posterior_moments,
     posterior_node_cache,
 )
-from phridge.contrib.intensity_ll.mli import normalize  # noqa: E402
+from phridge.d.rules.mli_quad import normalize  # noqa: E402
 from phridge.contrib.intensity_ll.surrogate import (  # noqa: E402
     FIT_EXACT_ROUTE,
     FIT_FALLBACK_INIT,
@@ -46,14 +46,14 @@ from phridge.contrib.intensity_ll.surrogate import (  # noqa: E402
     fit_surrogate_for_observations,
     rice_log_derivatives,
 )
-from phridge.contrib.intensity_ll.target import IntensityLogLikelihood  # noqa: E402
+from phridge.d.rules.mli_quad.target import IntensityLogLikelihood  # noqa: E402
 from phridge.contracts.models import CrystalSymmetry, ObservationType, Scatterer, SymOp  # noqa: E402
 from phridge.contracts.packing import PackedMiller  # noqa: E402
 from phridge.contracts.packing import PackedXray  # noqa: E402
 from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import scattering_model  # noqa: E402
 from phridge.sfcalc.packing import PackedScatteringTable  # noqa: E402
-from phridge.sfcalc.targets import Observations, build_target  # noqa: E402
+from phridge.d.rules.amplitude import Observations, build_target  # noqa: E402
 
 SIGMA_A = 0.94
 DTYPE = torch.float64

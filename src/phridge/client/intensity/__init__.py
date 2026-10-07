@@ -64,7 +64,7 @@ def __getattr__(name: str) -> Any:
 
         return IntensityModel
     if name == "IntensityMapMixin":
-        from phridge.client.intensity.maps import IntensityMapMixin
+        from phridge.d.map_coefficients import IntensityMapMixin
 
         return IntensityMapMixin
     if name == "IntensityRefineMixin":

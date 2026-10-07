@@ -200,7 +200,7 @@ def test_v5_gauge_leaves_field_unchanged():
 
 
 def test_v1_hl_none_bit_identical():
-    from phridge.contrib.intensity_ll.maps import posterior_moments
+    from phridge.d.maps import posterior_moments
 
     ec = torch.tensor([0.4, 1.2, 2.5], dtype=torch.float64)
     sa = torch.tensor([0.6, 0.8, 0.7], dtype=torch.float64)
@@ -215,7 +215,7 @@ def test_v1_hl_none_bit_identical():
 
 
 def test_v7_centric_two_point():
-    from phridge.contrib.intensity_ll.maps import centric_two_point_moment
+    from phridge.d.maps import centric_two_point_moment
 
     kappas = np.linspace(-1.5, 2.5, 9)
     axes = np.linspace(-1.0, 1.0, 7)
@@ -230,7 +230,7 @@ def test_v7_centric_two_point():
 
 def test_v2_gaussian_amplitude_quadrature():
     scipy_special = pytest.importorskip("scipy.special")
-    from phridge.contrib.intensity_ll.maps import posterior_moments
+    from phridge.d.maps import posterior_moments
 
     ec, sa, zo, sz = 1.4, 0.75, 2.2, 0.35
     a = 1.0 - sa**2

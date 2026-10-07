@@ -184,7 +184,7 @@ def test_optimism_estimate():
     lower NLL than the honest procedure by roughly p_theta / |T| (within a factor of 2 on synthetic data).
     """
     import torch
-    from phridge.contrib.intensity_ll.mli import log_likelihood_normal, normalize
+    from phridge.d.rules.mli_quad import log_likelihood_normal, normalize
 
     xs, fc = _make_synthetic_xtal(n_atoms=32, d_min=2.0, seed=42)
     xs_shaken = xs.deep_copy_scatterers()
