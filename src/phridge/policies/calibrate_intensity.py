@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
+import numpy as np
 from pydantic import BaseModel, Field
 
 from phridge.contracts.manifest import BlockDecl, PluginManifest, Slot, Space
@@ -57,13 +58,27 @@ class IntensityCalibrationOptions(BaseModel):
 
 
 class IntensityCalibration:
-    """Shell σ_A, shell β, the selected ν, and the per-reflection Σ_W."""
+    """Shell σ_A, shell β, the selected ν, and the per-reflection Σ_W.
 
-    def __init__(self, sigma_a: Any, beta: Any, nu: Any, sigma_w: Any) -> None:
+    ``sigma_a_refl`` and ``beta_residual`` are the interpolated, Rice-modulated
+    arrays the scoring rule consumes. ``beta_residual`` is in normalized units.
+    """
+
+    def __init__(
+        self,
+        sigma_a: Any,
+        beta: Any,
+        nu: Any,
+        sigma_w: Any,
+        sigma_a_refl: Any = None,
+        beta_residual: Any = None,
+    ) -> None:
         self.sigma_a = sigma_a
         self.beta = beta
         self.nu = nu
         self.sigma_w = sigma_w
+        self.sigma_a_refl = sigma_a_refl
+        self.beta_residual = beta_residual
 
 
 class CalibrateIntensity(Policy):
@@ -96,11 +111,20 @@ class CalibrateIntensity(Policy):
             return float(state.nll_sum)
 
         best = screen.screen(parse_nu_grid(opts.nu_grid), refit, criterion)
+        s_sq = _numpy(obs.data["s_sq"], np.float64)
+        hkl = _numpy(obs.index["hkl"], np.int32).reshape(-1, 3)
+        cell = _numpy(obs.data["unit_cell"], np.float64)
+        from phridge.q.error_models.wilson_aniso import reciprocal_cartesian
+
+        s_cart = reciprocal_cartesian(tuple(float(x) for x in cell), hkl)
+        sigma_a_refl, beta_residual = _expand_shells(best, s_sq, s_cart)
         return IntensityCalibration(
             sigma_a=torch.as_tensor(best.sigma_a, dtype=torch.float64),
             beta=torch.as_tensor(best.beta, dtype=torch.float64),
             nu=torch.as_tensor(screen.nu_shell, dtype=torch.float64),
             sigma_w=sigma_w,
+            sigma_a_refl=torch.as_tensor(sigma_a_refl, dtype=torch.float64),
+            beta_residual=torch.as_tensor(beta_residual, dtype=torch.float64),
         )
 
 
@@ -171,3 +195,35 @@ def register() -> None:
     """Register the calibration manifests outside the FieldScale catalog."""
     for manifest in calibration_manifests():
         register_manifest(manifest)
+
+
+def _numpy(value: Any, dtype: Any) -> np.ndarray:
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    return np.asarray(value, dtype=dtype)
+
+
+def _expand_shells(result: Any, s_sq: np.ndarray, s_cart: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Interpolate shell curves onto reflections, then apply the Rice modulation."""
+    from phridge.d.rules.mli_quad.aniso_rice import a_from_params, quadratic_form, unit_directions
+    from phridge.q.error_models.sigma_a_beta import BETA_MAX, BETA_MIN
+
+    edges = np.asarray(result.edges, dtype=np.float64)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    sa_bins = np.asarray(result.sigma_a, dtype=np.float64)
+    beta_bins = np.asarray(result.beta, dtype=np.float64)
+    if sa_bins.size == 1:
+        sigma_a = np.full(s_sq.shape[0], float(sa_bins[0]), dtype=np.float64)
+        beta = np.full(s_sq.shape[0], float(beta_bins[0]), dtype=np.float64)
+    else:
+        sigma_a = np.interp(s_sq, centers, sa_bins, left=float(sa_bins[0]), right=float(sa_bins[-1]))
+        beta = np.interp(s_sq, centers, beta_bins, left=float(beta_bins[0]), right=float(beta_bins[-1]))
+    sigma_a = np.clip(sigma_a, 1e-4, 0.9999)
+    beta = np.clip(beta, BETA_MIN, BETA_MAX)
+    if result.u_m_a is not None and result.u_m_b is not None:
+        s_hat = unit_directions(s_cart)
+        q_a = np.clip(quadratic_form(s_hat, np.eye(3) + a_from_params(result.u_m_a, result.laue)), 1e-6, 1e6)
+        q_b = np.clip(quadratic_form(s_hat, np.eye(3) + a_from_params(result.u_m_b, result.laue)), 1e-6, 1e6)
+        sigma_a = np.clip(sigma_a * np.sqrt(q_a), 1e-4, 0.9999)
+        beta = np.clip(beta * q_b, BETA_MIN, BETA_MAX)
+    return sigma_a, beta

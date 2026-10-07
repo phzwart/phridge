@@ -633,7 +633,12 @@ class _ShellSession:
             mean = float(nll_i.mean().item())
             sa = self._sa_bins().detach().cpu().numpy().astype(np.float64)
             beta = self._beta_bins().detach().cpu().numpy().astype(np.float64)
-        return ShellFitResult(sa, beta, mean, self.n_tune)
+        result = ShellFitResult(sa, beta, mean, self.n_tune)
+        result.edges = np.array(self.edges, dtype=np.float64, copy=True)
+        result.laue = self.laue
+        result.u_m_a = None if self.u_m_a is None else self.u_m_a.detach().cpu().numpy().astype(np.float64)
+        result.u_m_b = None if self.u_m_b is None else self.u_m_b.detach().cpu().numpy().astype(np.float64)
+        return result
 
 
 class SigmaABeta:

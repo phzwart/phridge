@@ -611,7 +611,7 @@ def test_ops_never_fuses_device_and_dtype_in_to():
     small tensors but silently yields uninitialized memory past ~1k elements."""
     fused = re.compile(r"\.to\([^)]*dtype=[^)]*device=[^)]*\)|\.to\([^)]*device=[^)]*dtype=[^)]*\)")
     paths = [
-        ROOT / "src" / "phridge" / "contrib" / "intensity_ll" / "ops.py",
+        ROOT / "src" / "phridge" / "legacy" / "intensity_ll_ops.py",
         ROOT / "src" / "phridge" / "sfcalc" / "ops.py",
         ROOT / "src" / "phridge" / "worker" / "convert.py",
     ]

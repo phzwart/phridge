@@ -477,3 +477,50 @@ def intensity_map_coefficients(
         stats=stats,
         f_mode=_r(scale * f_mode_E),
     )
+
+
+def posterior_map_coefficients(pred: Any, obs: Any, d_location: Any) -> IntensityMapSet:
+    """Posterior maps for the same fields ``MliQuad.score`` differentiated.
+
+    ``difference`` and ``d_location`` share a phase. Their ratio on a work
+    reflection is ``sqrt(eps * Sigma_W)`` times a real posterior factor, so a
+    caller can check that factor directly.
+    """
+    import torch
+
+    from phridge.d.rules.amplitude.base import Observations
+    from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
+
+    location = pred.fields["location"]
+    if hasattr(location, "detach"):
+        location = location.detach()
+    else:
+        location = torch.as_tensor(location)
+    if not location.is_complex():
+        location = location.to(torch.complex128)
+    n = int(location.shape[0])
+    nu = pred.fields["nu"]
+    nu_t = nu.detach() if hasattr(nu, "detach") else torch.as_tensor(nu)
+    nu_t = nu_t.to(torch.float64).reshape(-1)
+    if nu_t.numel() == 1:
+        nu_t = nu_t.expand(n)
+
+    def _field(name: str, *, boolean: bool = False) -> Any:
+        value = obs.data[name]
+        value = value.detach() if hasattr(value, "detach") else torch.as_tensor(value)
+        if boolean:
+            return value.to(torch.bool)
+        return value.to(torch.float64)
+
+    observations = Observations(
+        data=_field("i_obs"),
+        sigmas=_field("sig_i"),
+        epsilon=_field("epsilon"),
+        centric=_field("centric", boolean=True),
+        alpha=torch.as_tensor(pred.fields["sigma_a"]).to(torch.float64),
+        beta=torch.as_tensor(pred.fields["sigma_w"]).to(torch.float64),
+        nu=nu_t,
+        beta_residual=torch.as_tensor(pred.fields["beta_residual"]).to(torch.float64),
+    )
+    _ = d_location
+    return intensity_map_coefficients(IntensityLogLikelihood(), location, observations)
