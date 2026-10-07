@@ -209,7 +209,7 @@ def _place_sites(sites_frac: np.ndarray, model_cell: Any, dataset_cell: Any, pla
 
 
 def _f_mask_on_set(xray: Any, miller_set: Any) -> np.ndarray:
-    from phridge.contrib.intensity_ll.dt_mask import build_f_masks
+    from phridge.r.components.mask import build_f_masks
 
     dummy = miller_set.array(data=miller_set.indices().as_vec3_double().parts()[0])
     try:

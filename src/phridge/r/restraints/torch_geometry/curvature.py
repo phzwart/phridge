@@ -29,7 +29,7 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 
-from phridge.worker.geometry.energy import _RestraintTables
+from phridge.r.restraints.torch_geometry.energy import _RestraintTables
 
 Tensor = Any
 
@@ -246,7 +246,7 @@ class GaussNewtonPreconditioner:
         weight: float = 1.0,
         coo: Optional[tuple[np.ndarray, np.ndarray, np.ndarray, int]] = None,
     ) -> None:
-        import scipy.sparse as sp
+        from phridge.numeric.sparse import csr_matrix, diags
 
         if coo is not None:
             rows, cols, vals, n3 = coo
@@ -255,13 +255,13 @@ class GaussNewtonPreconditioner:
         else:
             rows, cols, vals, n3 = gn_sparse_coo(curv, xyz)
 
-        H = sp.csr_matrix((float(weight) * vals, (rows, cols)), shape=(n3, n3))
+        H = csr_matrix((float(weight) * vals, (rows, cols)), shape=(n3, n3))
         d = H.diagonal()
         if extra_diag is not None:
             ex = np.asarray(extra_diag, dtype=np.float64).reshape(-1)
             if ex.shape[0] != n3:
                 raise ValueError(f"extra_diag must have {n3} entries, got {ex.shape[0]}")
-            H = H + sp.diags(ex)
+            H = H + diags(ex)
             d = d + ex
         pos = d[d > 0]
         self.ref = float(np.median(pos)) if pos.size else 1.0
@@ -271,19 +271,19 @@ class GaussNewtonPreconditioner:
         self._H = H
         self._lu: Any = None
         self._chol: Any = None
-        self._factor = self._factorise(H + sp.diags(np.full(n3, self.mu)))
+        self._factor = self._factorise(H + diags(np.full(n3, self.mu)))
 
     def _factorise(self, A: Any) -> Callable[[np.ndarray], np.ndarray]:
         try:  # pragma: no cover - optional dependency
-            from sksparse.cholmod import cholesky
+            from phridge.numeric.sparse import cholmod_factor
 
-            f = cholesky(A.tocsc())
+            f = cholmod_factor(A)
             self._chol = f
             return lambda b: np.asarray(f(b))
         except Exception:
-            import scipy.sparse.linalg as spl
+            from phridge.numeric.sparse import splu
 
-            lu = spl.splu(A.tocsc())
+            lu = splu(A)
             self._lu = lu
             return lambda b: lu.solve(b)
 
@@ -329,7 +329,7 @@ class BlockTridiagonalPreconditioner:
         param_dims: Optional[Any] = None,
         coo: Optional[tuple[np.ndarray, np.ndarray, np.ndarray, int]] = None,
     ) -> None:
-        import scipy.sparse as sp
+        from phridge.numeric.sparse import csr_matrix, diags
 
         if groups is None:
             raise ValueError("groups (list of atom-index lists in chain order) is required")
@@ -341,11 +341,11 @@ class BlockTridiagonalPreconditioner:
         else:
             rows, cols, vals, n3 = gn_sparse_coo(curv, xyz)
 
-        H = sp.csr_matrix((float(weight) * vals, (rows, cols)), shape=(n3, n3))
+        H = csr_matrix((float(weight) * vals, (rows, cols)), shape=(n3, n3))
         d = H.diagonal()
         if extra_diag is not None:
             ex = np.asarray(extra_diag, dtype=np.float64).reshape(-1)
-            H = H + sp.diags(ex)
+            H = H + diags(ex)
             d = d + ex
         pos = d[d > 0]
         self.ref = float(np.median(pos)) if pos.size else 1.0

@@ -15,7 +15,7 @@ H_{GN} = 2 J^\top W J, \qquad J_{ri} = \partial \rho_r / \partial x_i ,
 $$
 
 is positive semi-definite and sparse: each residual touches at most four atoms, so
-$H_{GN}$ only couples bonded neighbours. `phridge.worker.geometry.curvature` builds it
+$H_{GN}$ only couples bonded neighbours. `phridge.r.restraints.torch_geometry.curvature` builds it
 exactly and cheaply by evaluating every residual on *gathered* coordinates
 $P_r \in \mathbb{R}^{k_r\times 3}$, so that one autograd call on $\sum_r \rho_r$ returns every
 per-residual gradient (the gathered Jacobian is block diagonal), and scatter-adding

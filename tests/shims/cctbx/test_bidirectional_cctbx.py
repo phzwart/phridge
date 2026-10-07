@@ -127,7 +127,7 @@ def test_geometry_restraints_energy_grad_via_handle():
 
 def test_unknown_restraints_handle_errors():
     pytest.importorskip("cctbx")
-    from phridge.cctbx_worker.ops.geometry_ops import geometry_restraints_energy_grad
+    from phridge.shims.cctbx.restraint_ops import geometry_restraints_energy_grad
     from phridge.contracts.packing import PackedCartesian
 
     sites = PackedCartesian(np.zeros((3, 3), dtype=np.float64))

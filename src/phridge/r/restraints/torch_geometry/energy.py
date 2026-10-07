@@ -66,6 +66,203 @@ def _normalize_schedule(schedule: Optional[str]) -> str:
     return name
 
 
+
+def _run_minimizer(
+    *,
+    name,
+    tables,
+    xyz0,
+    y,
+    scale,
+    scale_at,
+    lr,
+    lr_min,
+    momentum,
+    sched,
+    precond,
+    precond_refresh,
+    max_iterations,
+    base_stats,
+):
+    """Dispatch L-BFGS, Adam-family, or Gauss-Newton. Returns the minimized sites."""
+    import torch
+
+    n_calls = 0
+    n_steps = 0
+    used_lr = None
+    used_lr_min = None
+    opt = None
+    n_refresh = 0
+
+    def _sites():
+        return y / scale
+
+    if name == "gauss_newton":
+        xyz, n_calls, n_steps, used_lr = _gauss_newton_sites(
+            tables, xyz0, lr, max_iterations, base_stats,
+        )
+    elif name == "lbfgs":
+        xyz, y, n_calls, n_steps, used_lr, opt, n_refresh = _lbfgs_sites(
+            tables, y, scale, scale_at, lr, precond, precond_refresh, max_iterations,
+        )
+    else:
+        xyz, n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh = _first_order_sites(
+            name, tables, y, scale, scale_at, lr, lr_min, momentum, sched, precond, precond_refresh, max_iterations,
+        )
+    return xyz, n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh
+
+
+def _gauss_newton_sites(tables, xyz0, lr, max_iterations, base_stats):
+    import torch
+    from phridge.r.restraints.torch_geometry.curvature import GaussNewtonPreconditioner, RestraintCurvature
+
+    curv_gn = RestraintCurvature(tables)
+    x = xyz0.clone()
+    mu_rel = float(lr) if lr is not None else 1e-3
+    used_lr = mu_rel
+    e_cur = float(tables.energy(x).detach().cpu())
+    n_calls = 1
+    n_reject = 0
+    n_steps = 0
+    for _ in range(max_iterations):
+        xr = x.clone().requires_grad_(True)
+        e_t = tables.energy(xr)
+        (g,) = torch.autograd.grad(e_t, xr)
+        n_calls += 1
+        g_np = g.detach().cpu().numpy().reshape(-1)
+        if float(np.abs(g_np).max()) < 1e-10:
+            break
+        accepted = False
+        while mu_rel < 1e8:
+            M = GaussNewtonPreconditioner(curv_gn, x, damping=mu_rel)
+            p = torch.as_tensor(M.solve(-g_np).reshape(-1, 3), dtype=x.dtype, device=x.device)
+            e_new = float(tables.energy(x + p).detach().cpu())
+            n_calls += 1
+            if e_new < e_cur:
+                x = x + p
+                e_cur = e_new
+                mu_rel = max(mu_rel / 3.0, 1e-10)
+                accepted = True
+                break
+            mu_rel *= 4.0
+            n_reject += 1
+        n_steps += 1
+        if not accepted:
+            break
+    base_stats["gn_final_damping"] = mu_rel
+    base_stats["gn_rejected_steps"] = n_reject
+    return x.detach(), n_calls, n_steps, used_lr
+
+
+def _lbfgs_sites(tables, y, scale, scale_at, lr, precond, precond_refresh, max_iterations):
+    import torch
+
+    step_lr = 1.0 if lr is None else float(lr)
+    used_lr = step_lr
+    chunk = int(precond_refresh) if (precond == "diagonal" and precond_refresh > 0) else max_iterations
+    chunk = max(1, min(chunk, max_iterations))
+    n_calls = 0
+    n_steps = 0
+    n_refresh = 0
+    opt = None
+
+    def _sites():
+        return y / scale
+
+    def make_opt(var, iters):
+        return torch.optim.LBFGS(
+            [var],
+            lr=step_lr,
+            max_iter=iters,
+            line_search_fn="strong_wolfe",
+            history_size=20,
+            tolerance_grad=1e-9,
+            tolerance_change=1e-11,
+        )
+
+    remaining = max_iterations
+    while remaining > 0:
+        iters = min(chunk, remaining)
+        opt = make_opt(y, iters)
+
+        def closure():
+            nonlocal n_calls
+            opt.zero_grad(set_to_none=True)
+            loss = tables.energy(_sites())
+            loss.backward()
+            n_calls += 1
+            return loss
+
+        opt.step(closure)
+        done = int(opt.state[y].get("n_iter", 0))
+        n_steps += done
+        remaining -= iters
+        if done < iters:
+            break
+        if remaining > 0:
+            x_now = _sites().detach()
+            scale = scale_at(x_now)
+            y = (x_now * scale).clone().requires_grad_(True)
+            n_refresh += 1
+    return _sites().detach(), y, n_calls, n_steps, used_lr, opt, n_refresh
+
+
+def _first_order_sites(name, tables, y, scale, scale_at, lr, lr_min, momentum, sched, precond, precond_refresh, max_iterations):
+    import torch
+
+    defaults = {"adam": 1e-2, "adamw": 1e-2, "sgd": 1e-3}
+    step_lr = defaults[name] if lr is None else float(lr)
+    floor = (step_lr * 0.01) if lr_min is None else float(lr_min)
+    used_lr, used_lr_min = step_lr, floor
+    if name == "adam":
+        opt = torch.optim.Adam([y], lr=step_lr)
+    elif name == "adamw":
+        opt = torch.optim.AdamW([y], lr=step_lr)
+    else:
+        opt = torch.optim.SGD([y], lr=step_lr, momentum=float(momentum))
+
+    scheduler = None
+    if sched == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(max_iterations, 1), eta_min=floor)
+    elif sched == "triangular":
+        period = max(max_iterations // 2, 1)
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            opt,
+            base_lr=floor,
+            max_lr=step_lr,
+            step_size_up=period,
+            step_size_down=max(max_iterations - period, 1),
+            mode="triangular",
+            cycle_momentum=False,
+        )
+
+    n_calls = 0
+    n_steps = 0
+    n_refresh = 0
+
+    def _sites():
+        return y / scale
+
+    for it in range(max_iterations):
+        if precond == "diagonal" and precond_refresh > 0 and it > 0 and it % int(precond_refresh) == 0:
+            x_now = _sites().detach()
+            new_scale = scale_at(x_now)
+            with torch.no_grad():
+                y.mul_(new_scale / scale)
+            scale = new_scale
+            n_refresh += 1
+        opt.zero_grad(set_to_none=True)
+        loss = tables.energy(_sites())
+        loss.backward()
+        n_calls += 1
+        torch.nn.utils.clip_grad_norm_([y], max_norm=1.0)
+        opt.step()
+        n_steps += 1
+        if scheduler is not None:
+            scheduler.step()
+    return _sites().detach(), n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh
+
+
 def energy_and_sites(
     sites_cart: Any,
     restraints: PackedRestraints,
@@ -136,7 +333,7 @@ def energy_and_sites(
         "precond_refresh": int(precond_refresh),
     }
     if precond == "diagonal":
-        from phridge.worker.geometry.curvature import RestraintCurvature, curvature_summary
+        from phridge.r.restraints.torch_geometry.curvature import RestraintCurvature, curvature_summary
 
         curv = RestraintCurvature(tables)
         base_stats["curvature"] = curvature_summary(curv.gn_diagonal(xyz0))
@@ -180,148 +377,36 @@ def energy_and_sites(
     def _scale_at(x_now: Any) -> Any:
         if precond != "diagonal":
             return torch.ones_like(x_now)
-        from phridge.worker.geometry.curvature import jacobi_scale
+        from phridge.r.restraints.torch_geometry.curvature import jacobi_scale
 
         return jacobi_scale(curv.gn_diagonal(x_now.detach()))
 
     scale = _scale_at(xyz0)
     y = (xyz0 * scale).clone().requires_grad_(True)
-    n_refresh = 0
 
-    def _sites() -> Any:
-        return y / scale
+    xyz, n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh = _run_minimizer(
+        name=name,
+        tables=tables,
+        xyz0=xyz0,
+        y=y,
+        scale=scale,
+        scale_at=_scale_at,
+        lr=lr,
+        lr_min=lr_min,
+        momentum=momentum,
+        sched=sched,
+        precond=precond,
+        precond_refresh=precond_refresh,
+        max_iterations=max_iterations,
+        base_stats=base_stats,
+    )
+    return _finish_energy(
+        xyz, tables, base_stats, n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh, rss_before, cuda_before, device,
+    )
 
-    if name == "gauss_newton":
-        # Levenberg-Marquardt Gauss-Newton: solve (2 J^T W J + mu I) p = -grad E with a sparse
-        # direct factorisation; mu adapts (x1/3 on success, x4 on rejection). The Jacobi
-        # rescaling above is irrelevant here (the solve is affine-invariant), so work in x.
-        from phridge.worker.geometry.curvature import GaussNewtonPreconditioner, RestraintCurvature
 
-        curv_gn = RestraintCurvature(tables)
-        x = xyz0.clone()
-        mu_rel = float(lr) if lr is not None else 1e-3  # lr slot doubles as the initial relative damping
-        used_lr = mu_rel
-        e_cur = float(tables.energy(x).detach().cpu())
-        n_calls += 1
-        n_reject = 0
-        for _ in range(max_iterations):
-            xr = x.clone().requires_grad_(True)
-            e_t = tables.energy(xr)
-            (g,) = torch.autograd.grad(e_t, xr)
-            n_calls += 1
-            g_np = g.detach().cpu().numpy().reshape(-1)
-            if float(np.abs(g_np).max()) < 1e-10:
-                break
-            accepted = False
-            while mu_rel < 1e8:
-                M = GaussNewtonPreconditioner(curv_gn, x, damping=mu_rel)
-                p = torch.as_tensor(M.solve(-g_np).reshape(-1, 3), dtype=x.dtype, device=x.device)
-                e_new = float(tables.energy(x + p).detach().cpu())
-                n_calls += 1
-                if e_new < e_cur:
-                    x = x + p
-                    e_cur = e_new
-                    mu_rel = max(mu_rel / 3.0, 1e-10)
-                    accepted = True
-                    break
-                mu_rel *= 4.0
-                n_reject += 1
-            n_steps += 1
-            if not accepted:
-                break
-        xyz = x.detach()
-        base_stats["gn_final_damping"] = mu_rel
-        base_stats["gn_rejected_steps"] = n_reject
-    elif name == "lbfgs":
-        step_lr = 1.0 if lr is None else float(lr)
-        used_lr = step_lr
-        chunk = int(precond_refresh) if (precond == "diagonal" and precond_refresh > 0) else max_iterations
-        chunk = max(1, min(chunk, max_iterations))
-
-        def make_opt(var: Any, iters: int) -> Any:
-            return torch.optim.LBFGS(
-                [var],
-                lr=step_lr,
-                max_iter=iters,
-                line_search_fn="strong_wolfe",
-                history_size=20,
-                tolerance_grad=1e-9,
-                tolerance_change=1e-11,
-            )
-
-        remaining = max_iterations
-        while remaining > 0:
-            iters = min(chunk, remaining)
-            opt = make_opt(y, iters)
-
-            def closure():
-                nonlocal n_calls
-                opt.zero_grad(set_to_none=True)
-                loss = tables.energy(_sites())
-                loss.backward()
-                n_calls += 1
-                return loss
-
-            opt.step(closure)
-            done = int(opt.state[y].get("n_iter", 0))
-            n_steps += done
-            remaining -= iters
-            if done < iters:
-                break  # converged inside the chunk
-            if remaining > 0:
-                x_now = _sites().detach()
-                scale = _scale_at(x_now)
-                y = (x_now * scale).clone().requires_grad_(True)
-                n_refresh += 1
-        xyz = _sites().detach()
-    else:
-        defaults = {"adam": 1e-2, "adamw": 1e-2, "sgd": 1e-3}
-        step_lr = defaults[name] if lr is None else float(lr)
-        floor = (step_lr * 0.01) if lr_min is None else float(lr_min)
-        used_lr, used_lr_min = step_lr, floor
-        if name == "adam":
-            opt = torch.optim.Adam([y], lr=step_lr)
-        elif name == "adamw":
-            opt = torch.optim.AdamW([y], lr=step_lr)
-        else:
-            opt = torch.optim.SGD([y], lr=step_lr, momentum=float(momentum))
-
-        scheduler = None
-        if sched == "cosine":
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                opt, T_max=max(max_iterations, 1), eta_min=floor
-            )
-        elif sched == "triangular":
-            period = max(max_iterations // 2, 1)
-            scheduler = torch.optim.lr_scheduler.CyclicLR(
-                opt,
-                base_lr=floor,
-                max_lr=step_lr,
-                step_size_up=period,
-                step_size_down=max(max_iterations - period, 1),
-                mode="triangular",
-                cycle_momentum=False,
-            )
-
-        for it in range(max_iterations):
-            if precond == "diagonal" and precond_refresh > 0 and it > 0 and it % int(precond_refresh) == 0:
-                # re-scale in place so optimizer state stays attached to y
-                x_now = _sites().detach()
-                new_scale = _scale_at(x_now)
-                with torch.no_grad():
-                    y.mul_(new_scale / scale)
-                scale = new_scale
-                n_refresh += 1
-            opt.zero_grad(set_to_none=True)
-            loss = tables.energy(_sites())
-            loss.backward()
-            n_calls += 1
-            torch.nn.utils.clip_grad_norm_([y], max_norm=1.0)
-            opt.step()
-            n_steps += 1
-            if scheduler is not None:
-                scheduler.step()
-        xyz = _sites().detach()
+def _finish_energy(xyz, tables, base_stats, n_calls, n_steps, used_lr, used_lr_min, opt, n_refresh, rss_before, cuda_before, device):
+    import torch
 
     after = float(tables.energy(xyz).detach().cpu())
     opt_state_mb = _optimizer_state_nbytes(opt) / (1024.0 ** 2) if opt is not None else 0.0
@@ -332,7 +417,6 @@ def energy_and_sites(
         cuda_peak = float(torch.cuda.max_memory_allocated()) / (1024.0 ** 2) - cuda_before
     else:
         cuda_peak = 0.0
-
     return _as_numpy(xyz.detach()), {
         **base_stats,
         "after": after,

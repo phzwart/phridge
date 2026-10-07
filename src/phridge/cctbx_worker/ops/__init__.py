@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from phridge.cctbx_worker.ops.geometry_ops import (
+from phridge.shims.cctbx.restraint_ops import (
     build_geometry_restraints,
     geometry_restraints_energy_grad,
 )

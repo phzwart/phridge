@@ -15,7 +15,7 @@ except ImportError:
     iotbx = None
     any_reflection_file = None
 
-from phridge.client.intensity.model import IntensityModel
+from phridge.tools.intensity.model import IntensityModel
 
 
 def parse_omit_selection(sel_str: str) -> str:

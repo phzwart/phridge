@@ -19,7 +19,7 @@ from phridge.sfcalc.ops import (
     sf_gradients,
     target_eval,
 )
-from phridge.worker.ops.geometry_ops import (
+from phridge.r.restraints.ops import (
     adp_prior_eval,
     adp_prior_hvp,
     geometry_curvature,

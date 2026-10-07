@@ -11,7 +11,7 @@ from phridge.client import Bridge, RemoteGeometry  # noqa: E402
 from phridge.contracts.packing import PackedRestraints  # noqa: E402
 from phridge.contracts.packing import PackedCartesian, PackedHierarchy  # noqa: E402
 from phridge.contracts.models import Atom, CoordinateFrame  # noqa: E402
-from phridge.worker.geometry.energy import energy_and_sites  # noqa: E402
+from phridge.r.restraints.torch_geometry.energy import energy_and_sites  # noqa: E402
 
 
 def _bridge():

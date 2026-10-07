@@ -16,7 +16,7 @@ from phridge.client.intensity.math_utils import (
     isotonic_non_increasing,
     tv_denoise_1d,
 )
-from phridge.client.intensity.model import IntensityModel
+from phridge.tools.intensity.model import IntensityModel
 from phridge.legacy.intensity_refine import IntensityRefineMixin
 
 

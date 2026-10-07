@@ -10,7 +10,7 @@ import numpy as np
 from phridge.contracts.packing import PackedRestraints
 from phridge.contracts.packing import PackedCartesian
 from phridge.sfcalc import ops as sfcalc_ops
-from phridge.worker.geometry.energy import energy_and_sites
+from phridge.r.restraints.torch_geometry.energy import energy_and_sites
 
 _DEVICE = sfcalc_ops._DEVICE
 
@@ -108,8 +108,8 @@ def _sites_tensor(sites: Any, restraints: PackedRestraints):
 def _curvature(restraints: PackedRestraints):
     import torch
 
-    from phridge.worker.geometry.energy import _RestraintTables
-    from phridge.worker.geometry.curvature import RestraintCurvature
+    from phridge.r.restraints.torch_geometry.energy import _RestraintTables
+    from phridge.r.restraints.torch_geometry.curvature import RestraintCurvature
 
     return RestraintCurvature(_RestraintTables.from_packed(restraints, device=_DEVICE["device"], dtype=torch.float64))
 
@@ -126,7 +126,7 @@ def geometry_curvature(
     be summed), ``energy`` and summary ``stats``. ``params`` JSON: ``{"sparse": bool}``
     (default True).
     """
-    from phridge.worker.geometry.curvature import as_numpy, curvature_summary, gn_sparse_coo
+    from phridge.r.restraints.torch_geometry.curvature import as_numpy, curvature_summary, gn_sparse_coo
 
     params = dict(params or {})
     curv = _curvature(restraints)
@@ -167,7 +167,7 @@ def geometry_hvp(
     """Hessian-vector product of the restraint energy: ``params.hessian`` = "gn" (default) | "full"."""
     import torch
 
-    from phridge.worker.geometry.curvature import as_numpy
+    from phridge.r.restraints.torch_geometry.curvature import as_numpy
 
     params = dict(params or {})
     curv = _curvature(restraints)
@@ -178,6 +178,52 @@ def geometry_hvp(
 
 
 geometry_hvp.compute_dtype = "float64"
+
+
+def _gn_solve_adp(xyz, restraints, rhs, params, extra_diag, weight, damping, method, groups):
+    import torch
+    from phridge.r.restraints.torch_geometry.adp import ADPPrior, ADPPriorTables
+    from phridge.r.restraints.torch_geometry.curvature import BlockTridiagonalPreconditioner, GaussNewtonPreconditioner
+
+    tables = ADPPriorTables.from_packed(restraints, sites=xyz, device=_DEVICE["device"])
+    prior = ADPPrior(tables)
+    n_adp = prior.t.n_params
+    adp_params = params.get("adp_params", None)
+    if adp_params is not None:
+        adp_vec = torch.as_tensor(np.asarray(adp_params, dtype=np.float64), dtype=xyz.dtype, device=xyz.device)
+    else:
+        adp_vec = torch.full((n_adp,), math.log(max(float(prior.t.wilson_b or 20.0), 1.0)), dtype=xyz.dtype, device=xyz.device)
+    coo_adp = prior.gn_sparse_coo(adp_vec, sites=xyz)
+    ex_adp = None if extra_diag is None else np.asarray(extra_diag, dtype=np.float64).reshape(-1)
+    kw_adp = dict(extra_diag=ex_adp, damping=damping, weight=weight, coo=coo_adp)
+    if method == "sparse":
+        solver: Any = GaussNewtonPreconditioner(prior, adp_vec, **kw_adp)
+        stats = {"method": method, "nnz": solver.nnz, "mu": solver.mu, "ref_diagonal": solver.ref, "n_params": n_adp}
+    elif method == "tridiagonal":
+        if not groups:
+            raise ValueError("method='tridiagonal' needs params.groups")
+        param_dims = prior.t.param_dims.cpu().numpy()
+        solver = BlockTridiagonalPreconditioner(
+            prior, adp_vec, [np.asarray(g, dtype=np.int64) for g in groups], param_dims=param_dims, **kw_adp
+        )
+        stats = {
+            "method": method,
+            "nnz": solver.nnz_kept,
+            "nnz_total": solver.nnz_total,
+            "mu": solver.mu,
+            "ref_diagonal": solver.ref,
+            "n_params": n_adp,
+            "n_groups": len(groups),
+        }
+    else:
+        raise ValueError("params.method must be 'sparse' or 'tridiagonal'")
+    b = np.asarray(rhs, dtype=np.float64)
+    shape = b.shape
+    b2 = b.reshape(-1, n_adp) if b.size % n_adp == 0 else None
+    if b2 is None:
+        raise ValueError(f"rhs must have a multiple of {n_adp} entries, got {b.size}")
+    sol = np.stack([solver.solve(row) for row in b2]).reshape(shape)
+    return {"solution": sol, "stats": stats}
 
 
 def geometry_gn_solve(
@@ -197,8 +243,8 @@ def geometry_gn_solve(
     ``blocks`` = ["sites"] (default) | ["adp"] | ["sites", "adp"].
     """
     import torch
-    from phridge.worker.geometry.adp import ADPPrior, ADPPriorTables
-    from phridge.worker.geometry.curvature import BlockTridiagonalPreconditioner, GaussNewtonPreconditioner
+    from phridge.r.restraints.torch_geometry.adp import ADPPrior, ADPPriorTables
+    from phridge.r.restraints.torch_geometry.curvature import BlockTridiagonalPreconditioner, GaussNewtonPreconditioner
 
     params = dict(params or {})
     blocks = params.get("blocks", None)
@@ -211,43 +257,8 @@ def geometry_gn_solve(
     xyz = _sites_tensor(sites, restraints)
     n3 = 3 * int(xyz.shape[0])
 
-    # Case 1: ADP-only solve
     if block == "adp" or blocks == ["adp"]:
-        tables = ADPPriorTables.from_packed(restraints, sites=xyz, device=_DEVICE["device"])
-        prior = ADPPrior(tables)
-        n_adp = prior.t.n_params
-        adp_params = params.get("adp_params", None)
-        if adp_params is not None:
-            adp_vec = torch.as_tensor(np.asarray(adp_params, dtype=np.float64), dtype=xyz.dtype, device=xyz.device)
-        else:
-            adp_vec = torch.full((n_adp,), math.log(max(float(prior.t.wilson_b or 20.0), 1.0)), dtype=xyz.dtype, device=xyz.device)
-
-        coo_adp = prior.gn_sparse_coo(adp_vec, sites=xyz)
-        ex_adp = None if extra_diag is None else np.asarray(extra_diag, dtype=np.float64).reshape(-1)
-        kw_adp = dict(extra_diag=ex_adp, damping=damping, weight=weight, coo=coo_adp)
-
-        if method == "sparse":
-            M_adp: Any = GaussNewtonPreconditioner(prior, adp_vec, **kw_adp)
-            stats = {"method": method, "nnz": M_adp.nnz, "mu": M_adp.mu, "ref_diagonal": M_adp.ref, "n_params": n_adp}
-        elif method == "tridiagonal":
-            if not groups:
-                raise ValueError("method='tridiagonal' needs params.groups")
-            param_dims = prior.t.param_dims.cpu().numpy()
-            M_adp = BlockTridiagonalPreconditioner(
-                prior, adp_vec, [np.asarray(g, dtype=np.int64) for g in groups], param_dims=param_dims, **kw_adp
-            )
-            stats = {"method": method, "nnz": M_adp.nnz_kept, "nnz_total": M_adp.nnz_total, "mu": M_adp.mu,
-                     "ref_diagonal": M_adp.ref, "n_params": n_adp, "n_groups": len(groups)}
-        else:
-            raise ValueError("params.method must be 'sparse' or 'tridiagonal'")
-
-        b = np.asarray(rhs, dtype=np.float64)
-        shape = b.shape
-        b2 = b.reshape(-1, n_adp) if b.size % n_adp == 0 else None
-        if b2 is None:
-            raise ValueError(f"rhs must have a multiple of {n_adp} entries, got {b.size}")
-        sol = np.stack([M_adp.solve(row) for row in b2]).reshape(shape)
-        return {"solution": sol, "stats": stats}
+        return _gn_solve_adp(xyz, restraints, rhs, params, extra_diag, weight, damping, method, groups)
 
     # Case 2: Joint solve (sites + adp)
     if blocks == ["sites", "adp"] or blocks == ["adp", "sites"]:
@@ -363,8 +374,8 @@ def adp_prior_eval(
 ) -> dict[str, Any]:
     """Evaluate ADP prior energy, gradient, GN diagonal, and sparse COO triplets."""
     import torch
-    from phridge.worker.geometry.adp import ADPPrior, ADPPriorTables
-    from phridge.worker.geometry.curvature import as_numpy
+    from phridge.r.restraints.torch_geometry.adp import ADPPrior, ADPPriorTables
+    from phridge.r.restraints.torch_geometry.curvature import as_numpy
 
     params = dict(params or {})
     xyz = _sites_tensor(sites, restraints)
@@ -402,8 +413,8 @@ def adp_prior_hvp(
 ) -> dict[str, Any]:
     """Hessian-vector product of the ADP prior energy: params.hessian = 'gn' (default) | 'full'."""
     import torch
-    from phridge.worker.geometry.adp import ADPPrior, ADPPriorTables
-    from phridge.worker.geometry.curvature import as_numpy
+    from phridge.r.restraints.torch_geometry.adp import ADPPrior, ADPPriorTables
+    from phridge.r.restraints.torch_geometry.curvature import as_numpy
 
     params = dict(params or {})
     xyz = _sites_tensor(sites, restraints)

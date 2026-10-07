@@ -10,7 +10,7 @@ import pytest
 pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
-from phridge.contrib.intensity_ll import dt_mask as DT
+from phridge.r.components import mask as DT
 
 
 class _FakeMiller:
@@ -178,7 +178,7 @@ def test_build_f_masks_baked_differs_from_flat():
     from cctbx.array_family import flex
     from cctbx.development import random_structure
 
-    from phridge.client.intensity.model import IntensityModel
+    from phridge.tools.intensity.model import IntensityModel
 
     flex.set_random_seed(0)
     xs = random_structure.xray_structure(
@@ -247,7 +247,7 @@ def test_cli_scripts_accept_dt_mask_flag():
     root = Path(__file__).resolve().parents[2]
     driver = (root / "scripts" / "phenix_refine_mli.py").read_text()
     wrapper = (root / "scripts" / "run_phenix_intensity.sh").read_text()
-    cli = (root / "src" / "phridge" / "client" / "intensity" / "cli.py").read_text()
+    cli = (root / "src" / "phridge" / "legacy" / "intensity_cli.py").read_text()
     assert "--dt-mask" in driver
     assert "PHRIDGE_DT_MASK" in driver
     assert "--dt-mask" in wrapper

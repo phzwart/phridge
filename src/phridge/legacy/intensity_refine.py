@@ -227,7 +227,7 @@ class IntensityRefineMixin:
         damping: float = 1e-3,
     ) -> float:
         """Apply a gradient descent / preconditioned step with line search to isotropic B-factors."""
-        from phridge.worker.geometry.curvature import GaussNewtonPreconditioner
+        from phridge.r.restraints.torch_geometry.curvature import GaussNewtonPreconditioner
 
         if any(sc.flags.use_u_aniso() for sc in self.xray_structure.scatterers()):
             self.convert_to_isotropic()
@@ -484,7 +484,7 @@ class IntensityRefineMixin:
         """Build hierarchical, scale-invariant ADP prior / B-factor restraints."""
         from phridge.shims.cctbx import restraints_from_cctbx
         from phridge.shims.cctbx import ADPPriorOptions, build_adp_restraints
-        from phridge.worker.geometry.adp import ADPPrior, ADPPriorTables
+        from phridge.r.restraints.torch_geometry.adp import ADPPrior, ADPPriorTables
 
         if self.restraints_manager is None:
             self.build_geometry_restraints()

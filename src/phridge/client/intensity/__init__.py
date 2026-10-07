@@ -60,7 +60,7 @@ def __getattr__(name: str) -> Any:
 
         return getattr(cli, name)
     if name == "IntensityModel":
-        from phridge.client.intensity.model import IntensityModel
+        from phridge.tools.intensity.model import IntensityModel
 
         return IntensityModel
     if name == "IntensityMapMixin":

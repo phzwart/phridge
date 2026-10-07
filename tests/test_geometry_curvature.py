@@ -10,13 +10,13 @@ torch = pytest.importorskip("torch")
 from phridge.client import Bridge  # noqa: E402
 from phridge.contracts.packing import PackedRestraints  # noqa: E402
 from phridge.contracts.packing import PackedCartesian  # noqa: E402
-from phridge.worker.geometry.curvature import (  # noqa: E402
+from phridge.r.restraints.torch_geometry.curvature import (  # noqa: E402
     GaussNewtonPreconditioner,
     RestraintCurvature,
     gn_sparse_coo,
     jacobi_scale,
 )
-from phridge.worker.geometry.energy import _RestraintTables, energy_and_sites  # noqa: E402
+from phridge.r.restraints.torch_geometry.energy import _RestraintTables, energy_and_sites  # noqa: E402
 
 
 def _ring(n=12, seed=0):
@@ -208,7 +208,7 @@ def test_remote_geometry_curvature_api():
 
 
 def test_block_tridiagonal_exact_on_chain_and_op():
-    from phridge.worker.geometry.curvature import BlockTridiagonalPreconditioner
+    from phridge.r.restraints.torch_geometry.curvature import BlockTridiagonalPreconditioner
 
     n = 60
     xyz, start, pr = chain(n)
@@ -234,7 +234,7 @@ def test_block_tridiagonal_exact_on_chain_and_op():
 def test_geometry_gn_solve_adp_and_joint_fallback():
     """Verify geometry_gn_solve works when adp_params is omitted (testing math.log fallback)."""
     from phridge.shims.cctbx import ADPPriorOptions, build_adp_restraints
-    from phridge.worker.geometry.adp import ADPPriorTables
+    from phridge.r.restraints.torch_geometry.adp import ADPPriorTables
 
     n = 10
     xyz = np.random.randn(n, 3) * 2.0

@@ -596,10 +596,10 @@ def fit_adp_hyperparameters(
 ) -> dict[str, Any]:
     """Fit ADP hyperparameters by maximizing Laplace marginal likelihood approximation.
 
-    Delegates to ``phridge.worker.geometry.adp.fit_adp_hyperparameters`` so that
+    Delegates to ``phridge.r.restraints.torch_geometry.adp.fit_adp_hyperparameters`` so that
     importing this module remains strictly torch-free.
     """
-    from phridge.worker.geometry.adp import fit_adp_hyperparameters as _worker_fit
+    from phridge.r.restraints.torch_geometry.adp import fit_adp_hyperparameters as _worker_fit
 
     return _worker_fit(
         prior,

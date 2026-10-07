@@ -18,12 +18,12 @@ import numpy as np
 import torch
 
 from phridge.contracts.packing import PackedRestraints
-from phridge.worker.geometry.curvature import (
+from phridge.r.restraints.torch_geometry.curvature import (
     BlockTridiagonalPreconditioner,
     RestraintCurvature,
     gn_sparse_coo,
 )
-from phridge.worker.geometry.energy import _RestraintTables, energy_and_sites
+from phridge.r.restraints.torch_geometry.energy import _RestraintTables, energy_and_sites
 
 
 def chain(n: int, seed: int = 0, shake: float = 0.3, n_long: int = 5):

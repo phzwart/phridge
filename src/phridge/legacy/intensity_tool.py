@@ -1,7 +1,7 @@
 """Backward-compatibility shim for phridge.client.intensity_tool.
 
 All functionality has been modularized into ``phridge.client.intensity.*``:
-  - ``phridge.client.intensity.model.IntensityModel``
+  - ``phridge.tools.intensity.model.IntensityModel``
   - ``phridge.client.intensity.cli``: ``from_files``, ``run_intensity_pipeline``, ``main``
   - ``phridge.client.intensity.maps.IntensityMapMixin``
   - ``phridge.client.intensity.refine.IntensityRefineMixin``

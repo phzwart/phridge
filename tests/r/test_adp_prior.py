@@ -29,14 +29,14 @@ from phridge.contracts.models import SfEngineParams  # noqa: E402
 from phridge.contracts.packing import PackedRestraints, unpack_restraints  # noqa: E402
 from phridge.contracts.packing import Atom, CoordinateFrame, PackedCartesian, PackedHierarchy  # noqa: E402
 from phridge.sfcalc.client import RemoteRefinementTarget  # noqa: E402
-from phridge.worker.geometry.adp import (  # noqa: E402
+from phridge.r.restraints.torch_geometry.adp import (  # noqa: E402
     ADPPrior,
     ADPPriorTables,
     EIGHT_PI_SQ,
     sym_mat_to_vec6,
     vec6_to_sym_mat,
 )
-from phridge.worker.geometry.curvature import (  # noqa: E402
+from phridge.r.restraints.torch_geometry.curvature import (  # noqa: E402
     BlockTridiagonalPreconditioner,
     GaussNewtonPreconditioner,
 )

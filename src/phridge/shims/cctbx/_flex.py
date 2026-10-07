@@ -28,8 +28,8 @@ def is_numeric_flex(value: Any) -> bool:
     return isinstance(value, (flex.double, flex.bool, flex.int, flex.size_t, flex.complex_double, flex.float))
 
 
-def double(values: Any) -> Any:
-    return _flex().double(values)
+def double(*values: Any) -> Any:
+    return _flex().double(*values)
 
 
 def complex_double(values: Any) -> Any:
@@ -76,6 +76,10 @@ def numpy_to_flex(values: Any, *, kind: str = "double") -> Any:
     if kind == "xray_scatterer":
         return xray_scatterer(values)
     raise ValueError(f"unknown flex kind {kind!r}")
+
+
+def flex_mean(values: Any) -> float:
+    return float(_flex().mean(values))
 
 
 def set_random_seed(seed: int) -> None:
