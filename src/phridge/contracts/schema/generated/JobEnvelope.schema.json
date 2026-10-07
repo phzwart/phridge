@@ -112,6 +112,66 @@
             "title": "BlobMeta",
             "type": "object"
         },
+        "BlockDecl": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "bounds": {
+                    "items": {
+                        "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "frozen": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "id": {
+                    "type": "string"
+                },
+                "shape": {
+                    "description": "Axis extents; a string names a symbolic dimension",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "string"
+                            }
+                        ],
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "transform": {
+                    "$ref": "#/$defs/BlockTransform"
+                }
+            },
+            "required": [
+                "id",
+                "shape"
+            ],
+            "title": "BlockDecl",
+            "type": "object"
+        },
+        "BlockTransform": {
+            "description": "",
+            "enum": [
+                "identity",
+                "log",
+                "logit"
+            ],
+            "title": "BlockTransform",
+            "type": "string"
+        },
         "ByteOrder": {
             "description": "",
             "enum": [
@@ -715,6 +775,26 @@
             "title": "JobStatus",
             "type": "string"
         },
+        "ManifestDevice": {
+            "description": "",
+            "enum": [
+                "cpu",
+                "cuda",
+                "mps",
+                "any"
+            ],
+            "title": "ManifestDevice",
+            "type": "string"
+        },
+        "ManifestDtype": {
+            "description": "",
+            "enum": [
+                "float32",
+                "float64"
+            ],
+            "title": "ManifestDtype",
+            "type": "string"
+        },
         "MapCoefficients": {
             "additionalProperties": false,
             "description": "Complex miller array used as FFT map coefficients (cctbx miller array of Fcalc / 2mFo-DFc coefficients). npz: hkl int32[N,3], data complex128[N].",
@@ -999,6 +1079,17 @@
                         "null"
                     ]
                 },
+                "manifest": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/PluginManifest"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Optional plugin manifest carried by this op"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -1033,6 +1124,94 @@
                 "runtime"
             ],
             "title": "OpSpec",
+            "type": "object"
+        },
+        "PluginManifest": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "blocks": {
+                    "items": {
+                        "$ref": "#/$defs/BlockDecl"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "device": {
+                    "$ref": "#/$defs/ManifestDevice"
+                },
+                "dtype": {
+                    "$ref": "#/$defs/ManifestDtype"
+                },
+                "from_space": {
+                    "$ref": "#/$defs/Space"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "needs": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "produces": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "provides": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "reads": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "slot": {
+                    "$ref": "#/$defs/Slot"
+                },
+                "space": {
+                    "$ref": "#/$defs/Space"
+                },
+                "tier": {
+                    "$ref": "#/$defs/Tier"
+                },
+                "to_space": {
+                    "$ref": "#/$defs/Space"
+                },
+                "version": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "name",
+                "slot",
+                "space"
+            ],
+            "title": "PluginManifest",
             "type": "object"
         },
         "RealMap": {
@@ -1391,6 +1570,24 @@
             "title": "SfGradients",
             "type": "object"
         },
+        "Slot": {
+            "description": "",
+            "enum": [
+                "r_component",
+                "restraint_provider",
+                "q_component",
+                "fourier",
+                "observation",
+                "builder",
+                "scoring_rule",
+                "optimizer",
+                "policy",
+                "statistic",
+                "io_adapter"
+            ],
+            "title": "Slot",
+            "type": "string"
+        },
         "SlotBinding": {
             "additionalProperties": false,
             "description": "",
@@ -1427,6 +1624,17 @@
             ],
             "title": "SlotBinding",
             "type": "object"
+        },
+        "Space": {
+            "description": "",
+            "enum": [
+                "R",
+                "Q",
+                "D",
+                "transform"
+            ],
+            "title": "Space",
+            "type": "string"
         },
         "SpatialSigmaAV2": {
             "additionalProperties": false,
@@ -1576,6 +1784,16 @@
             ],
             "title": "TargetResult",
             "type": "object"
+        },
+        "Tier": {
+            "description": "",
+            "enum": [
+                "shim",
+                "hybrid",
+                "native"
+            ],
+            "title": "Tier",
+            "type": "string"
         },
         "WorkerRuntime": {
             "description": "",

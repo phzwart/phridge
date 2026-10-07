@@ -30,6 +30,17 @@ URI: [phridge:OpSpec](https://github.com/phzwart/phridge/schema/phridge/OpSpec)
     
 
         
+      OpSpec : manifest
+        
+          
+    
+        
+        
+        OpSpec --> "0..1" PluginManifest : manifest
+        click PluginManifest href "../PluginManifest/"
+    
+
+        
       OpSpec : name
         
       OpSpec : outputs
@@ -73,6 +84,7 @@ URI: [phridge:OpSpec](https://github.com/phzwart/phridge/schema/phridge/OpSpec)
 | [runtime](runtime.md) | 1 <br/> [WorkerRuntime](WorkerRuntime.md) | Which worker stream consumes this op (torch vs cctbx) | direct |
 | [inputs](inputs.md) | * <br/> [SlotBinding](SlotBinding.md) |  | direct |
 | [outputs](outputs.md) | * <br/> [SlotBinding](SlotBinding.md) |  | direct |
+| [manifest](manifest.md) | 0..1 <br/> [PluginManifest](PluginManifest.md) | Optional plugin manifest carried by this op | direct |
 
 
 
@@ -133,6 +145,7 @@ attributes:
     domain_of:
     - SlotBinding
     - OpSpec
+    - PluginManifest
     - Atom
     - TargetResult
     required: true
@@ -174,6 +187,15 @@ attributes:
     multivalued: true
     inlined: true
     inlined_as_list: false
+  manifest:
+    name: manifest
+    description: Optional plugin manifest carried by this op
+    from_schema: https://github.com/phzwart/phridge/schema/phridge
+    rank: 1000
+    domain_of:
+    - OpSpec
+    range: PluginManifest
+    inlined: true
 
 ```
 </details>
@@ -194,6 +216,7 @@ attributes:
     domain_of:
     - SlotBinding
     - OpSpec
+    - PluginManifest
     - Atom
     - TargetResult
     range: string
@@ -240,6 +263,16 @@ attributes:
     multivalued: true
     inlined: true
     inlined_as_list: false
+  manifest:
+    name: manifest
+    description: Optional plugin manifest carried by this op
+    from_schema: https://github.com/phzwart/phridge/schema/phridge
+    rank: 1000
+    owner: OpSpec
+    domain_of:
+    - OpSpec
+    range: PluginManifest
+    inlined: true
 
 ```
 </details></div>

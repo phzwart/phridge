@@ -59,6 +59,45 @@ enums:
         description: PyTorch worker (GPU/CPU science kernels; never imports cctbx)
       cctbx:
         description: CCTBX/mmtbx worker (packing, restraints build; never imports torch)
+  Slot:
+    permissible_values:
+      r_component:
+      restraint_provider:
+      q_component:
+      fourier:
+      observation:
+      builder:
+      scoring_rule:
+      optimizer:
+      policy:
+      statistic:
+      io_adapter:
+  Space:
+    permissible_values:
+      R:
+      Q:
+      D:
+      transform:
+  Tier:
+    permissible_values:
+      shim:
+      hybrid:
+      native:
+  BlockTransform:
+    permissible_values:
+      identity:
+      log:
+      logit:
+  ManifestDtype:
+    permissible_values:
+      float32:
+      float64:
+  ManifestDevice:
+    permissible_values:
+      cpu:
+      cuda:
+      mps:
+      any:
 
 classes:
   ArrayMeta:
@@ -203,3 +242,78 @@ classes:
         multivalued: true
         inlined: true
         inlined_as_list: false
+      manifest:
+        range: PluginManifest
+        inlined: true
+        description: Optional plugin manifest carried by this op
+
+  BlockDecl:
+    attributes:
+      id:
+        identifier: true
+        required: true
+      block_shape:
+        alias: shape
+        required: true
+        multivalued: true
+        any_of:
+          - range: integer
+          - range: string
+        description: Axis extents; a string names a symbolic dimension
+      bounds:
+        range: float
+        multivalued: true
+        minimum_cardinality: 2
+        maximum_cardinality: 2
+      transform:
+        range: BlockTransform
+        ifabsent: string(identity)
+      frozen:
+        range: boolean
+        ifabsent: "False"
+
+  PluginManifest:
+    attributes:
+      name:
+        identifier: true
+        required: true
+      slot:
+        range: Slot
+        required: true
+      manifest_space:
+        alias: space
+        range: Space
+        required: true
+      from_space:
+        range: Space
+      to_space:
+        range: Space
+      reads:
+        range: string
+        multivalued: true
+      produces:
+        range: string
+        multivalued: true
+      blocks:
+        range: BlockDecl
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
+      needs:
+        range: string
+        multivalued: true
+      provides:
+        range: string
+        multivalued: true
+      tier:
+        range: Tier
+        ifabsent: string(native)
+      manifest_dtype:
+        alias: dtype
+        range: ManifestDtype
+        ifabsent: string(float64)
+      device:
+        range: ManifestDevice
+        ifabsent: string(any)
+      version:
+        ifabsent: string(0)

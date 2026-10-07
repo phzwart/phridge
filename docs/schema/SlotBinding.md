@@ -106,6 +106,7 @@ attributes:
     domain_of:
     - SlotBinding
     - OpSpec
+    - PluginManifest
     - Atom
     - TargetResult
     required: true
@@ -138,6 +139,7 @@ attributes:
     domain_of:
     - SlotBinding
     - OpSpec
+    - PluginManifest
     - Atom
     - TargetResult
     range: string

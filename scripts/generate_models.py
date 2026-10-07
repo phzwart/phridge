@@ -54,6 +54,7 @@ JSONSCHEMA_CLASSES = (
     "ModelGeometry",
     "SpatialSigmaAV2",
     "SpatialSigmaAV2Result",
+    "PluginManifest",
 )
 
 

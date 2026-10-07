@@ -118,6 +118,8 @@ attributes:
     - XrayStructure
     - SfGradients
     - SfCurvatures
+    - SpatialSigmaAV2
+    - SpatialSigmaAV2Result
     range: integer
     required: true
   target:
@@ -155,6 +157,8 @@ attributes:
     - XrayStructure
     - SfGradients
     - SfCurvatures
+    - SpatialSigmaAV2
+    - SpatialSigmaAV2Result
     range: integer
     required: true
   target:

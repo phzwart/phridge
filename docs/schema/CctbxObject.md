@@ -68,6 +68,10 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
         click SfCurvatures href "../SfCurvatures/"
       CctbxObject <|-- TargetResult
         click TargetResult href "../TargetResult/"
+      CctbxObject <|-- SpatialSigmaAV2
+        click SpatialSigmaAV2 href "../SpatialSigmaAV2/"
+      CctbxObject <|-- SpatialSigmaAV2Result
+        click SpatialSigmaAV2Result href "../SpatialSigmaAV2Result/"
       
       
 ```
@@ -98,6 +102,8 @@ URI: [phridge:CctbxObject](https://github.com/phzwart/phridge/schema/phridge/Cct
     * [SfGradients](SfGradients.md)
     * [SfCurvatures](SfCurvatures.md)
     * [TargetResult](TargetResult.md)
+    * [SpatialSigmaAV2](SpatialSigmaAV2.md)
+    * [SpatialSigmaAV2Result](SpatialSigmaAV2Result.md)
 
 
 ## Slots

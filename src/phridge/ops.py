@@ -13,11 +13,13 @@ import json
 import sys
 from typing import Any, Callable, Iterable, Optional, Union
 
+from phridge.contracts.manifest import PluginManifest, Slot
 from phridge.contracts.models import SCHEMA_VERSION, OpSpec, WorkerRuntime
 
 _SPECS: dict[str, OpSpec] = {}
 # External / late-bound implementations (avoids importing worker.ops on the client).
 _IMPLS: dict[str, Callable[..., Any]] = {}
+_MANIFESTS: dict[str, PluginManifest] = {}
 
 
 def register(spec: OpSpec) -> OpSpec:
@@ -32,6 +34,32 @@ def register_impl(name: str, impl: Callable[..., Any]) -> Callable[..., Any]:
         raise KeyError(f"unknown op: {name} (register OpSpec first)")
     _IMPLS[name] = impl
     return impl
+
+
+def register_manifest(
+    m: PluginManifest,
+    impl: Optional[Callable[..., Any]] = None,
+) -> PluginManifest:
+    """Store a plugin manifest. When ``impl`` is given, also bind it."""
+    _MANIFESTS[m.name] = m
+    if impl is not None:
+        register_impl(m.name, impl)
+    return m
+
+
+def get_manifest(name: str) -> PluginManifest:
+    try:
+        return _MANIFESTS[name]
+    except KeyError as exc:
+        raise KeyError(f"unknown manifest: {name}") from exc
+
+
+def list_manifests() -> list[PluginManifest]:
+    return [manifest for _, manifest in sorted(_MANIFESTS.items())]
+
+
+def manifests_for_slot(slot: Slot) -> list[PluginManifest]:
+    return [manifest for manifest in list_manifests() if manifest.slot == slot]
 
 
 def register_op(

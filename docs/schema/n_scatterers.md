@@ -23,6 +23,8 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 | [XrayStructure](XrayStructure.md) | Canonical cctbx |  no  |
 | [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |  no  |
 | [SfCurvatures](SfCurvatures.md) | Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligne... |  no  |
+| [SpatialSigmaAV2](SpatialSigmaAV2.md) | Optional per-atom error-model block (spatial σ_A v2) |  no  |
+| [SpatialSigmaAV2Result](SpatialSigmaAV2Result.md) | Field-coefficient gradients and per-atom diagnostics returned after a field s... |  no  |
 
 
 
@@ -36,7 +38,7 @@ URI: [phridge:n_scatterers](https://github.com/phzwart/phridge/schema/phridge/n_
 | Property | Value |
 | --- | --- |
 | Range | [String](String.md) |
-| Domain Of | [XrayStructure](XrayStructure.md), [SfGradients](SfGradients.md), [SfCurvatures](SfCurvatures.md) |
+| Domain Of | [XrayStructure](XrayStructure.md), [SfGradients](SfGradients.md), [SfCurvatures](SfCurvatures.md), [SpatialSigmaAV2](SpatialSigmaAV2.md), [SpatialSigmaAV2Result](SpatialSigmaAV2Result.md) |
 
 ### Cardinality and Requirements
 
@@ -78,6 +80,8 @@ domain_of:
 - XrayStructure
 - SfGradients
 - SfCurvatures
+- SpatialSigmaAV2
+- SpatialSigmaAV2Result
 range: string
 
 ```

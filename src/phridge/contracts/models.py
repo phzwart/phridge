@@ -16,6 +16,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from phridge.contracts.manifest import PluginManifest
+
 SCHEMA_VERSION = 1
 
 
@@ -534,3 +536,4 @@ class OpSpec(_Strict):
     runtime: WorkerRuntime = WorkerRuntime.torch
     inputs: dict[str, str] = Field(default_factory=dict)
     outputs: dict[str, str] = Field(default_factory=dict)
+    manifest: Optional[PluginManifest] = None

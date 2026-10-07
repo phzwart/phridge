@@ -18,6 +18,7 @@ Name: phridge
 | [ArrayMeta](ArrayMeta.md) |  |
 | [Atom](Atom.md) | One iotbx |
 | [BlobMeta](BlobMeta.md) |  |
+| [BlockDecl](BlockDecl.md) |  |
 | [CartesianSites](CartesianSites.md) | cctbx xrs |
 | [CctbxObject](CctbxObject.md) | Base for canonical phenix/cctbx types |
 | [ComplexMap](ComplexMap.md) | Complex grid (e |
@@ -35,6 +36,7 @@ Name: phridge
 | [ModelGeometry](ModelGeometry.md) | Correspondence header asserting that hierarchy, xray scatterers, and restrain... |
 | [ObjectRef](ObjectRef.md) | Pointer at bytes in Redis plus enough metadata to decode them |
 | [OpSpec](OpSpec.md) |  |
+| [PluginManifest](PluginManifest.md) |  |
 | [RealMap](RealMap.md) | Canonical real-space map (maptbx / iotbx |
 | [ReflectionColumn](ReflectionColumn.md) | One data column in a ReflectionFile (not H/K/L) |
 | [ReflectionFile](ReflectionFile.md) | Canonical iotbx |
@@ -43,9 +45,9 @@ Name: phridge
 | [SfCurvatures](SfCurvatures.md) | Per-atom Gauss-Newton curvature blocks diag/blocks of J^T H_F J, index-aligne... |
 | [SfEngineParams](SfEngineParams.md) | Gridding / accuracy controls for the FFT structure-factor engine |
 | [SfGradients](SfGradients.md) | d(target)/d(scatterer parameters), index-aligned with the XrayStructure the g... |
-| [SpatialSigmaAV2](../spatial_sigmaA_v2/INSPECTION.md) | Optional per-atom error-model block (spatial σ_A v2) |
-| [SpatialSigmaAV2Result](../spatial_sigmaA_v2/INSPECTION.md) | Field-coefficient gradients and per-atom w_j / U_j diagnostics |
 | [SlotBinding](SlotBinding.md) |  |
+| [SpatialSigmaAV2](SpatialSigmaAV2.md) | Optional per-atom error-model block (spatial σ_A v2) |
+| [SpatialSigmaAV2Result](SpatialSigmaAV2Result.md) | Field-coefficient gradients and per-atom diagnostics returned after a field s... |
 | [SymOp](SymOp.md) | One symmetry operator in fractional coordinates |
 | [TargetResult](TargetResult.md) | Evaluation of a reciprocal-space target on a reflection list |
 | [XrayStructure](XrayStructure.md) | Canonical cctbx |
@@ -63,7 +65,10 @@ Name: phridge
 | [anomalous](anomalous.md) |  |
 | [anomalous_layout](anomalous_layout.md) | ASU vs both hemispheres; never inferred |
 | [atoms](atoms.md) |  |
+| [block_shape](block_shape.md) | Axis extents; a string names a symbolic dimension |
+| [blocks](blocks.md) |  |
 | [bond_asu_rt_mx](bond_asu_rt_mx.md) | sgtbx |
+| [bounds](bounds.md) |  |
 | [byte_order](byte_order.md) |  |
 | [cctbx_type](cctbx_type.md) | Cctbx class name when kind=cctbx (MillerArray, RealMap, CrystalSymmetry) |
 | [chain_id](chain_id.md) |  |
@@ -74,13 +79,20 @@ Name: phridge
 | [crystal](crystal.md) |  |
 | [d_min](d_min.md) | Resolution (Å) used to choose the grid, when known |
 | [data_dtype](data_dtype.md) | Canonical store dtype for data; v1 is float64 or complex128 |
+| [device](device.md) |  |
 | [dtype](dtype.md) | numpy dtype name (float64, int32, complex128, …) |
 | [element](element.md) |  |
+| [enabled](enabled.md) |  |
+| [entropy_weight](entropy_weight.md) | α in the explained-power relative-entropy regulariser |
 | [error](error.md) |  |
 | [experiment_type](experiment_type.md) |  |
 | [fdp](fdp.md) | f'' when set |
+| [field_cutoff](field_cutoff.md) | Band-limit of λ(x) and κ(x) in Å |
+| [fisher](fisher.md) | If true, U_j from Fisher 3×3 blocks instead of κ |
 | [fp](fp.md) | f' when set |
 | [frame](frame.md) |  |
+| [from_space](from_space.md) |  |
+| [frozen](frozen.md) |  |
 | [grid_resolution_factor](grid_resolution_factor.md) | Grid spacing = d_min * factor (default 1/3) |
 | [has_curvature](has_curvature.md) |  |
 | [has_hierarchy](has_hierarchy.md) |  |
@@ -93,6 +105,7 @@ Name: phridge
 | [i](i.md) | Row index into packed xyz; same i_seq as scatterers and restraints |
 | [i_seq_identity](i_seq_identity.md) | True when Hierarchy |
 | [icode](icode.md) | Insertion code; empty if none |
+| [id](id.md) |  |
 | [index_dtype](index_dtype.md) | Canonical store dtype for hkl; v1 is int32 |
 | [inputs](inputs.md) | Map of input name to ObjectRef |
 | [is_mask](is_mask.md) |  |
@@ -101,6 +114,9 @@ Name: phridge
 | [kind](kind.md) |  |
 | [label](label.md) | MTZ / miller array id (e |
 | [labels](labels.md) | Scattering type label per row (C, N, O, S, Se, water,  |
+| [manifest](manifest.md) | Optional plugin manifest carried by this op |
+| [manifest_dtype](manifest_dtype.md) |  |
+| [manifest_space](manifest_space.md) |  |
 | [message](message.md) |  |
 | [meta](meta.md) | Kind-specific JSON (ArrayMeta, BlobMeta, or a CctbxObject) |
 | [miller](miller.md) | Must have observation_type complex |
@@ -114,6 +130,7 @@ Name: phridge
 | [n_bond_similarities](n_bond_similarities.md) |  |
 | [n_bonds](n_bonds.md) |  |
 | [n_chiralities](n_chiralities.md) |  |
+| [n_coeff](n_coeff.md) | K, unique field coefficients (c_0 excluded) |
 | [n_dihedrals](n_dihedrals.md) |  |
 | [n_nonbonded](n_nonbonded.md) |  |
 | [n_parallelities](n_parallelities.md) |  |
@@ -123,9 +140,11 @@ Name: phridge
 | [n_refl](n_refl.md) |  |
 | [n_rigid_bonds](n_rigid_bonds.md) |  |
 | [n_scatterers](n_scatterers.md) |  |
+| [n_shells](n_shells.md) | S, resolution shells for D_0(s) and Sigma_miss(s) |
 | [n_sites](n_sites.md) |  |
 | [n_terms](n_terms.md) | K, number of Gaussian terms per row |
 | [name](name.md) |  |
+| [needs](needs.md) |  |
 | [npz_name](npz_name.md) | Array name inside the packed npz (usually the label) |
 | [observation_type](observation_type.md) |  |
 | [op](op.md) |  |
@@ -134,8 +153,11 @@ Name: phridge
 | [origin_cart](origin_cart.md) | Cartesian origin shift (Å), map_manager |
 | [outputs](outputs.md) | Map of output name to ObjectRef (filled by worker) |
 | [pixel_sizes](pixel_sizes.md) | Voxel size (Å) along a, b, c |
+| [produces](produces.md) |  |
+| [provides](provides.md) |  |
 | [quality_factor](quality_factor.md) | cctbx quality_factor for u_base (default 100) |
 | [r](r.md) |  |
+| [reads](reads.md) |  |
 | [resname](resname.md) |  |
 | [resolution](resolution.md) | Nominal high resolution (Å) when known |
 | [resolution_factor](resolution_factor.md) | Typical FFT factor (e |
@@ -146,15 +168,20 @@ Name: phridge
 | [scattering_type](scattering_type.md) | cctbx scattering type (C, N, S, AU, water, …) |
 | [schema_version](schema_version.md) | Must match this schema file version (1) |
 | [shape](shape.md) |  |
+| [slot](slot.md) |  |
 | [space](space.md) |  |
 | [space_group_hall](space_group_hall.md) | Hall symbol as understood by cctbx |
 | [space_group_number](space_group_number.md) | International Tables space-group number when known |
+| [spectral_taper_scale](spectral_taper_scale.md) | Scale of the spectral prior variances v_k |
 | [status](status.md) |  |
 | [symops](symops.md) | Optional full list of symmetry operators (centering included), x' = r @ x + t... |
 | [t](t.md) |  |
 | [table](table.md) | Registry table name (wk1995, it1992, n_gaussian,  |
 | [target](target.md) | Target value when the gradients came from a target op |
+| [tier](tier.md) |  |
+| [to_space](to_space.md) |  |
 | [traceback](traceback.md) |  |
+| [transform](transform.md) |  |
 | [type](type.md) |  |
 | [u_extra](u_extra.md) | Override the extra isotropic U added before sampling |
 | [unit_cell](unit_cell.md) | a, b, c (Å), alpha, beta, gamma (degrees) |
@@ -162,6 +189,7 @@ Name: phridge
 | [use_u_iso](use_u_iso.md) | cctbx flags |
 | [value](value.md) | Target on the work set |
 | [value_test](value_test.md) | Target on the test set when r_free flags were given |
+| [version](version.md) |  |
 | [wavelength](wavelength.md) | Dataset wavelength (Å) when known |
 | [wilson_b](wilson_b.md) |  |
 | [wing_cutoff](wing_cutoff.md) | Relative density at the sampling cutoff radius (default 1e-4) |
@@ -173,15 +201,21 @@ Name: phridge
 | Enumeration | Description |
 | --- | --- |
 | [AnomalousLayout](AnomalousLayout.md) |  |
+| [BlockTransform](BlockTransform.md) |  |
 | [ByteOrder](ByteOrder.md) |  |
 | [CompressionKind](CompressionKind.md) |  |
 | [CoordinateFrame](CoordinateFrame.md) |  |
 | [ExperimentType](ExperimentType.md) |  |
 | [JobStatus](JobStatus.md) |  |
+| [ManifestDevice](ManifestDevice.md) |  |
+| [ManifestDtype](ManifestDtype.md) |  |
 | [MapSpace](MapSpace.md) |  |
 | [MtzColumnType](MtzColumnType.md) | CCP4 MTZ column type character (iotbx |
 | [ObjectKind](ObjectKind.md) |  |
 | [ObservationType](ObservationType.md) |  |
+| [Slot](Slot.md) |  |
+| [Space](Space.md) |  |
+| [Tier](Tier.md) |  |
 | [WorkerRuntime](WorkerRuntime.md) |  |
 
 

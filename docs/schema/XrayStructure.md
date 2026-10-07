@@ -158,6 +158,8 @@ attributes:
     - XrayStructure
     - SfGradients
     - SfCurvatures
+    - SpatialSigmaAV2
+    - SpatialSigmaAV2Result
     range: integer
     required: true
   scatterers:
@@ -217,6 +219,8 @@ attributes:
     - XrayStructure
     - SfGradients
     - SfCurvatures
+    - SpatialSigmaAV2
+    - SpatialSigmaAV2Result
     range: integer
     required: true
   scatterers:

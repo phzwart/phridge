@@ -3,7 +3,7 @@ search:
   boost: 10.0
 ---
 
-# Class: GeometryRestraints
+# Class: GeometryRestraints 
 
 
 _Canonical cctbx.geometry_restraints.manager proxy tables. i_seq values index the corresponding Hierarchy / XrayStructure._
@@ -28,53 +28,53 @@ URI: [phridge:GeometryRestraints](https://github.com/phzwart/phridge/schema/phri
     click GeometryRestraints href "../GeometryRestraints/"
       CctbxObject <|-- GeometryRestraints
         click CctbxObject href "../CctbxObject/"
-
+      
       GeometryRestraints : adp_level_weight
-
+        
       GeometryRestraints : adp_nu
-
+        
       GeometryRestraints : bond_asu_rt_mx
-
+        
       GeometryRestraints : crystal
-
-
-
-
-
+        
+          
+    
+        
+        
         GeometryRestraints --> "0..1" CrystalSymmetry : crystal
         click CrystalSymmetry href "../CrystalSymmetry/"
+    
 
-
-
+        
       GeometryRestraints : n_adp_pairs
-
+        
       GeometryRestraints : n_angles
-
+        
       GeometryRestraints : n_bond_asu
-
+        
       GeometryRestraints : n_bond_similarities
-
+        
       GeometryRestraints : n_bonds
-
+        
       GeometryRestraints : n_chiralities
-
+        
       GeometryRestraints : n_dihedrals
-
+        
       GeometryRestraints : n_nonbonded
-
+        
       GeometryRestraints : n_parallelities
-
+        
       GeometryRestraints : n_planarities
-
+        
       GeometryRestraints : n_reference_coords
-
+        
       GeometryRestraints : n_rigid_bonds
-
+        
       GeometryRestraints : n_sites
-
+        
       GeometryRestraints : wilson_b
-
-
+        
+      
 ```
 
 
