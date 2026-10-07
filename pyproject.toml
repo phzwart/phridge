@@ -68,6 +68,7 @@ pythonpath = ["src", "tests"]
 markers = [
     "gpu: requires CUDA torch worker",
     "slow: large-N / long-running",
+    "boundaries: import-wall checks over src/phridge",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
