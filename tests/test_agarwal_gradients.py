@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
-from phridge.sfcalc.engine.symmetry import identity_ops
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
 
 def _toy(n_atoms: int = 8):
@@ -33,7 +33,7 @@ def _toy(n_atoms: int = 8):
 
 
 def _hkl(model, d_min: float = 2.5, max_index: int = 6) -> np.ndarray:
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
     a, b, c = (float(x) for x in model.unit_cell[:3])
     hm = min(max_index, int(np.ceil(a / d_min) + 1))
@@ -56,17 +56,17 @@ def test_agarwal_matches_autograd(backend):
     pytest.importorskip("torch")
     device = "cpu"
     if backend == "numba":
-        from phridge.sfcalc.engine.stamp_numba import numba_available
+        from phridge.sfcalc.backends.stamp_numba import numba_available
 
         if not numba_available():
             pytest.skip("numba required")
     if backend == "cpp":
-        from phridge.sfcalc.engine.stamp_cpp import cpp_available
+        from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
         if not cpp_available():
             pytest.skip("C++ stamp extension required")
     if backend == "cuda":
-        from phridge.sfcalc.engine.stamp_cuda import cuda_available
+        from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_available
 
         if not cuda_available():
             pytest.skip("CUDA stamp extension required")
@@ -92,8 +92,8 @@ def test_agarwal_matches_autograd(backend):
 
 def test_cpp_f_matches_numba():
     pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_cpp import cpp_available
-    from phridge.sfcalc.engine.stamp_numba import numba_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
+    from phridge.sfcalc.backends.stamp_numba import numba_available
 
     if not cpp_available():
         pytest.skip("C++ stamp extension required")
@@ -132,8 +132,8 @@ def test_rfft_f_matches_complex_fftn():
 
 def test_cuda_f_matches_cpp():
     pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_cpp import cpp_available
-    from phridge.sfcalc.engine.stamp_cuda import cuda_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_available
 
     if not cpp_available():
         pytest.skip("C++ stamp extension required")
@@ -155,7 +155,7 @@ def test_cuda_f_matches_cpp():
 
 def test_auto_mps_uses_cpp():
     torch = pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_cpp import cpp_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
     if not cpp_available():
         pytest.skip("C++ stamp extension required")
@@ -179,7 +179,7 @@ def test_auto_mps_uses_cpp():
 @pytest.mark.parametrize("dtype,tol", [("float32", 2e-3), ("float16", 3e-2)])
 def test_cpp_lowp_f_matches_f64(dtype, tol):
     pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_cpp import cpp_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
     if not cpp_available():
         pytest.skip("C++ stamp extension required")
@@ -199,7 +199,7 @@ def test_cpp_lowp_f_matches_f64(dtype, tol):
 
 def test_auto_cpu_stays_numba():
     pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_numba import numba_available
+    from phridge.sfcalc.backends.stamp_numba import numba_available
 
     if not numba_available():
         pytest.skip("numba required")
@@ -212,7 +212,7 @@ def test_auto_cpu_stays_numba():
 
 def test_fast_cpu_uses_cpp():
     pytest.importorskip("torch")
-    from phridge.sfcalc.engine.stamp_cpp import cpp_available
+    from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
     if not cpp_available():
         pytest.skip("C++ stamp required")

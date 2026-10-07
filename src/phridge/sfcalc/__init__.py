@@ -2,7 +2,7 @@
 
 Torch boundary:
 - ``phridge.sfcalc.client`` / ``phridge.sfcalc.packing`` — no torch (Phenix-safe).
-- ``phridge.sfcalc.engine`` / ``targets`` / ``ops`` — torch; worker-side only.
+- ``phridge.transforms.fourier.ten_eyck`` / ``targets`` / ``ops`` — torch; worker-side only.
 """
 
 from __future__ import annotations

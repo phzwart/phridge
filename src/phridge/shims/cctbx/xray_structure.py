@@ -159,3 +159,38 @@ def packed_order(xs: Any) -> dict[str, slice]:
             order[f"fdp_{i}"] = slice(cursor, cursor + 1)
             cursor += 1
     return order
+
+
+def random_xray_structure(
+    space_group: str,
+    elements: list[str],
+    *,
+    volume_per_atom: float = 50.0,
+    random_u_iso: bool = True,
+    random_occupancy: bool = True,
+    seed: int = 0,
+) -> Any:
+    """cctbx ``random_structure`` with a fixed seed. Stays inside the adapter."""
+    import random
+
+    from cctbx import sgtbx
+    from cctbx.development import random_structure
+
+    from phridge.shims.cctbx._flex import set_random_seed
+
+    random.seed(seed)
+    set_random_seed(seed)
+    return random_structure.xray_structure(
+        space_group_info=sgtbx.space_group_info(space_group),
+        elements=list(elements),
+        volume_per_atom=volume_per_atom,
+        random_u_iso=random_u_iso,
+        random_occupancy=random_occupancy,
+    )
+
+
+def xray_structure_from_pdb(path: str) -> Any:
+    """Read a PDB path into a cctbx ``xray.structure``."""
+    import iotbx.pdb
+
+    return iotbx.pdb.input(file_name=str(path)).xray_structure_simple()

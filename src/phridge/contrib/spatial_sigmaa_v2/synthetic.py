@@ -17,8 +17,8 @@ from phridge.contrib.spatial_sigmaa_v2.moments import f_eff_direct, moments, res
 from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2
 from phridge.contrib.spatial_sigmaa_v2.per_atom import EIGHT_PI2
 from phridge.contrib.spatial_sigmaa_v2.target import draw_circular_normal, rice_nll_intensity
-from phridge.sfcalc.engine.engine import ScatteringModel
-from phridge.sfcalc.engine.symmetry import identity_ops
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
 P212121_ROT = np.array(
     [

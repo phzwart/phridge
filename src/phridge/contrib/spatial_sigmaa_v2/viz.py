@@ -14,7 +14,7 @@ import numpy as np
 from phridge.contrib.spatial_sigmaa_v2.fields import FieldBasis, grid_n_real, sample_on_grid
 from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2, PackedSpatialSigmaAV2Result, _to_numpy
 from phridge.contrib.spatial_sigmaa_v2.per_atom import EIGHT_PI2
-from phridge.sfcalc.engine.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
 
 
 def field_volumes(

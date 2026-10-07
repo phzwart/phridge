@@ -2,7 +2,7 @@
 
 The suite is torch-only (no cctbx / Phenix), so the surrogate math is checked against
 an independent numpy dense-grid oracle and the end-to-end behaviour against a synthetic
-structure driven through :class:`~phridge.sfcalc.engine.StructureFactorEngine`.
+structure driven through :class:`~phridge.transforms.fourier.ten_eyck.StructureFactorEngine`.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ from phridge.contrib.intensity_ll.target import IntensityLogLikelihood  # noqa: 
 from phridge.contracts.models import CrystalSymmetry, ObservationType, Scatterer, SymOp  # noqa: E402
 from phridge.contracts.packing import PackedMiller  # noqa: E402
 from phridge.contracts.packing import PackedXray  # noqa: E402
-from phridge.sfcalc.engine import EngineParams, StructureFactorEngine  # noqa: E402
+from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import scattering_model  # noqa: E402
 from phridge.sfcalc.packing import PackedScatteringTable  # noqa: E402
 from phridge.sfcalc.targets import Observations, build_target  # noqa: E402

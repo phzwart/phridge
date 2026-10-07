@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
-from phridge.sfcalc.engine.sg_gather import agentsg_available, resolve_space_group
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.sfcalc.backends.sg_gather import agentsg_available, resolve_space_group
 
 
 def _p212121(n_atoms: int = 12):
@@ -43,7 +43,7 @@ def _p212121(n_atoms: int = 12):
 
 
 def _hkl(model, d_min: float = 3.0) -> np.ndarray:
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
     a, b, c = (float(x) for x in model.unit_cell[:3])
     hs = [
@@ -64,12 +64,12 @@ def test_asu_f_matches_p1_expand(backend):
     if not agentsg_available():
         pytest.skip("agentsg required")
     if backend == "numba":
-        from phridge.sfcalc.engine.stamp_numba import numba_available
+        from phridge.sfcalc.backends.stamp_numba import numba_available
 
         if not numba_available():
             pytest.skip("numba required")
     if backend == "cpp":
-        from phridge.sfcalc.engine.stamp_cpp import cpp_available
+        from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
         if not cpp_available():
             pytest.skip("C++ stamp required")
@@ -144,7 +144,7 @@ def test_r3h_asu_matches_p1_expand(backend):
     if not agentsg_available():
         pytest.skip("agentsg required")
     if backend == "cpp":
-        from phridge.sfcalc.engine.stamp_cpp import cpp_available
+        from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
         if not cpp_available():
             pytest.skip("C++ stamp required")

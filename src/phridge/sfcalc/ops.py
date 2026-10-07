@@ -15,7 +15,7 @@ from phridge.contracts.packing import PackedMiller
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 from phridge.contracts.packing import PackedXray
 from phridge.sfcalc.targets import Observations, TargetEval, build_target
-from phridge.sfcalc.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck import EngineParams, ScatteringModel, StructureFactorEngine
 
 _DEVICE = {"device": "cpu"}
 
@@ -164,7 +164,7 @@ def _handle_str(handle: Any) -> Optional[str]:
 
 def _refresh_model(eng: Any, xray: PackedXray) -> None:
     """Update scatterer arrays on a kept engine; do not rebuild grids or the group plan."""
-    from phridge.sfcalc.engine.symmetry import site_multiplicities
+    from phridge.transforms.fourier.ten_eyck.symmetry import site_multiplicities
 
     m = eng.model
     n = m.n_scatterers

@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.stamp_cpp import _frac_scale, _pack, _reduce_expanded
+from phridge.transforms.fourier.ten_eyck.stamp_cpp import _frac_scale, _pack, _reduce_expanded
 
 _CUDA_OK: bool | None = None
 _MOD = None
@@ -243,7 +243,7 @@ def cuda_f_calc_numpy(engine) -> np.ndarray:
     m = engine.model
     with torch.no_grad():
         rho = _density_cuda_forward(engine, m.sites_frac, m.occupancy, m.u_iso, m.u_star, m.fp, m.fdp)
-        from phridge.sfcalc.engine.engine import _fftn
+        from phridge.transforms.fourier.ten_eyck.engine import _fftn
 
         ft = _fftn(rho, engine.params.cpu_numpy_fft).reshape(-1)
         return engine._f_from_fft(ft).detach().cpu().numpy().astype(np.complex128)

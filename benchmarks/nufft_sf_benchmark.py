@@ -11,8 +11,8 @@ Synthetic space groups (cctbx ``random_structure``, C/N/O/S)::
 Split: Phenix / cctbx client, torch worker over phridge (Redis)::
 
     KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner \\
-        --device cpu --preload phridge.contrib.nufft_sf --consumer nufft-bench
-    PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark \\
+        --device cpu --preload phridge.transforms.fourier.nufft --consumer nufft-bench
+    PYTHONPATH=src phenix.python -m phridge.transforms.fourier.nufft.benchmark \\
         --redis-url redis://127.0.0.1:6379/1 --cases p1,p212121,r3,f423 \\
         --n-synthetic 1000 --d-min 2.0 --dtypes float32 --no-nufft
 """
@@ -139,7 +139,7 @@ def _r_factor(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def _stamp_engine(model, hkl, d_min: float, quality_factor: float, device: str):
-    from phridge.sfcalc.engine.engine import EngineParams, StructureFactorEngine
+    from phridge.transforms.fourier.ten_eyck.engine import EngineParams, StructureFactorEngine
 
     return StructureFactorEngine(
         model, hkl, EngineParams(d_min=d_min, quality_factor=quality_factor), device=device
@@ -147,7 +147,7 @@ def _stamp_engine(model, hkl, d_min: float, quality_factor: float, device: str):
 
 
 def _nufft_engine(model, hkl, d_min: float, tau: float, device: str):
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     return NufftStructureFactorEngine(
         model, hkl, NufftEngineParams(d_min=d_min, tau=tau, n_max=2, eps=1e-6), device=device
@@ -169,41 +169,31 @@ def _time_engine(eng, device: str, repeats: int, dtdf: np.ndarray) -> tuple[np.n
 
 
 def _cctbx_available() -> bool:
-    try:
-        import cctbx  # noqa: F401
+    from phridge.shims.cctbx import has_cctbx
 
-        return True
-    except Exception:
-        return False
+    return has_cctbx()
 
 
 def _load_cctbx_structure(case: str, n_synthetic: int):
-    from cctbx import sgtbx
-    from cctbx.development import random_structure
-    from cctbx.array_family import flex
+    from phridge.shims.cctbx import random_xray_structure, xray_structure_from_pdb
 
     if _is_synthetic(case):
-        import random
-
-        random.seed(0)
-        flex.set_random_seed(0)
         elements = ("C", "N", "O", "S")
         n_repeat = max(1, int(round(int(n_synthetic) / len(elements))))
-        return random_structure.xray_structure(
-            space_group_info=sgtbx.space_group_info(_SYNTHETIC_SG[case]),
-            elements=list(elements) * n_repeat,
+        return random_xray_structure(
+            _SYNTHETIC_SG[case],
+            list(elements) * n_repeat,
             volume_per_atom=50,
             random_u_iso=True,
             random_occupancy=True,
+            seed=0,
         )
     pdb = ROOT / "examples" / case / f"{case}.pdb"
     if not pdb.exists():
         _download_pdb(case, pdb)
     if not pdb.exists():
         raise FileNotFoundError(pdb)
-    import iotbx.pdb
-
-    return iotbx.pdb.input(file_name=str(pdb)).xray_structure_simple()
+    return xray_structure_from_pdb(pdb)
 
 
 def _download_pdb(code: str, dest: Path) -> None:
@@ -225,8 +215,8 @@ def _model_from_cctbx(xs):
 
 
 def _toy_case(n_atoms: int = 200):
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     rng = np.random.default_rng(0)
     rot, trans = identity_ops()
@@ -251,7 +241,7 @@ def _toy_case(n_atoms: int = 200):
 
 
 def _miller_from_model(model, d_min: float, max_index: int = 20) -> np.ndarray:
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
     a, b, c = (float(x) for x in model.unit_cell[:3])
     hm = min(max_index, int(np.ceil(a / d_min) + 1))
@@ -384,7 +374,7 @@ def run_case_via_bridge(
     include_nufft: bool = True,
 ) -> list[Row]:
     """Phenix/cctbx client: local FFT, stamp + NUFFT on the torch worker."""
-    from phridge.contrib.nufft_sf import register
+    from phridge.transforms.fourier.nufft import register
     from phridge.contracts.models import SfEngineParams
     from phridge.contracts.packing import PackedMiller
     from phridge.sfcalc.client import _miller_template, _packed_xray
@@ -602,18 +592,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(table)
     if args.redis_url:
         cmd = (
-            f"PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark "
+            f"PYTHONPATH=src phenix.python -m phridge.transforms.fourier.nufft.benchmark "
             f"--redis-url {args.redis_url} --cases {args.cases} --d-min {args.d_min} "
             f"--device {args.device} --repeats {args.repeats}"
         )
         worker_cmd = (
             "KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner "
-            f"--device {args.device} --preload phridge.contrib.nufft_sf"
+            f"--device {args.device} --preload phridge.transforms.fourier.nufft"
         )
         commands = [worker_cmd, cmd]
     else:
         commands = [
-            f"PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark "
+            f"PYTHONPATH=src python -m phridge.transforms.fourier.nufft.benchmark "
             f"--cases {args.cases} --d-min {args.d_min} --device {args.device} --repeats {args.repeats}"
         ]
     out = Path(args.out) if args.out else ROOT / "docs" / "nufft_engine.md"

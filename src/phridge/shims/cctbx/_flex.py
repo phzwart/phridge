@@ -76,3 +76,7 @@ def numpy_to_flex(values: Any, *, kind: str = "double") -> Any:
     if kind == "xray_scatterer":
         return xray_scatterer(values)
     raise ValueError(f"unknown flex kind {kind!r}")
+
+
+def set_random_seed(seed: int) -> None:
+    _cctbx_flex().set_random_seed(int(seed))

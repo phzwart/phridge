@@ -21,8 +21,8 @@ from phridge.legacy.multixtal.friedel import (
 from phridge.legacy.multixtal.influence import ClassicalInfluence, effective_n
 from phridge.legacy.multixtal.selector import PopulationSelector, per_dataset_selector
 from phridge.ops import get_op
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
-from phridge.sfcalc.engine.symmetry import identity_ops
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
 
 class _Crystal:

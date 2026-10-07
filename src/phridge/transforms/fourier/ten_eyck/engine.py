@@ -18,326 +18,35 @@ still go through autograd so the graph can be differentiated again.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import (
+from phridge.transforms.fourier.ten_eyck.cell import (
     cell_volume,
     orthogonalization_matrix,
     reciprocal_cartesian,
     sym6_to_mat,
     u_base,
 )
-from phridge.sfcalc.engine.symmetry import identity_ops, site_multiplicities
-
-TWO_PI2 = 2.0 * math.pi * math.pi
-EIGHT_PI2 = 8.0 * math.pi * math.pi
-
-
-@dataclass
-class ScatteringModel:
-    """Everything the engine needs about the model, as numpy arrays.
-
-    Gaussian form factors follow eltbx: f(stol^2) = sum_k a_k exp(-b_k stol^2) + c.
-    ``type_index[j]`` selects the row of ``gauss_a/gauss_b/gauss_c`` for atom j.
-    Symmetry operators: x' = rot[s] @ x + trans[s], full list incl. centering.
-    """
-
-    unit_cell: tuple
-    sites_frac: np.ndarray  # (N, 3)
-    occupancy: np.ndarray  # (N,)
-    u_iso: np.ndarray  # (N,)
-    u_star: np.ndarray  # (N, 6)
-    anisotropic: np.ndarray  # (N,) bool
-    fp: np.ndarray  # (N,)
-    fdp: np.ndarray  # (N,)
-    type_index: np.ndarray  # (N,) int
-    gauss_a: np.ndarray  # (T, K)
-    gauss_b: np.ndarray  # (T, K)
-    gauss_c: np.ndarray  # (T,)
-    rot: np.ndarray = field(default_factory=lambda: identity_ops()[0])
-    trans: np.ndarray = field(default_factory=lambda: identity_ops()[1])
-    multiplicity: Optional[np.ndarray] = None  # (N,) int; computed if None
-    space_group_hall: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        n = self.sites_frac.shape[0]
-        for name in ("occupancy", "u_iso", "anisotropic", "fp", "fdp", "type_index"):
-            if getattr(self, name).shape[0] != n:
-                raise ValueError(f"{name} length mismatch")
-        if self.u_star.shape != (n, 6):
-            raise ValueError("u_star must be (N, 6)")
-        if self.multiplicity is None:
-            self.multiplicity = site_multiplicities(self.sites_frac, self.rot, self.trans, self.unit_cell)
-
-    @property
-    def n_scatterers(self) -> int:
-        return int(self.sites_frac.shape[0])
-
-    @property
-    def n_sym(self) -> int:
-        return int(self.rot.shape[0])
-
-
-@dataclass
-class EngineParams:
-    d_min: float
-    grid_resolution_factor: float = 1.0 / 3.0
-    quality_factor: float = 100.0
-    wing_cutoff: float = 1e-4
-    u_extra: Optional[float] = None  # override cctbx u_base
-    n_real: Optional[tuple] = None  # override gridding
-    max_chunk_points: int = 8_000_000  # atoms x box points per chunk
-    dtype: str = "float64"  # float64 | float32 | float16
-    # Default: torch.fft.fftn everywhere (CUDA cuFFT / CPU pocketfft via torch) so the
-    # density→FFT→gather graph stays in PyTorch and per-atom grads use autograd.
-    # Opt-in numpy FFT only for rare CPU torch/MKL threading bugs (see docs/engine.md).
-    cpu_numpy_fft: bool = False
-    n_radius_buckets: int = 4  # group expanded atoms by cutoff radius to shrink sampling boxes
-    compile_stamp: bool = False  # torch.compile the per-chunk stamp (off in unit tests)
-    stamp_backend: str = "auto"  # auto | fast | torch | triton | numba | cpp | cuda
-    p1_expand: bool = False  # True: paint all sym copies; False: ASU + agentsg gather
-
-
-def _fft_friendly(n: int) -> int:
-    """Smallest m >= n whose prime factors are all in {2,3,5}."""
-    while True:
-        m = n
-        for p in (2, 3, 5):
-            while m % p == 0:
-                m //= p
-        if m == 1:
-            return n
-        n += 1
-
-
-def default_gridding(unit_cell, d_min: float, factor: float) -> tuple:
-    a, b, c = (float(x) for x in unit_cell[:3])
-    spacing = d_min * factor
-    return tuple(_fft_friendly(int(math.ceil(length / spacing))) for length in (a, b, c))
-
-
-def _iso_gauss(r2, sigma2):
-    """Normalized spherical Gaussian: r2 (C,P), sigma2 (C,)."""
-    import torch
-
-    norm = (2.0 * math.pi * sigma2) ** (-1.5)
-    return norm[:, None] * torch.exp(-0.5 * r2 / sigma2[:, None])
-
-
-def _points_core(xf, offsets, r_cut, o_mat, n_real_f, n_real_i):
-    """Grid points around atoms xf (C,3): cartesian offsets, flat indices, cutoff mask."""
-    import torch
-
-    g0 = torch.round(xf.detach() * n_real_f).to(torch.int64)
-    g = g0[:, None, :] + offsets[None, :, :]
-    r_frac = g.to(xf.dtype) / n_real_f - xf[:, None, :]
-    r_cart = r_frac @ o_mat.T
-    inside = (r_cart.detach() ** 2).sum(-1) <= r_cut[:, None] ** 2
-    flat = ((g[..., 0] % n_real_i[0]) * n_real_i[1] + (g[..., 1] % n_real_i[1])) * n_real_i[2] + (g[..., 2] % n_real_i[2])
-    return r_cart, flat, inside
-
-
-def _iso_terms_core(r_cart, u_iso, a, b, u_extra):
-    r2 = (r_cart**2).sum(-1)
-    sigma2_base = u_iso + u_extra
-    base = _iso_gauss(r2, sigma2_base)
-    sigma2_k = sigma2_base[:, None] + b / EIGHT_PI2
-    norm = (2.0 * math.pi * sigma2_k) ** (-1.5)
-    gauss_k = norm[:, :, None] * (-0.5 * r2[:, None, :] / sigma2_k[:, :, None]).exp()
-    terms = (a[:, :, None] * gauss_k).sum(1)
-    return base, terms
-
-
-def _gauss_core(r_cart, u_cart, extra_iso):
-    import torch
-
-    eye = torch.eye(3, dtype=r_cart.dtype, device=r_cart.device)
-    if torch.is_tensor(extra_iso) and extra_iso.ndim == 1:
-        cov = u_cart + extra_iso[:, None, None] * eye
-    else:
-        cov = u_cart + extra_iso * eye
-    prec, det = _inv_det_3x3(cov)
-    x, y, z = r_cart[..., 0], r_cart[..., 1], r_cart[..., 2]
-    p = lambda i, j: prec[:, i, j][:, None]  # noqa: E731
-    q = p(0, 0) * x * x + p(1, 1) * y * y + p(2, 2) * z * z + 2.0 * (p(0, 1) * x * y + p(0, 2) * x * z + p(1, 2) * y * z)
-    norm = (2.0 * math.pi) ** (-1.5) * det.rsqrt()
-    return norm[:, None] * torch.exp(-0.5 * q)
-
-
-def _aniso_terms_core(r_cart, u_cart, a, b, u_extra):
-    base = _gauss_core(r_cart, u_cart, u_extra)
-    c, k = int(a.shape[0]), int(a.shape[1])
-    p = int(r_cart.shape[1])
-    extra = b / EIGHT_PI2 + u_extra
-    r_rep = r_cart[:, None, :, :].expand(c, k, p, 3).reshape(c * k, p, 3)
-    u_rep = u_cart[:, None, :, :].expand(c, k, 3, 3).reshape(c * k, 3, 3)
-    gauss_k = _gauss_core(r_rep, u_rep, extra.reshape(c * k)).reshape(c, k, p)
-    terms = (a[:, :, None] * gauss_k).sum(1)
-    return base, terms
-
-
-def _stamp_chunk(
-    grid_re,
-    grid_im,
-    xf,
-    offsets,
-    r_cut,
-    u_iso,
-    u_cart,
-    a,
-    b,
-    c,
-    w,
-    fp,
-    fdp,
-    o_mat,
-    n_real_f,
-    n_real_i,
-    u_extra,
-    aniso: bool,
-):
-    """Paint one chunk of expanded atoms onto the flat real/imag grids."""
-    r_cart, flat, inside = _points_core(xf, offsets, r_cut, o_mat, n_real_f, n_real_i)
-    if aniso:
-        base, terms = _aniso_terms_core(r_cart, u_cart, a, b, u_extra)
-    else:
-        base, terms = _iso_terms_core(r_cart, u_iso, a, b, u_extra)
-    rho_re = (terms + (c + fp)[:, None] * base) * w[:, None] * inside
-    grid_re = grid_re.index_add(0, flat.reshape(-1), rho_re.reshape(-1))
-    if grid_im is not None:
-        rho_im = fdp[:, None] * base * w[:, None] * inside
-        grid_im = grid_im.index_add(0, flat.reshape(-1), rho_im.reshape(-1))
-    return grid_re, grid_im
-
-
-def _inv_det_3x3(m):
-    """Batched closed-form inverse and determinant of symmetric (C,3,3)."""
-    import torch
-
-    a, b, c = m[:, 0, 0], m[:, 0, 1], m[:, 0, 2]
-    d, e = m[:, 1, 1], m[:, 1, 2]
-    f = m[:, 2, 2]
-    c00 = d * f - e * e
-    c01 = c * e - b * f
-    c02 = b * e - c * d
-    c11 = a * f - c * c
-    c12 = b * c - a * e
-    c22 = a * d - b * b
-    det = a * c00 + b * c01 + c * c02
-    inv = torch.stack(
-        [
-            torch.stack([c00, c01, c02], dim=1),
-            torch.stack([c01, c11, c12], dim=1),
-            torch.stack([c02, c12, c22], dim=1),
-        ],
-        dim=1,
-    ) / det[:, None, None]
-    return inv, det
-
-
-def _np_fftn(t):
-    import torch
-
-    out = np.fft.fftn(t.detach().cpu().numpy())
-    return torch.from_numpy(np.ascontiguousarray(out)).to(t.dtype)
-
-
-def _np_ifftn_unnormalized(t):
-    import torch
-
-    out = np.fft.ifftn(t.detach().cpu().numpy(), norm="forward")
-    return torch.from_numpy(np.ascontiguousarray(out)).to(t.dtype)
-
-
-def _make_numpy_fftn():
-    """Optional CPU fftn via numpy (pocketfft), as a pair of autograd Functions.
-
-    Only used when ``EngineParams.cpu_numpy_fft`` is True. Default path is
-    ``torch.fft.fftn``. Kept for rare torch 2.x / MKL CPU builds where
-    multi-threaded ``torch.fft`` returned garbage intermittently. Forward and
-    unnormalized inverse are each other's adjoints (Gauss-Newton HVP).
-    """
-    import torch
-
-    class NumpyFFTN(torch.autograd.Function):
-        @staticmethod
-        def forward(ctx, inp):
-            return _np_fftn(inp)
-
-        @staticmethod
-        def backward(ctx, grad):
-            return NumpyIFFTN.apply(grad)
-
-    class NumpyIFFTN(torch.autograd.Function):
-        @staticmethod
-        def forward(ctx, inp):
-            return _np_ifftn_unnormalized(inp)
-
-        @staticmethod
-        def backward(ctx, grad):
-            return NumpyFFTN.apply(grad)
-
-    return NumpyFFTN
-
-
-_NUMPY_FFTN = None
-
-
-def _full_flat_to_rfft(flat: np.ndarray, n0: int, n1: int, n2: int):
-    """Map full-grid flat index of ``-h`` to packed ``rfftn`` index + conj/unique."""
-    flat = np.asarray(flat, dtype=np.int64)
-    n2r = n2 // 2 + 1
-    i2 = flat % n2
-    tmp = flat // n2
-    i1 = tmp % n1
-    i0 = tmp // n1
-    conj = i2 >= n2r
-    j0 = np.where(conj, (-i0) % n0, i0)
-    j1 = np.where(conj, (-i1) % n1, i1)
-    j2 = np.where(conj, (-i2) % n2, i2)
-    idx = (j0 * n1 + j1) * n2r + j2
-
-    def _nyq(i, n):
-        return (i == 0) | ((n % 2 == 0) & (i == n // 2))
-
-    unique = _nyq(j0, n0) & _nyq(j1, n1) & _nyq(j2, n2)
-    return idx.astype(np.int64), conj, unique
-
-
-def _scatter_add_complex(y, index, contrib):
-    """``scatter_add_`` that works when MPS refuses complex scatter."""
-    try:
-        y.scatter_add_(0, index, contrib)
-        return y
-    except RuntimeError:
-        import torch
-
-        re = y.real.contiguous()
-        im = y.imag.contiguous()
-        re.scatter_add_(0, index, contrib.real)
-        im.scatter_add_(0, index, contrib.imag)
-        return torch.complex(re, im)
-
-
-def _fftn(x, cpu_numpy: bool = False):
-    """3D FFT of the density grid. Real maps use ``rfftn``."""
-    import torch
-
-    global _NUMPY_FFTN
-    if not x.is_complex() and x.dtype == torch.float16:
-        x = x.to(torch.float32)
-    elif x.is_complex() and x.dtype not in (torch.complex64, torch.complex128):
-        x = x.to(torch.complex64)
-    if not x.is_complex():
-        return torch.fft.rfftn(x)
-    if cpu_numpy and not x.is_cuda:
-        if _NUMPY_FFTN is None:
-            _NUMPY_FFTN = _make_numpy_fftn()
-        return _NUMPY_FFTN.apply(x)
-    return torch.fft.fftn(x)
+from phridge.transforms.fourier.ten_eyck.gauss_newton import (
+    _gn_adp_row,
+    _gn_block_from_df,
+    _gn_scalar_from_df,
+    _u_star_gradient_transform,
+)
+from phridge.transforms.fourier.ten_eyck.grids import (
+    EIGHT_PI2,
+    TWO_PI2,
+    EngineParams,
+    ScatteringModel,
+    _fft_friendly,
+    _fftn,
+    _full_flat_to_rfft,
+    _scatter_add_complex,
+    _stamp_chunk,
+    default_gridding,
+)
+from phridge.transforms.fourier.ten_eyck.symmetry import site_multiplicities
 
 
 class StructureFactorEngine:
@@ -404,7 +113,7 @@ class StructureFactorEngine:
         self.mate_phase = None
         if (not params.p1_expand) and model.n_sym > 1:
             try:
-                from phridge.sfcalc.engine.sg_gather import agentsg_available, mate_tables
+                from phridge.sfcalc.backends.sg_gather import agentsg_available, mate_tables
 
                 if agentsg_available():
                     idx, ph = mate_tables(
@@ -513,56 +222,56 @@ class StructureFactorEngine:
         if backend == "torch":
             return "torch"
         if backend == "triton":
-            from phridge.sfcalc.engine.stamp_triton import triton_available
+            from phridge.sfcalc.backends.stamp_triton import triton_available
 
             if triton_available() and device.startswith("cuda"):
                 return "triton"
             raise RuntimeError("stamp_backend='triton' requires CUDA + triton")
         if backend == "numba":
-            from phridge.sfcalc.engine.stamp_numba import numba_available
+            from phridge.sfcalc.backends.stamp_numba import numba_available
 
             if numba_available() and not device.startswith(("cuda", "mps")):
                 return "numba"
             raise RuntimeError("stamp_backend='numba' requires CPU + numba")
         if backend == "cpp":
-            from phridge.sfcalc.engine.stamp_cpp import cpp_available
+            from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
             if cpp_available():
                 return "cpp"
             raise RuntimeError("stamp_backend='cpp' requires a C++ compiler")
         if backend == "cuda":
-            from phridge.sfcalc.engine.stamp_cuda import cuda_available
+            from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_available
 
             if cuda_available() and device.startswith("cuda"):
                 return "cuda"
             raise RuntimeError("stamp_backend='cuda' requires NVIDIA CUDA")
         if backend == "fast":
             if device.startswith("cuda"):
-                from phridge.sfcalc.engine.stamp_cuda import cuda_available
+                from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_available
 
                 if cuda_available():
                     return "cuda"
-            from phridge.sfcalc.engine.stamp_cpp import cpp_available
+            from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
             if cpp_available():
                 return "cpp"
             backend = "auto"
         if backend == "auto":
             if device.startswith("cuda"):
-                from phridge.sfcalc.engine.stamp_cuda import cuda_available
-                from phridge.sfcalc.engine.stamp_triton import triton_available
+                from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_available
+                from phridge.sfcalc.backends.stamp_triton import triton_available
 
                 if cuda_available():
                     return "cuda"
                 if triton_available():
                     return "triton"
             elif device.startswith("mps"):
-                from phridge.sfcalc.engine.stamp_cpp import cpp_available
+                from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_available
 
                 if cpp_available():
                     return "cpp"
             else:
-                from phridge.sfcalc.engine.stamp_numba import numba_available
+                from phridge.sfcalc.backends.stamp_numba import numba_available
 
                 if numba_available():
                     return "numba"
@@ -643,19 +352,19 @@ class StructureFactorEngine:
         """Sample the symmetry-expanded model onto the grid. Returns (complex) grid."""
         kind = self._stamp_kind()
         if kind == "triton":
-            from phridge.sfcalc.engine.stamp_triton import triton_density
+            from phridge.sfcalc.backends.stamp_triton import triton_density
 
             return triton_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
         if kind == "numba":
-            from phridge.sfcalc.engine.stamp_numba import numba_density
+            from phridge.sfcalc.backends.stamp_numba import numba_density
 
             return numba_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
         if kind == "cpp":
-            from phridge.sfcalc.engine.stamp_cpp import cpp_density
+            from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_density
 
             return cpp_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
         if kind == "cuda":
-            from phridge.sfcalc.engine.stamp_cuda import cuda_density
+            from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_density
 
             return cuda_density(self, sites_frac, occupancy, u_iso, u_star, fp, fdp)
         return self._density_torch(sites_frac, occupancy, u_iso, u_star, fp, fdp)
@@ -711,11 +420,11 @@ class StructureFactorEngine:
         torch = self.torch
         kind = self._stamp_kind()
         if kind == "cpp":
-            from phridge.sfcalc.engine.stamp_cpp import cpp_f_calc_numpy
+            from phridge.transforms.fourier.ten_eyck.stamp_cpp import cpp_f_calc_numpy
 
             return cpp_f_calc_numpy(self)
         if kind == "cuda":
-            from phridge.sfcalc.engine.stamp_cuda import cuda_f_calc_numpy
+            from phridge.transforms.fourier.ten_eyck.stamp_cuda import cuda_f_calc_numpy
 
             return cuda_f_calc_numpy(self)
         with torch.no_grad():
@@ -782,19 +491,19 @@ class StructureFactorEngine:
         names = ("site_frac", "occupancy", "u_iso", "u_star", "fp", "fdp")
         kind = self._stamp_kind()
         if kind == "numba":
-            from phridge.sfcalc.engine.stamp_numba import _vjp_numpy
+            from phridge.sfcalc.backends.stamp_numba import _vjp_numpy
 
             gx, gocc, gu, gustar, gfp, gfdp = _vjp_numpy(self, grad_rho, *params)
             arrays = (gx, gocc, gu, gustar, gfp, gfdp)
             return {k: np.asarray(a, dtype=np.float64) for k, a in zip(names, arrays)}
         if kind == "cpp":
-            from phridge.sfcalc.engine.stamp_cpp import _vjp_numpy as _vjp_cpp
+            from phridge.transforms.fourier.ten_eyck.stamp_cpp import _vjp_numpy as _vjp_cpp
 
             gx, gocc, gu, gustar, gfp, gfdp = _vjp_cpp(self, grad_rho, *params)
             arrays = (gx, gocc, gu, gustar, gfp, gfdp)
             return {k: np.asarray(a, dtype=np.float64) for k, a in zip(names, arrays)}
         if kind == "cuda":
-            from phridge.sfcalc.engine.stamp_cuda import _vjp_numpy as _vjp_cuda
+            from phridge.transforms.fourier.ten_eyck.stamp_cuda import _vjp_numpy as _vjp_cuda
 
             gx, gocc, gu, gustar, gfp, gfdp = _vjp_cuda(self, grad_rho, *params)
             arrays = (gx, gocc, gu, gustar, gfp, gfdp)
@@ -1048,29 +757,10 @@ class StructureFactorEngine:
             fp_diag[j] = _gn_scalar_from_df(dF_fp, wm, wp, e_m2iphi)
             fdp_diag[j] = _gn_scalar_from_df(dF_fdp, wm, wp, e_m2iphi)
 
-            if aniso[j]:
-                # U* : κ_μ = -2π² * (h⊗h)_μ with 2× off-diagonals; transform by symop
-                dF_u = np.zeros((6, n_h), dtype=np.complex128)
-                for si in range(s):
-                    e = j * s + si
-                    eph = np.exp(2j * math.pi * (h @ x_exp[e]))
-                    hh = np.stack(
-                        [h[:, 0] ** 2, h[:, 1] ** 2, h[:, 2] ** 2, 2 * h[:, 0] * h[:, 1], 2 * h[:, 0] * h[:, 2], 2 * h[:, 1] * h[:, 2]],
-                        axis=0,
-                    )  # (6, H)
-                    # ∂/∂U*_asu: chain through U*_exp = R U* R^T
-                    # d(huh)/dU*_asu via gradient transform
-                    gtmx = _u_star_gradient_transform(rot[si])  # (6,6)
-                    kappa = -TWO_PI2 * (gtmx @ hh)  # (6, H)
-                    dF_u += kappa * (a_exp[e] * eph)[None, :]
-                u_star_blocks[j] = _gn_block_from_df(dF_u, wm, wp, e_m2iphi)
-            else:
-                dF_uiso = np.zeros(n_h, dtype=np.complex128)
-                for si in range(s):
-                    e = j * s + si
-                    eph = np.exp(2j * math.pi * (h @ x_exp[e]))
-                    dF_uiso += a_exp[e] * eph * (-TWO_PI2 * dstar2)
-                u_iso_diag[j] = _gn_scalar_from_df(dF_uiso, wm, wp, e_m2iphi)
+            u_star_blocks[j], u_iso_diag[j] = _gn_adp_row(
+                j, bool(aniso[j]), s, h, x_exp, a_exp, rot, u_star, u_iso, dstar2, wm, wp, e_m2iphi,
+            )
+
 
         return {
             "site_frac": site_blocks,
@@ -1082,64 +772,3 @@ class StructureFactorEngine:
         }
 
 
-def _gn_block_from_df(dF, wm, wp, e_m2iphi):
-    """GN block from dF[param, refl] complex Jacobians."""
-    n = dF.shape[0]
-    out = np.zeros((n, n), dtype=np.float64)
-    for a in range(n):
-        for b in range(a, n):
-            cprod = np.conj(dF[a]) * dF[b]
-            sprod = dF[a] * dF[b] * e_m2iphi
-            val = float(np.sum(wp * cprod.real + wm * sprod.real))
-            out[a, b] = out[b, a] = val
-    return out
-
-
-def _gn_scalar_from_df(dF, wm, wp, e_m2iphi):
-    cprod = np.conj(dF) * dF
-    sprod = dF * dF * e_m2iphi
-    return float(np.sum(wp * cprod.real + wm * sprod.real))
-
-
-def _u_star_gradient_transform(R):
-    """6x6 matrix mapping d(huh)/dU*_exp contributions back to d/dU*_asu.
-
-    U*_exp = R U*_asu R^T; returns G such that kappa_asu = G @ kappa_exp_coeffs
-    where kappa_exp_coeffs = (h'h', k'k', l'l', 2h'k', 2h'l', 2k'l') for h' = R^T h
-    ... actually we use cctbx tensor_rank_2::gradient_transform_matrix convention:
-    d_target/dU*_asu = G^T @ d_target/dU*_exp, so kappa_asu = G @ kappa_exp when
-    dF ∝ kappa · (a e^{iφ}).
-    """
-    # Build G where vec(U_exp) related; for sym_mat3 packed (6,):
-    # huh = h^T U_exp h = h^T R U R^T h = (R^T h)^T U (R^T h)
-    # so kappa_asu_μ = -2π² * m_μ(R^T h) with m = (hh,kk,ll,2hk,2hl,2kl)
-    # Equivalently kappa_asu = G @ (-2π² m(h_exp)) with h_exp = h (same miller in
-    # crystal frame) and U_exp = R U R^T means m(h) on U_exp = m(R^T h) on U_asu.
-    # Easiest: express m_asu(h) = m(R^T h) via the 6x6 that maps m(h_exp)->m_asu.
-    # We pass hh computed from crystal-frame h for U_exp; need ∂huh/∂U_asu.
-    # huh = h^T R U R^T h = (R^T h)^T U (R^T h). Let p = R^T h.
-    # ∂huh/∂U_ij packed = m(p). So kappa_asu = -2π² m(R^T h) = G @ (-2π² m(h))
-    # with G mapping m(h) -> m(R^T h)... no that's not a linear map on m(h) alone
-    # independent of h. Compute G as gradient_transform: d/dU_asu = G^T d/dU_exp
-    # where U_exp = R U_asu R^T.
-    G = np.zeros((6, 6), dtype=np.float64)
-    # Finite basis: for each ASU basis matrix E_μ, U_exp = R E_μ R^T, read packed
-    basis = [
-        np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=np.float64),
-        np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]], dtype=np.float64),
-        np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]], dtype=np.float64),
-        np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]], dtype=np.float64),
-        np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]], dtype=np.float64),
-        np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0]], dtype=np.float64),
-    ]
-    for mu, E in enumerate(basis):
-        Uexp = R @ E @ R.T
-        # pack (11,22,33,12,13,23); off-diagonals stored as full U_ij (not doubled)
-        packed = np.array([Uexp[0, 0], Uexp[1, 1], Uexp[2, 2], Uexp[0, 1], Uexp[0, 2], Uexp[1, 2]])
-        G[:, mu] = packed  # U_exp_packed = G @ U_asu_packed ... check off-diag
-    # For off-diagonal basis E_3 has U_01=U_10=1, packed_asu[3]=1 meaning U_01=1.
-    # U_exp = R E R^T, packed_exp = G @ e_mu. Then huh = m(h)·U_exp_packed with
-    # m = (hh,kk,ll,2hk,2hl,2kl). And huh = m_asu · U_asu with m_asu = G.T @ m.
-    # So kappa_asu = -2π² G.T @ m(h) when kappa_exp = -2π² m(h).
-    # Thus we want gtmx such that kappa_asu = gtmx @ hh_as_m, i.e. gtmx = G.T
-    return G.T

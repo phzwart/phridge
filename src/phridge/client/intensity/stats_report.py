@@ -145,7 +145,7 @@ def fit_aniso_scale(
     (too few reflections, non-positive values, a rank-deficient set of indices). This is
     reporting-only and must never cost a macro cycle.
     """
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
+    from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
     out = AnisoScale()
     hkl = np.asarray(miller_indices, dtype=np.float64)

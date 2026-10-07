@@ -21,8 +21,8 @@ from phridge.contrib.spatial_sigmaa_v2.per_atom import (
     luzzati_d_iso,
     modified_model,
 )
-from phridge.sfcalc.engine.cell import sym6_to_mat
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.cell import sym6_to_mat
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
 
 TWO_PI = 2.0 * math.pi
 TWO_PI2 = 2.0 * math.pi * math.pi

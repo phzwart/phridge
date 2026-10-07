@@ -21,8 +21,8 @@ from phridge.contrib.spatial_sigmaa_v2.moments import (
 )
 from phridge.contrib.spatial_sigmaa_v2.per_atom import luzzati_d_iso
 from phridge.contrib.spatial_sigmaa_v2.target import intensity_variance_limit
-from phridge.sfcalc.engine.cell import orthogonalization_matrix, sym6_to_mat
-from phridge.sfcalc.engine.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix, sym6_to_mat
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
 
 TWO_PI = 2.0 * np.pi
 TWO_PI2 = 2.0 * np.pi * np.pi

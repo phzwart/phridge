@@ -255,8 +255,8 @@ def campaign_with_engine(hmax: int = 1, n_atoms: int = 4) -> np.ndarray:
     ``multixtal.synthetic`` uses for its benchmark atoms.
     """
     from phridge.legacy.multixtal.structure import f_calc_s_g
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     sites = helix_sites(n_atoms)
     hkl = half_set(hmax)

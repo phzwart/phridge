@@ -51,7 +51,7 @@ intensity_ll = "phridge.contrib.intensity_ll:register"
 [project.entry-points."phridge.ops"]
 spatial_sigmaa_v2 = "phridge.contrib.spatial_sigmaa_v2:register"
 multixtal = "phridge.legacy.multixtal:register"
-nufft_sf = "phridge.contrib.nufft_sf:register"
+nufft_sf = "phridge.transforms.fourier.nufft:register"
 ensemble = "phridge.contrib.ensemble:register"
 
 [tool.hatch.metadata]
@@ -71,7 +71,7 @@ markers = [
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/phridge/sfcalc/engine/stamp_cpp/kernels.h" = "phridge/sfcalc/engine/stamp_cpp/kernels.h"
-"src/phridge/sfcalc/engine/stamp_cpp/stamp.cpp" = "phridge/sfcalc/engine/stamp_cpp/stamp.cpp"
-"src/phridge/sfcalc/engine/stamp_cuda/kernels.cuh" = "phridge/sfcalc/engine/stamp_cuda/kernels.cuh"
-"src/phridge/sfcalc/engine/stamp_cuda/stamp.cu" = "phridge/sfcalc/engine/stamp_cuda/stamp.cu"
+"src/phridge/transforms/fourier/ten_eyck/stamp_cpp/kernels.h" = "phridge/transforms/fourier/ten_eyck/stamp_cpp/kernels.h"
+"src/phridge/transforms/fourier/ten_eyck/stamp_cpp/stamp.cpp" = "phridge/transforms/fourier/ten_eyck/stamp_cpp/stamp.cpp"
+"src/phridge/transforms/fourier/ten_eyck/stamp_cuda/kernels.cuh" = "phridge/transforms/fourier/ten_eyck/stamp_cuda/kernels.cuh"
+"src/phridge/transforms/fourier/ten_eyck/stamp_cuda/stamp.cu" = "phridge/transforms/fourier/ten_eyck/stamp_cuda/stamp.cu"

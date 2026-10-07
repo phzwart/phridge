@@ -408,7 +408,7 @@ def test_cctbx_r_fields_computed_from_the_scaffold_are_flagged():
 def _aniso_fixture():
     """An AnisoScale with a known tensor, built the way the engine builds it."""
     from phridge.client.intensity.stats_report import fit_aniso_scale
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
+    from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
     cell = (78.1, 78.1, 37.0, 90.0, 90.0, 90.0)
     b = np.diag([-1.5, -1.5, 3.0])

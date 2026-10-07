@@ -17,7 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("pytorch_finufft")
 
-from phridge.sfcalc.engine.nufft_backend import nufft_type1, nufft_type2  # noqa: E402
+from phridge.sfcalc.backends.nufft_backend import nufft_type1, nufft_type2  # noqa: E402
 
 
 def _fft_mode_indices(n: int) -> np.ndarray:
@@ -128,7 +128,7 @@ def _set_uniform_u_iso(xs, u_iso: float = 0.04):
 
 def _nufft_engine(xs, hkl, d_min, **kwargs):
     from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
     from phridge.sfcalc.ops import scattering_model
 
     model = scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
@@ -138,49 +138,15 @@ def _nufft_engine(xs, hkl, d_min, **kwargs):
 
 def _direct_f_calc(model, hkl, atom_indices=None) -> np.ndarray:
     """Exact expanded-atom summation for a subset of ASU atoms."""
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian, sym6_to_mat
-    from phridge.sfcalc.engine.nufft_engine import TWO_PI2, _form_factors
+    from phridge.transforms.fourier.direct import direct_f_calc
 
-    idx = np.arange(model.n_scatterers) if atom_indices is None else np.asarray(atom_indices, dtype=np.int64)
-    hkl = np.asarray(hkl, dtype=np.float64).reshape(-1, 3)
-    dstar = reciprocal_cartesian(model.unit_cell, hkl)
-    dstar2 = np.sum(dstar**2, axis=1)
-    stol2 = dstar2 / 4.0
-    ff_type = _form_factors(model.gauss_a, model.gauss_b, model.gauss_c, stol2)
-    rot = np.asarray(model.rot, dtype=np.float64)
-    trans = np.asarray(model.trans, dtype=np.float64)
-    o = None
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
-
-    o = orthogonalization_matrix(model.unit_cell)
-    f = np.zeros(hkl.shape[0], dtype=np.complex128)
-    n_sym = rot.shape[0]
-    for j in idx:
-        ga = ff_type[int(model.type_index[j])]
-        fj = ga + float(model.fp[j]) + 1j * float(model.fdp[j])
-        w = float(model.occupancy[j]) * float(model.multiplicity[j]) / float(n_sym)
-        u_iso = float(model.u_iso[j])
-        aniso = bool(model.anisotropic[j])
-        if aniso:
-            u_mat = sym6_to_mat(np.asarray(model.u_star[j : j + 1], dtype=np.float64))[0]
-        for s in range(n_sym):
-            x = rot[s] @ model.sites_frac[j] + trans[s]
-            if aniso:
-                u_sym = rot[s] @ u_mat @ rot[s].T
-                u_cart = o @ u_sym @ o.T
-                dw = np.exp(-TWO_PI2 * np.einsum("hi,ij,hj->h", dstar, u_cart, dstar))
-            else:
-                dw = np.exp(-TWO_PI2 * u_iso * dstar2)
-            with np.errstate(all="ignore"):
-                phase = np.exp(2j * math.pi * (hkl @ x))
-            f += w * fj * dw * phase
-    return f
+    return direct_f_calc(model, hkl, atom_indices)
 
 
 def _toy_carbon_p1(n_atoms: int = 8, u_iso: float = 0.04, seed: int = 0, random_u: bool = False):
     """Minimal all-carbon P1 model (no cctbx)."""
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     rng = np.random.default_rng(seed)
     rot, trans = identity_ops()
@@ -209,7 +175,7 @@ def _toy_carbon_p1(n_atoms: int = 8, u_iso: float = 0.04, seed: int = 0, random_
 
 
 def _miller_sphere(d_min: float, unit_cell, max_index: int = 8) -> np.ndarray:
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
     hs = []
     for h in range(-max_index, max_index + 1):
@@ -225,7 +191,7 @@ def _miller_sphere(d_min: float, unit_cell, max_index: int = 8) -> np.ndarray:
 
 def test_identical_atoms_n0_vs_direct_sum():
     """Isolates spreader/grid/gather/f_t without cctbx."""
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_carbon_p1(n_atoms=8, u_iso=0.04, seed=1)
     d_min = 2.0
@@ -275,7 +241,7 @@ def test_identical_atoms_n0_symmetry(space_group):
 
 def test_plan_bound_is_honest_direct():
     """Per-group relative error vs direct sum of that group's atoms (no cctbx)."""
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_carbon_p1(n_atoms=16, u_iso=0.04, seed=4, random_u=True)
     d_min = 2.0
@@ -310,8 +276,8 @@ def test_plan_bound_is_honest():
 
 def _toy_mixed_iso(n_repeat: int = 3, seed: int = 0):
     """C/N/O/S isotropic atoms with random U."""
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     rng = np.random.default_rng(seed)
     n_types = 4
@@ -357,9 +323,9 @@ def _toy_mixed_iso(n_repeat: int = 3, seed: int = 0):
 
 def _toy_aniso_anom(n_atoms: int = 10, seed: int = 5, se_like: bool = False):
     """Mixed iso/aniso with anomalous scattering."""
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     rng = np.random.default_rng(seed)
     rot, trans = identity_ops()
@@ -410,7 +376,7 @@ def _toy_aniso_anom(n_atoms: int = 10, seed: int = 5, se_like: bool = False):
 
 @pytest.mark.parametrize("d_min", [2.0, 1.5, 1.0])
 def test_mixed_iso_nmax_vs_direct(d_min):
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_mixed_iso(n_repeat=3, seed=6)
     hmax = int(np.ceil(max(model.unit_cell[:3]) / d_min) + 1)
@@ -449,7 +415,7 @@ def test_mixed_iso_cctbx():
 
 
 def test_aniso_anomalous_vs_direct():
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     d_min = 1.5
     for se_like in (False, True):
@@ -481,7 +447,7 @@ def test_aniso_anomalous_cctbx():
 
 
 def test_chunking_invariance():
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_mixed_iso(n_repeat=3, seed=10)
     d_min = 2.0
@@ -497,8 +463,8 @@ def test_chunking_invariance():
 
 
 def test_cross_engine_vs_stamp():
-    from phridge.sfcalc.engine.engine import EngineParams, StructureFactorEngine
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.ten_eyck.engine import EngineParams, StructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     # Identical atoms: NUFFT is exact at n_max=0. Stamp at quality_factor=1000 on the
     # default 1/3 grid is only ~8e-4 vs direct; a slightly finer grid keeps the
@@ -531,7 +497,7 @@ def _rel_norm(a: np.ndarray, b: np.ndarray) -> float:
 
 def test_gradients_match_finite_difference():
     """Autograd gradients vs central FD of Q = Σ Re[conj(G) F] (truncated model)."""
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_mixed_iso(n_repeat=2, seed=12)
     d_min = 2.0
@@ -610,7 +576,7 @@ def test_gradients_match_cctbx_direct():
 
 
 def test_jvp_finite_difference():
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     model = _toy_mixed_iso(n_repeat=2, seed=13)
     d_min = 2.0
@@ -637,7 +603,7 @@ def test_jvp_finite_difference():
 
 
 def test_register_is_idempotent():
-    from phridge.contrib.nufft_sf import CALC_OP, GRAD_OP, register
+    from phridge.transforms.fourier.nufft import CALC_OP, GRAD_OP, register
     from phridge.ops import get_op, list_ops
 
     register()
@@ -652,7 +618,7 @@ def test_register_is_idempotent():
 def test_options_pydantic_accept_reject():
     from pydantic import ValidationError
 
-    from phridge.contrib.nufft_sf.options import NufftEngineOptions
+    from phridge.transforms.fourier.nufft.options import NufftEngineOptions
 
     NufftEngineOptions(d_min=2.0)
     NufftEngineOptions(engine="nufft", d_min=1.5, tau=1e-3, n_max=1)
@@ -665,7 +631,7 @@ def test_options_pydantic_accept_reject():
 
 
 def test_job_envelope_nufft_sf_calc():
-    from phridge.contrib.nufft_sf import CALC_OP, register
+    from phridge.transforms.fourier.nufft import CALC_OP, register
     from phridge.contracts.models import JobEnvelope, JobStatus, ObjectKind, ObjectRef, SCHEMA_VERSION
 
     register()
@@ -687,7 +653,7 @@ def test_job_envelope_nufft_sf_calc():
 
 
 def test_nufft_sf_calc_op_smoke():
-    from phridge.contrib.nufft_sf.op import nufft_sf_calc
+    from phridge.transforms.fourier.nufft.op import nufft_sf_calc
     from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
     from phridge.contracts.packing import PackedMiller
     from phridge.contracts.packing import PackedXray
@@ -722,7 +688,7 @@ def test_nufft_sf_calc_op_smoke():
 
 
 def test_nufft_sf_bind_reuse():
-    from phridge.contrib.nufft_sf.op import nufft_sf_bind, nufft_sf_calc
+    from phridge.transforms.fourier.nufft.op import nufft_sf_bind, nufft_sf_calc
     from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
     from phridge.contracts.packing import PackedMiller
     from phridge.contracts.packing import PackedXray

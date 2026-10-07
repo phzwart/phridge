@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import orthogonalization_matrix
+from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
 
 def site_multiplicities(

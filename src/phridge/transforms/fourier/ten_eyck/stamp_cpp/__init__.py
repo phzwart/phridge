@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import sym6_to_mat
+from phridge.transforms.fourier.ten_eyck.cell import sym6_to_mat
 
 _CPP_OK: bool | None = None
 _MOD = None
@@ -363,7 +363,7 @@ def cpp_f_calc_numpy(engine) -> np.ndarray:
     m = engine.model
     with torch.no_grad():
         rho = _density_cpp_forward(engine, m.sites_frac, m.occupancy, m.u_iso, m.u_star, m.fp, m.fdp)
-        from phridge.sfcalc.engine.engine import _fftn
+        from phridge.transforms.fourier.ten_eyck.engine import _fftn
 
         ft = _fftn(rho, engine.params.cpu_numpy_fft).reshape(-1)
         f = engine._f_from_fft(ft)

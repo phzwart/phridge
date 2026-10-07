@@ -60,9 +60,9 @@ from phridge.contrib.spatial_sigmaa_v2.target import (
     rice_nll_intensity,
 )
 from phridge.contracts.models import CCTBX_TYPES, SpatialSigmaAV2, SpatialSigmaAV2Result
-from phridge.sfcalc.engine.cell import orthogonalization_matrix
-from phridge.sfcalc.engine.engine import ScatteringModel
-from phridge.sfcalc.engine.symmetry import identity_ops
+from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
 GENERATED = (
     Path(__file__).resolve().parents[2] / "src" / "phridge" / "contracts" / "schema" / "generated"
@@ -766,7 +766,7 @@ from phridge.contrib.spatial_sigmaa_v2.fisher import (
 )
 from phridge.contrib.spatial_sigmaa_v2.op import OP_NAME as V2_STEP_OP
 from phridge.ops import get_op
-from phridge.sfcalc.engine.cell import orthogonalization_matrix
+from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
 
 def test_register_binds_step_op():

@@ -11,8 +11,8 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import orthogonalization_matrix
-from phridge.sfcalc.engine.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
 
 EIGHT_PI2 = 8.0 * math.pi * math.pi
 TWO_PI2 = 2.0 * math.pi * math.pi

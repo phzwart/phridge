@@ -75,8 +75,10 @@ from phridge.shims.cctbx.symmetry import crystal_from_cctbx, crystal_to_cctbx
 from phridge.shims.cctbx.xray_structure import (
     from_robject,
     packed_order,
+    random_xray_structure,
     to_robject,
     xray_from_cctbx,
+    xray_structure_from_pdb,
     xray_to_cctbx,
 )
 
@@ -113,6 +115,7 @@ __all__ = [
     "miller_to_cctbx",
     "model_geometry",
     "packed_order",
+    "random_xray_structure",
     "reflections_from_mtz",
     "reflections_to_mtz",
     "restraints_from_cctbx",
@@ -125,6 +128,7 @@ __all__ = [
     "to_canonical",
     "to_robject",
     "xray_from_cctbx",
+    "xray_structure_from_pdb",
     "xray_to_cctbx",
 ]
 

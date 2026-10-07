@@ -139,10 +139,10 @@ the handle — rebuild-every-RPC is not these numbers.
 # worker (isolated Redis db)
 KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner \
   --redis-url redis://127.0.0.1:6379/1 --device cpu \
-  --preload phridge.contrib.nufft_sf --consumer nufft-bench
+  --preload phridge.transforms.fourier.nufft --consumer nufft-bench
 
 # Phenix / cctbx client
-PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark \
+PYTHONPATH=src phenix.python -m phridge.transforms.fourier.nufft.benchmark \
   --redis-url redis://127.0.0.1:6379/1 \
   --cases p1,p212121,r3,f423 --n-synthetic 1000 --d-min 2.0 \
   --device cpu --dtypes float32 --repeats 3 --no-nufft \

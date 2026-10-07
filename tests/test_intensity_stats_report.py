@@ -359,7 +359,7 @@ def _aniso_problem(b_cart_mat, cell, n=6000, seed=0, k_scale=1.0):
     conversion wrong cannot pass by luck -- the monoclinic cell has a non-diagonal O,
     which mixes the off-diagonal components.
     """
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
+    from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
     o_inv = np.linalg.inv(orthogonalization_matrix(cell))
     u_star = o_inv @ (np.asarray(b_cart_mat, dtype=np.float64) / (8 * np.pi**2)) @ o_inv.T

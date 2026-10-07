@@ -4,14 +4,18 @@ Never imports cctbx. Everything cctbx would normally supply (symmetry
 operators, form-factor Gaussians) arrives as arrays from the client.
 """
 
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
-from phridge.sfcalc.engine.nufft_engine import GroupPlan, NufftEngineParams, NufftStructureFactorEngine
+from __future__ import annotations
+
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.operator import register as register_fourier
 
 __all__ = [
     "EngineParams",
-    "GroupPlan",
-    "NufftEngineParams",
-    "NufftStructureFactorEngine",
     "ScatteringModel",
     "StructureFactorEngine",
+    "register",
 ]
+
+
+def register() -> None:
+    register_fourier()

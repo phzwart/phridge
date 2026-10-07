@@ -256,7 +256,7 @@ class WilsonTensor:
 
 def orthogonalization(unit_cell: Sequence[float]) -> np.ndarray:
     """Cartesian-from-fractional matrix ``O`` (``x_cart = O x_frac``)."""
-    from phridge.sfcalc.engine.cell import orthogonalization_matrix
+    from phridge.transforms.fourier.ten_eyck.cell import orthogonalization_matrix
 
     return orthogonalization_matrix(unit_cell)
 
@@ -268,7 +268,7 @@ def reciprocal_cartesian(unit_cell: Sequence[float], hkl: Any) -> np.ndarray:
     isotropic path uses to machine precision, for triclinic cells too. Raw integer
     indices would not.
     """
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian as _rc
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian as _rc
 
     return _rc(unit_cell, np.asarray(hkl, dtype=np.float64))
 

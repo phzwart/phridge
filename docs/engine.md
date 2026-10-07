@@ -23,9 +23,9 @@ tensor, so the two conventions line up with no factors of two.
 
 | Stage | Where | How |
 |-------|-------|-----|
-| $F_h(\mathbf{x})$ | `phridge.sfcalc.engine` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
+| $F_h(\mathbf{x})$ | `phridge.transforms.fourier.ten_eyck` | atoms sampled as real-space Gaussians on a grid, `torch.fft.fftn`, gather at $h$ |
 | $G_h = \partial g/\partial F_h$ | `phridge.sfcalc.targets` | autograd of the target w.r.t. the complex `f_calc` tensor |
-| $\partial F_h/\partial x$ chain | `phridge.sfcalc.engine` | Agarwal map: scatter $G_h$ onto FFT[-h], $N\cdot\mathrm{IFFT}$, stamp VJP (no autograd tape) |
+| $\partial F_h/\partial x$ chain | `phridge.transforms.fourier.ten_eyck` | Agarwal map: scatter $G_h$ onto FFT[-h], $N\cdot\mathrm{IFFT}$, stamp VJP (no autograd tape) |
 | packing for a minimizer | `phridge.sfcalc.client` | cctbx `packing_order_convention == 2`, cartesian site / $U_{cart}$ gradients |
 
 ## Forward model

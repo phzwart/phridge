@@ -251,7 +251,7 @@ def sigma_omit_raw(
 
     with Debye–Waller ``e^{-4π² U d*²}`` (``B = 8π²U`` ⇒ ``e^{-B s²/2}`` with ``s²=d*²``).
     """
-    from phridge.sfcalc.engine.cell import reciprocal_cartesian
+    from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
     h = np.asarray(hkl, dtype=np.float64).reshape(-1, 3)
     n_h = h.shape[0]
@@ -273,7 +273,7 @@ def sigma_omit_raw(
         w0 = float(occupancy[j]) * float(multiplicity[j]) / float(n_sym)
         for si in range(n_sym):
             if anisotropic[j]:
-                from phridge.sfcalc.engine.cell import sym6_to_mat
+                from phridge.transforms.fourier.ten_eyck.cell import sym6_to_mat
 
                 u_mat = sym6_to_mat(u_star[j : j + 1])[0]
                 u_sym = rot[si] @ u_mat @ rot[si].T

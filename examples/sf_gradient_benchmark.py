@@ -2,7 +2,7 @@
 """LS site-grad check vs CCTBX direct (cosine / R(F)).
 
 Timing tables in ``examples/sf_gradient_benchmark.md`` are produced by
-``phridge.contrib.nufft_sf.benchmark`` (P1 / P212121 / R3 / F423, kept
+``phridge.transforms.fourier.nufft.benchmark`` (P1 / P212121 / R3 / F423, kept
 engine, stamp backends). This script is the older in-process LS harness::
 
     python examples/sf_gradient_benchmark.py --device mps

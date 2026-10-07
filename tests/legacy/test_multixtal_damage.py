@@ -120,8 +120,8 @@ class _Crystal:
 
 
 def _tiny_model(*, fdp: float = 0.0, n: int = 3):
-    from phridge.sfcalc.engine.engine import ScatteringModel
-    from phridge.sfcalc.engine.symmetry import identity_ops
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     rot, trans = identity_ops()
     rng = np.random.default_rng(1)
@@ -150,7 +150,7 @@ def _tiny_model(*, fdp: float = 0.0, n: int = 3):
 
 def _phase1_bundle(n_data: int = 1, n_h: int = 8, seed: int = 0):
     from phridge.legacy.multixtal.structure import f_calc_s_g
-    from phridge.sfcalc.engine.engine import EngineParams
+    from phridge.transforms.fourier.ten_eyck.engine import EngineParams
 
     model = _tiny_model(fdp=0.0, n=3)
     hkl = np.array(

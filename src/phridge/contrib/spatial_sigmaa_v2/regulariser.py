@@ -13,7 +13,7 @@ import numpy as np
 
 from phridge.contrib.spatial_sigmaa_v2.fields import FieldBasis
 from phridge.contrib.spatial_sigmaa_v2.moments import form_factors, model_temperature, resolution_s2
-from phridge.sfcalc.engine.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
 
 
 @dataclass

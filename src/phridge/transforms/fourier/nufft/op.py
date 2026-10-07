@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.nufft_sf.options import NufftEngineOptions
+from phridge.transforms.fourier.nufft.options import NufftEngineOptions
 from phridge.ops import register_op
 from phridge.contracts.packing import PackedMiller
 from phridge.contracts.packing import PackedXray
@@ -45,7 +45,7 @@ def _params(params: Any) -> NufftEngineOptions:
 
 
 def _engine(xray: PackedXray, table: PackedScatteringTable, hkl: np.ndarray, params: Any):
-    from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
+    from phridge.transforms.fourier.nufft.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
 
     opts = _params(params)
     dtype = opts.dtype

@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import reciprocal_cartesian
+from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
 
 _TWO_PI = 2.0 * np.pi
 

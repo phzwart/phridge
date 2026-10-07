@@ -19,7 +19,7 @@ from phridge.sfcalc.client import (  # noqa: E402
     RemoteStructureFactors,
     RemoteTargetFunctor,
 )
-from phridge.sfcalc.engine import EngineParams, StructureFactorEngine  # noqa: E402
+from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import scattering_model  # noqa: E402
 from phridge.sfcalc.targets import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
 
@@ -692,7 +692,7 @@ def test_gauss_newton_blocks_match_hvp_at_nonzero_residual():
 
 def test_numba_stamp_matches_torch_f_and_grads():
     """CPU Numba per-atom stamp vs torch chunk path (F + first-order grads)."""
-    from phridge.sfcalc.engine.stamp_numba import numba_available
+    from phridge.sfcalc.backends.stamp_numba import numba_available
 
     if not numba_available():
         pytest.skip("numba required")
@@ -727,7 +727,7 @@ def test_numba_stamp_matches_torch_f_and_grads():
 @pytest.mark.gpu
 def test_triton_stamp_matches_torch_f_and_site_grads():
     """CUDA Triton iso forward vs torch stamp; grads use torch VJP either way."""
-    from phridge.sfcalc.engine.stamp_triton import triton_available
+    from phridge.sfcalc.backends.stamp_triton import triton_available
 
     if not torch.cuda.is_available() or not triton_available():
         pytest.skip("CUDA + triton required")

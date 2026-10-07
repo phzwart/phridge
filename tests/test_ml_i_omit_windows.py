@@ -31,7 +31,7 @@ from phridge.contracts.models import CrystalSymmetry, ObservationType, Scatterer
 from phridge.ops import get_implementation, get_op  # noqa: E402
 from phridge.contracts.packing import PackedMiller  # noqa: E402
 from phridge.contracts.packing import PackedXray  # noqa: E402
-from phridge.sfcalc.engine import EngineParams, StructureFactorEngine  # noqa: E402
+from phridge.transforms.fourier.ten_eyck import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import _observations, scattering_model  # noqa: E402
 from phridge.sfcalc.packing import PackedScatteringTable  # noqa: E402
 from phridge.sfcalc.targets import Observations  # noqa: E402

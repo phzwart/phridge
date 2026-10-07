@@ -11,8 +11,8 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import reciprocal_cartesian, sym6_to_mat
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian, sym6_to_mat
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
 
 TWO_PI2 = 2.0 * math.pi * math.pi
 TWO_PI = 2.0 * math.pi

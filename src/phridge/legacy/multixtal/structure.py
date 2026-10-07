@@ -12,7 +12,7 @@ from typing import Any, Optional, Sequence
 import numpy as np
 
 from phridge.legacy.multixtal.friedel import s_g_from_real_and_full
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel, StructureFactorEngine
 
 
 def model_with_cell(model: ScatteringModel, unit_cell: Sequence[float], sites_frac: np.ndarray) -> ScatteringModel:

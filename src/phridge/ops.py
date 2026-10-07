@@ -43,7 +43,10 @@ def register_manifest(
     """Store a plugin manifest. When ``impl`` is given, also bind it."""
     _MANIFESTS[m.name] = m
     if impl is not None:
-        register_impl(m.name, impl)
+        if m.name in _SPECS:
+            register_impl(m.name, impl)
+        else:
+            _IMPLS[m.name] = impl
     return m
 
 

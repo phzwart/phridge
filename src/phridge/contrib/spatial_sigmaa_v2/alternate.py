@@ -29,8 +29,8 @@ from phridge.contrib.spatial_sigmaa_v2.packing import PackedSpatialSigmaAV2, Pac
 from phridge.contrib.spatial_sigmaa_v2.per_atom import EIGHT_PI2, iso_u_star, luzzati_d_iso
 from phridge.contrib.spatial_sigmaa_v2.regulariser import regulariser
 from phridge.contrib.spatial_sigmaa_v2.target import rice_nll_intensity
-from phridge.sfcalc.engine.cell import reciprocal_cartesian
-from phridge.sfcalc.engine.engine import ScatteringModel
+from phridge.transforms.fourier.ten_eyck.cell import reciprocal_cartesian
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
 
 
 @dataclass

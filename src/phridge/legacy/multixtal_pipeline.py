@@ -29,7 +29,7 @@ from phridge.legacy.multixtal.options import MultixtalOptions
 from phridge.legacy.multixtal.residuals import mate_mean, normalized_residuals
 from phridge.legacy.multixtal.selector import PopulationSelector
 from phridge.legacy.multixtal.structure import f_calc_s_g, resolution_s2, s_hat
-from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel
+from phridge.transforms.fourier.ten_eyck.engine import EngineParams, ScatteringModel
 
 
 @dataclass

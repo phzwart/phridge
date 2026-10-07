@@ -13,14 +13,14 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.sfcalc.engine.cell import (
+from phridge.transforms.fourier.ten_eyck.cell import (
     orthogonalization_matrix,
     reciprocal_cartesian,
     sym6_to_mat,
     u_star_to_cart,
 )
-from phridge.sfcalc.engine.engine import ScatteringModel, _fft_friendly
-from phridge.sfcalc.engine.nufft_backend import nufft_available, nufft_type1
+from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel, _fft_friendly
+from phridge.sfcalc.backends.nufft_backend import nufft_available, nufft_type1
 
 TWO_PI2 = 2.0 * math.pi * math.pi
 log = logging.getLogger(__name__)

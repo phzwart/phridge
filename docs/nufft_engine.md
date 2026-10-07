@@ -47,7 +47,7 @@ This bound drives automatic U-shell construction (`GroupPlan.from_model`).
 ## API
 
 ```python
-from phridge.sfcalc.engine import NufftEngineParams, NufftStructureFactorEngine, GroupPlan
+from phridge.transforms.fourier.ten_eyck import NufftEngineParams, NufftStructureFactorEngine, GroupPlan
 
 eng = NufftStructureFactorEngine(model, hkl, NufftEngineParams(d_min=2.0, tau=1e-4, n_max=2, eps=1e-6))
 f = eng.f_calc_numpy()
@@ -73,7 +73,7 @@ large ADP changes.
 ## Contrib ops
 
 ```python
-from phridge.contrib.nufft_sf import register
+from phridge.transforms.fourier.nufft import register
 register()  # or pip install + worker entry point phridge.ops:nufft_sf
 
 # inputs: xray, table, hkl, params (json NufftEngineOptions)
@@ -101,10 +101,10 @@ redis-server --daemonize yes
 
 # torch worker (mamba / conda with pytorch-finufft)
 KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner \
-    --device cpu --preload phridge.contrib.nufft_sf
+    --device cpu --preload phridge.transforms.fourier.nufft
 
 # cctbx client
-PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark \
+PYTHONPATH=src phenix.python -m phridge.transforms.fourier.nufft.benchmark \
     --redis-url redis://localhost:6379/0 \
     --cases 1ee2,6czg,synthetic \
     --d-min 2.5,2.0,1.5 \
@@ -115,7 +115,7 @@ PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark \
 In-process (same interpreter has both cctbx and FINUFFT):
 
 ```bash
-PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark \
+PYTHONPATH=src python -m phridge.transforms.fourier.nufft.benchmark \
     --cases 1ee2,6czg,synthetic --d-min 2.5,2.0,1.5 --device cpu
 ```
 
@@ -123,7 +123,7 @@ Results (this environment has no cctbx and no CUDA; 1ee2 / 6czg / cctbx-direct
 rows were skipped. Re-run the commands above on a cctbx+CUDA box to fill the
 full table):
 
-    PYTHONPATH=src python -m phridge.contrib.nufft_sf.benchmark --cases synthetic --d-min 2.5 --device cpu --repeats 3 --n-synthetic 80
+    PYTHONPATH=src python -m phridge.transforms.fourier.nufft.benchmark --cases synthetic --d-min 2.5 --device cpu --repeats 3 --n-synthetic 80
 
 | engine | case | d_min | device | n_atoms | n_refl | n_groups | T | R(F) vs cctbx direct | t(F) | t(F+grad) | peak mem (MB) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -142,8 +142,8 @@ the stamp engine at equal `R(F)` on the largest case.
 
 Results (fill after running the commands above):
 
-    KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner --device cpu --preload phridge.contrib.nufft_sf
-    PYTHONPATH=src phenix.python -m phridge.contrib.nufft_sf.benchmark --redis-url redis://127.0.0.1:6379/1 --cases synthetic --d-min 2.0 --device cpu --repeats 3
+    KMP_DUPLICATE_LIB_OK=TRUE PYTHONPATH=src python -m phridge.worker.runner --device cpu --preload phridge.transforms.fourier.nufft
+    PYTHONPATH=src phenix.python -m phridge.transforms.fourier.nufft.benchmark --redis-url redis://127.0.0.1:6379/1 --cases synthetic --d-min 2.0 --device cpu --repeats 3
 
 | engine | case | d_min | device | n_atoms | n_refl | n_groups | T | R(F) vs cctbx FFT | t(F) | t(F+grad) | peak mem (MB) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
