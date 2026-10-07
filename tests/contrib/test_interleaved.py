@@ -14,11 +14,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 torch = pytest.importorskip("torch")
 
 from scipy.special import i0e  # noqa: E402
 
-from phridge.client.intensity.interleaved import (  # noqa: E402
+from phridge.legacy.intensity_interleaved import (  # noqa: E402
     BlockBudget,
     BlockOutcome,
     BlockSite,
@@ -854,7 +856,7 @@ def test_visible_fraction_refresh_selects_low_rho2_reflections():
 # ---------------------------------------------------------------- the naming guard
 _FORBIDDEN = re.compile(r"\b(F_p|f_p|beta_p|F_surrogate|surrogate_amplitude)\b")
 _TELEMETRY_SOURCES = (
-    Path("src/phridge/client/intensity/interleaved.py"),
+    Path("src/phridge/legacy/intensity_interleaved.py"),
     Path("src/phridge/contrib/intensity_ll/surrogate.py"),
     Path("src/phridge/contrib/intensity_ll/surrogate_op.py"),
 )
@@ -950,7 +952,7 @@ def test_block_site_is_read_off_the_phenix_lbfgs_call():
     the cycle, and a call that will not bind degrades to a readable label instead of
     raising inside a refinement.
     """
-    from phridge.client.intensity.phenix_hook import _block_site
+    from phridge.legacy.intensity_phenix_hook import _block_site
 
     class lbfgs:  # the mmtbx.refinement.minimization.lbfgs shape
         def __init__(

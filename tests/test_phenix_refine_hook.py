@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from cctbx import crystal, miller, sgtbx, xray
 from cctbx.array_family import flex
 from cctbx.development import random_structure
@@ -20,7 +22,7 @@ import mmtbx.maps
 import mmtbx.refinement.targets
 import mmtbx.utils
 
-from phridge.client.intensity.engine import (
+from phridge.legacy.intensity_engine import (
     IntensityElectronDensityMap,
     IntensityFModel,
     IntensityFModelInfo,
@@ -28,7 +30,7 @@ from phridge.client.intensity.engine import (
     IntensityTargetResult,
     IntensityDataError,
 )
-from phridge.client.intensity.phenix_hook import (
+from phridge.legacy.intensity_phenix_hook import (
     disable_intensity_in_phenix,
     enable_intensity_in_phenix,
     is_intensity_enabled,
@@ -135,7 +137,7 @@ def test_fmodel_manager2_rejects_twinning():
     enable_intensity_in_phenix()
     xs, i_obs, r_free, _ = _make_test_data()
 
-    from phridge.client.intensity.engine import IntensityTwinningError
+    from phridge.legacy.intensity_engine import IntensityTwinningError
 
     # 1. twin_law provided to fmodel_manager2
     with pytest.raises(IntensityTwinningError) as exc_info:
@@ -295,7 +297,7 @@ def test_clean_import_no_torch():
     """Verify that importing phenix_hook does not eagerly import torch on the client."""
     code = """
 import sys
-from phridge.client.intensity.phenix_hook import enable_intensity_in_phenix, disable_intensity_in_phenix
+from phridge.legacy.intensity_phenix_hook import enable_intensity_in_phenix, disable_intensity_in_phenix
 assert 'torch' not in sys.modules, f'torch was imported: {sys.modules.get("torch")}'
 print('OK')
 """
@@ -355,7 +357,7 @@ def test_french_wilson_and_f2_disabled():
 
 def test_adp_r_percent_vs_nll_guard():
     """Journal −log p(I) ≈ 6.5 must skip the R% assert; target_w must not."""
-    from phridge.client.intensity.phenix_hook import _adp_r_percent_vs_nll
+    from phridge.legacy.intensity_phenix_hook import _adp_r_percent_vs_nll
 
     # The crash: r_work()*100 vs rw_best after the journal-scale NLL overwrite.
     assert _adp_r_percent_vs_nll(24.25917909030311, 6.468631019437067, eps=0.001)
@@ -370,7 +372,7 @@ def test_adp_r_percent_vs_nll_guard():
 
 def test_weight_metric_helpers_and_patches():
     """NLL weight-metric helpers + scorer/ADP patches install cleanly."""
-    from phridge.client.intensity.phenix_hook import (
+    from phridge.legacy.intensity_phenix_hook import (
         _weight_metric_is_nll,
     )
 
@@ -407,7 +409,7 @@ def test_phenix_python_execution_if_available():
     code = """
 import sys
 import phridge
-from phridge.client.intensity.phenix_hook import enable_intensity_in_phenix, disable_intensity_in_phenix, is_intensity_enabled
+from phridge.legacy.intensity_phenix_hook import enable_intensity_in_phenix, disable_intensity_in_phenix, is_intensity_enabled
 import mmtbx.refinement.targets
 import phenix.refinement
 import iotbx.phil

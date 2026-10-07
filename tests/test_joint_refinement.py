@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 cctbx = pytest.importorskip("cctbx")
 from cctbx import sgtbx  # noqa: E402
 from cctbx.array_family import flex  # noqa: E402
@@ -14,7 +16,7 @@ torch = pytest.importorskip("torch")
 
 from phridge.client import Bridge  # noqa: E402
 from phridge.client.geometry import RemoteGeometry  # noqa: E402
-from phridge.client.joint import JointSiteRefinement  # noqa: E402
+from phridge.legacy.client_joint import JointSiteRefinement  # noqa: E402
 from phridge.models import Atom, CoordinateFrame, SfEngineParams  # noqa: E402
 from phridge.packing_geometry import PackedRestraints  # noqa: E402
 from phridge.packing_xtal import PackedHierarchy  # noqa: E402

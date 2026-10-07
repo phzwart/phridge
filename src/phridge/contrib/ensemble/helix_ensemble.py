@@ -569,7 +569,7 @@ def fit_from_mean_model(
     E-step is at ``z = 0`` on that mean model; the sweeps then estimate
     ``Δ0``, the modes, and the scores.
     """
-    from phridge.contrib.ensemble.fit import em_fit
+    from phridge.legacy.ensemble_fit import em_fit
     from phridge.contrib.ensemble.gauge import principal_angles
     from phridge.contrib.ensemble.synthetic import equal_count_shells
 

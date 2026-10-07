@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
 from phridge.contrib.ensemble import (
@@ -181,7 +183,7 @@ def test_v5_gauge_leaves_field_unchanged():
     d2, m2, z2 = fix_gauge(delta0, modes, z)
     after = reconstruction(d2, m2, z2)
     assert np.max(np.abs(before - after)) < 1e-10
-    from phridge.contrib.ensemble.fit import _known_f_loglik
+    from phridge.legacy.ensemble_fit import _known_f_loglik
 
     weights = np.ones_like(target.real)
     ll0 = _known_f_loglik(target, weights, delta0, modes, z)
@@ -300,7 +302,7 @@ def _tiny_intensity(n=4, hmax=1, k=1, seed=1):
 
 
 def test_v4_em_is_monotone():
-    from phridge.contrib.ensemble.fit import em_fit
+    from phridge.legacy.ensemble_fit import em_fit
 
     camp, wilson = _tiny_intensity()
     result = em_fit(
@@ -323,7 +325,7 @@ def test_v4_em_is_monotone():
 
 
 def test_v14_missing_reflections_have_zero_weight():
-    from phridge.contrib.ensemble.fit import fit_known_f
+    from phridge.legacy.ensemble_fit import fit_known_f
 
     camp, _wilson = _tiny_intensity(n=5, k=1)
     phase = np.angle(camp.f_true)
@@ -340,7 +342,7 @@ def test_v14_missing_reflections_have_zero_weight():
 
 
 def test_v16_audit_reflections_do_not_enter():
-    from phridge.contrib.ensemble.fit import fit_known_f
+    from phridge.legacy.ensemble_fit import fit_known_f
     from phridge.contrib.ensemble.holdout import assign_roles
 
     camp, _wilson = _tiny_intensity(n=5, k=1)

@@ -209,7 +209,7 @@ def __getattr__(name: str) -> Any:
         "IntensityElectronDensityMap",
         "IntensityGradients",
     ):
-        from phridge.client.intensity.engine import (
+        from phridge.legacy.intensity_engine import (
             IntensityElectronDensityMap,
             IntensityFModel,
             IntensityFmodel,

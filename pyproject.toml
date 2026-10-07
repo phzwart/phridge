@@ -41,8 +41,6 @@ dev = [
 phridge-worker = "phridge.worker.runner:main"
 phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"
-phridge-intensity = "phridge.client.intensity_tool:main"
-phridge-refine = "phridge.client.intensity.phenix_hook:main"
 phridge-view = "phridge.client.viewer:main"
 phridge-multixtal = "phridge.contrib.multixtal.cli:main"
 phridge-ensemble = "phridge.contrib.ensemble.cli:main"
@@ -69,6 +67,7 @@ markers = [
     "gpu: requires CUDA torch worker",
     "slow: large-N / long-running",
     "boundaries: import-wall checks over src/phridge",
+    "legacy: quarantined Phenix-era loops",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]

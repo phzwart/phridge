@@ -17,7 +17,7 @@ import os
 import sys
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from phridge.client.intensity.engine import (
+from phridge.legacy.intensity_engine import (
     IntensityDataError,
     IntensityElectronDensityMap,
     IntensityFModel,
@@ -710,7 +710,7 @@ class PhenixLbfgsBlockRunner:
             return None
 
     def full_budget(self) -> Any:
-        from phridge.client.intensity.interleaved import BlockBudget
+        from phridge.legacy.intensity_interleaved import BlockBudget
 
         return BlockBudget(max_iterations=self._base_iterations, step_scale=1.0)
 
@@ -891,7 +891,7 @@ def _block_site(
     does not supply falls back to the engine's own macro-cycle counter, and a signature
     that matches nothing still yields a usable label rather than raising.
     """
-    from phridge.client.intensity.interleaved import BlockSite
+    from phridge.legacy.intensity_interleaved import BlockSite
 
     call = _call_arguments(orig_init, instance, args, kwargs)
     flags = [
@@ -937,7 +937,7 @@ def _apply_target_mode(fmodel: Any, params: Any) -> None:
     The PHIL parameter wins over ``PHRIDGE_TARGET_MODE`` when it is present, so a
     ``.eff`` file is reproducible without the environment.
     """
-    from phridge.client.intensity.interleaved import TargetMode
+    from phridge.legacy.intensity_interleaved import TargetMode
 
     raw = getattr(params, "target_mode", None)
     if raw is not None:

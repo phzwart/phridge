@@ -122,7 +122,7 @@ def multixtal_fit(
 ) -> dict[str, Any]:
     """Run the phase-1 multi-dataset covariance pipeline."""
     from phridge.contrib.multixtal.options import MultixtalOptions
-    from phridge.contrib.multixtal.pipeline import run_multixtal_core
+    from phridge.legacy.multixtal_pipeline import run_multixtal_core
     from phridge.sfcalc.ops import _engine_params, scattering_model
 
     opts = MultixtalOptions.model_validate(options or {})

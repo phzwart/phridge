@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 torch = pytest.importorskip("torch")
 cctbx = pytest.importorskip("cctbx")
 
@@ -22,7 +24,7 @@ from phridge.client.adp_restraints import (  # noqa: E402
     build_adp_restraints,
     fit_adp_hyperparameters,
 )
-from phridge.client.joint import JointSiteRefinement, _extract_adp_vec  # noqa: E402
+from phridge.legacy.client_joint import JointSiteRefinement, _extract_adp_vec  # noqa: E402
 from phridge.models import SfEngineParams  # noqa: E402
 from phridge.packing_geometry import PackedRestraints, unpack_restraints  # noqa: E402
 from phridge.packing_xtal import Atom, CoordinateFrame, PackedCartesian, PackedHierarchy  # noqa: E402

@@ -226,8 +226,8 @@ def cctbx_fft_site_grads(
 
 def _phridge_engine(xs, hkl: np.ndarray, d_min: float, device: str, quality_factor: float = DEFAULT_QUALITY):
     from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
-    from phridge.worker.ops.xtal_ops import scattering_model
-    from phridge.worker.xtal.engine import EngineParams, StructureFactorEngine
+    from phridge.sfcalc.engine import EngineParams, StructureFactorEngine
+    from phridge.sfcalc.ops import scattering_model
 
     model = scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
     gpu = device.startswith(("mps", "cuda"))
@@ -270,7 +270,7 @@ def remote_f_and_site_grads(
     quality_factor: float = DEFAULT_QUALITY,
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
     """Bridge ``RemoteStructureFactors`` path: ``(f_calc, site_frac, t_f, t_grad)``."""
-    from phridge.client.xtal_engine import RemoteStructureFactors
+    from phridge.sfcalc.client import RemoteStructureFactors
     from phridge.models import SfEngineParams
 
     engine = RemoteStructureFactors(

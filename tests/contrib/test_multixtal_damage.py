@@ -7,6 +7,8 @@ import math
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.contrib.multixtal.baselines import linear_zero_dose, reject_bad_batches, run_baselines
 from phridge.contrib.multixtal.damage import (
     combine_loadings,
@@ -229,7 +231,7 @@ def _obs_matching_means(bundle, *, dose_value: float = 0.0, n_rep: int = 3) -> O
 
 def test_8_d0_and_no_damage_match_phase1():
     pytest.importorskip("torch")
-    from phridge.contrib.multixtal.pipeline import run_multixtal_core
+    from phridge.legacy.multixtal_pipeline import run_multixtal_core
 
     bundle = _phase1_bundle()
     kwargs = dict(

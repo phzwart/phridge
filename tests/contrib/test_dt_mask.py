@@ -6,6 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
 from phridge.contrib.intensity_ll import dt_mask as DT
@@ -218,7 +220,7 @@ def test_build_f_masks_baked_differs_from_flat():
 
 
 def test_k_mask_is_negligible():
-    from phridge.client.intensity.engine import _k_mask_is_negligible
+    from phridge.legacy.intensity_engine import _k_mask_is_negligible
 
     assert _k_mask_is_negligible(None)
     assert _k_mask_is_negligible(np.zeros(10))
@@ -227,7 +229,7 @@ def test_k_mask_is_negligible():
 
 
 def test_fit_nu_this_cycle_defaults_to_first_only(monkeypatch: pytest.MonkeyPatch):
-    from phridge.client.intensity.engine import _fit_nu_this_cycle
+    from phridge.legacy.intensity_engine import _fit_nu_this_cycle
 
     monkeypatch.delenv("PHRIDGE_FIT_NU_EVERY_CYCLE", raising=False)
     monkeypatch.delenv("PHRIDGE_FIT_NU_CYCLES", raising=False)

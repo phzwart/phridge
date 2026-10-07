@@ -83,10 +83,10 @@ def test_ml_i_requires_sigma_a_or_alpha():
 
 
 def test_shims_still_import():
-    from phridge.client import xtal_engine as xe
     from phridge.packing_scattering import PackedTargetResult
-    from phridge.worker import targets as wt
-    from phridge.worker import xtal as wx
+    from phridge.sfcalc import client as xe
+    from phridge.sfcalc import engine as wx
+    from phridge.sfcalc import targets as wt
 
     assert hasattr(xe, "StructureFactorServer")
     assert hasattr(wt, "register_target")

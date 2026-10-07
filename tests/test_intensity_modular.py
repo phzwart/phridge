@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.legacy
+
 import numpy as np
 
 import phridge.client.intensity as intensity
-import phridge.client.intensity_tool as intensity_tool
-from phridge.client.intensity.cli import parse_omit_selection
+import phridge.legacy.intensity_tool as intensity_tool
+from phridge.legacy.intensity_cli import parse_omit_selection
 from phridge.client.intensity.maps import IntensityMapMixin
 from phridge.client.intensity.math_utils import (
     isotonic_non_increasing,
     tv_denoise_1d,
 )
 from phridge.client.intensity.model import IntensityModel
-from phridge.client.intensity.refine import IntensityRefineMixin
+from phridge.legacy.intensity_refine import IntensityRefineMixin
 
 
 def test_intensity_package_exports():

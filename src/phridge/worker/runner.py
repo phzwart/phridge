@@ -173,9 +173,9 @@ def consume_forever(
 
 
 def _set_op_device(device: str) -> None:
-    from phridge.worker.ops import xtal_ops
+    from phridge.sfcalc.ops import set_device
 
-    xtal_ops.set_device(device)
+    set_device(device)
 
 
 def _field(fields: dict, key: str) -> str:

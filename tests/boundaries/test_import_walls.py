@@ -74,7 +74,7 @@ def test_no_phenix_anywhere() -> None:
     offenders = [
         _rel(path)
         for path, names in iter_modules(SRC_PHRIDGE)
-        if "phenix" in names
+        if "phenix" in names and not _under(_rel(path), LEGACY_EXEMPT)
     ]
     assert not offenders, "phenix imports:\n" + _format(offenders)
 

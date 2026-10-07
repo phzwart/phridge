@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 cctbx = pytest.importorskip("cctbx")
 from cctbx import sgtbx
 from cctbx.array_family import flex
@@ -16,7 +18,7 @@ import iotbx.ccp4_map
 import iotbx.pdb
 from iotbx.reflection_file_reader import any_reflection_file
 
-from phridge.client.intensity_tool import (
+from phridge.legacy.intensity_tool import (
     IntensityModel,
     from_files,
     isotonic_non_increasing,
@@ -360,7 +362,7 @@ def test_cli_entrypoint(tmp_path: Path):
 
 
 def test_omit_mode_delete(tmp_path: Path):
-    from phridge.client.intensity_tool import parse_omit_selection, apply_omit
+    from phridge.legacy.intensity_tool import parse_omit_selection, apply_omit
     assert parse_omit_selection("45-52") == "resseq 45:52"
     assert parse_omit_selection("45:52") == "resseq 45:52"
     assert parse_omit_selection("5") == "resseq 5"

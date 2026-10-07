@@ -132,7 +132,7 @@ def test_cli_scripts_accept_spatial_sigma_a_v2_flag():
     root = Path(__file__).resolve().parents[2]
     driver = (root / "scripts" / "phenix_refine_mli.py").read_text()
     wrapper = (root / "scripts" / "run_phenix_intensity.sh").read_text()
-    cli = (root / "src" / "phridge" / "client" / "intensity" / "cli.py").read_text()
+    cli = (root / "src" / "phridge" / "legacy" / "intensity_cli.py").read_text()
     assert "--spatial-sigmaa-v2" in driver.lower()
     assert "PHRIDGE_SPATIAL_SIGMA_A_V2" in driver
     assert "--spatial-sigmaA-v2" in wrapper
@@ -1140,7 +1140,7 @@ def test_viz_module_is_torch_and_cctbx_free():
 
 
 def test_client_writes_v2_maps_after_step():
-    src = (Path(__file__).resolve().parents[2] / "src" / "phridge" / "client" / "intensity" / "engine.py").read_text()
+    src = (Path(__file__).resolve().parents[2] / "src" / "phridge" / "legacy" / "intensity_engine.py").read_text()
     assert "_write_spatial_sigma_a_v2_maps" in src
     assert "_field_atoms.pdb" in src
     assert "lambda.ccp4" in src or 'f"{prefix}_{name}.ccp4"' in src

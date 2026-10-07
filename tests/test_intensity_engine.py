@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from cctbx import crystal, miller, sgtbx, xray
 from cctbx.array_family import flex
 from cctbx.development import random_structure
@@ -64,7 +66,7 @@ def test_intensity_fmodel_init_and_properties():
     assert fmodel_rev.i_obs().size() == i_obs.size()
 
     # Test amplitude-only construction is rejected (no F² reconstruction)
-    from phridge.client.intensity.engine import IntensityDataError
+    from phridge.legacy.intensity_engine import IntensityDataError
 
     f_obs_amp = i_obs.as_amplitude_array()
     with pytest.raises(IntensityDataError):
@@ -461,7 +463,7 @@ def test_client_clean_import_no_torch():
 def test_twinning_hard_error():
     """Verify that requesting twinning with mli_quad raises a hard error."""
     import pytest
-    from phridge.client.intensity.engine import IntensityTwinningError
+    from phridge.legacy.intensity_engine import IntensityTwinningError
 
     xs, i_obs, r_free, _ = _make_test_data()
 

@@ -127,7 +127,7 @@ def _french_wilson_scale_unpatched() -> Any:
     from this module.
     """
     try:
-        from phridge.client.intensity import phenix_hook
+        from phridge.legacy import intensity_phenix_hook as phenix_hook
 
         orig = phenix_hook._ORIGINALS.get("cctbx.french_wilson.french_wilson_scale")
         if orig is not None:
@@ -2657,7 +2657,7 @@ class IntensityFModel(
         # Interleaved refinement (refinement.target_mode). Exact by default: the
         # surrogate path is entirely opt-in and never active unless a controller has
         # been installed and has switched it on.
-        from phridge.client.intensity.interleaved import target_mode_from_env
+        from phridge.legacy.intensity_interleaved import target_mode_from_env
 
         self.target_mode = target_mode_from_env()
         self._surrogate: Optional[Dict[str, Any]] = None
@@ -2832,7 +2832,7 @@ class IntensityFModel(
         out at the scale-update substage, so the log shows the "when" even for a cycle
         whose blocks all end up exact.
         """
-        from phridge.client.intensity.interleaved import TargetMode
+        from phridge.legacy.intensity_interleaved import TargetMode
 
         mode = getattr(self, "target_mode", TargetMode.exact)
         cycle = getattr(self, "macro_cycle_index", 0)
@@ -3208,7 +3208,7 @@ class IntensityFModel(
         the returned NLL is the value that adjudicates the block that follows. See
         :mod:`phridge.client.intensity.interleaved`.
         """
-        from phridge.client.intensity.interleaved import CheckpointResult
+        from phridge.legacy.intensity_interleaved import CheckpointResult
         from phridge.contrib.intensity_ll.surrogate_op import SURROGATE_FIT_OP_NAME
 
         kw = self._common_eval_kwargs()
@@ -3266,7 +3266,7 @@ class IntensityFModel(
 
     def interleaved_controller(self, log: Any = None) -> Optional[Any]:
         """The run's controller, created on first use; ``None`` in exact mode."""
-        from phridge.client.intensity.interleaved import (
+        from phridge.legacy.intensity_interleaved import (
             InterleavedController,
             TargetMode,
             interleaved_options_from_env,

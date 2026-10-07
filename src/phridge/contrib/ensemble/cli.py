@@ -152,7 +152,7 @@ def run(args: argparse.Namespace) -> dict:
         np.savez(path, hkl=raw["delta0"].hkl, delta0=raw["delta0"].data, modes=raw["modes"])
         return {"out": str(path)}
     if args.command == "holdout":
-        from phridge.contrib.ensemble.fit import known_f_target, phased_observed
+        from phridge.legacy.ensemble_fit import known_f_target, phased_observed
         from phridge.contrib.ensemble.holdout import k_scan
 
         blob = np.load(args.job)

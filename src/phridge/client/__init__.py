@@ -35,7 +35,7 @@ def __getattr__(name: str) -> Any:
         "disable_intensity_in_phenix",
         "is_intensity_enabled",
     ):
-        from phridge.client.intensity.phenix_hook import (
+        from phridge.legacy.intensity_phenix_hook import (
             disable_intensity_in_phenix,
             enable_intensity_in_phenix,
             is_intensity_enabled,
@@ -57,7 +57,7 @@ def __getattr__(name: str) -> Any:
         "IntensityTargetResult",
         "IntensityTwinningError",
     ):
-        from phridge.client.intensity.engine import (
+        from phridge.legacy.intensity_engine import (
             IntensityElectronDensityMap,
             IntensityFModel,
             IntensityFModelInfo,

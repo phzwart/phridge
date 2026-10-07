@@ -219,7 +219,7 @@ def ensemble_fit(
 ) -> dict[str, Any]:
     """Shared Δ0, modes, and per-dataset scores."""
     from phridge.contrib.ensemble.cloud import latent_cloud
-    from phridge.contrib.ensemble.fit import em_fit, fit_known_f, phased_observed
+    from phridge.legacy.ensemble_fit import em_fit, fit_known_f, phased_observed
     from phridge.contrib.ensemble.holdout import crystal_folds, half_split, k_scan
     from phridge.contrib.ensemble.mstep import expand_shells
     from phridge.contrib.ensemble.options import EnsembleOptions
@@ -317,7 +317,7 @@ def ensemble_fit(
             projection=opts.projection.model_dump() if opts.projection.enabled else None,
         )
         if opts.direct:
-            from phridge.contrib.ensemble.fit import direct_fit
+            from phridge.legacy.ensemble_fit import direct_fit
 
             result = direct_fit(
                 i_obs_a,
@@ -337,7 +337,7 @@ def ensemble_fit(
             )
     heldout: dict[str, Any] = {}
     if opts.holdout.enabled and opts.likelihood == "known_f":
-        from phridge.contrib.ensemble.fit import known_f_target
+        from phridge.legacy.ensemble_fit import known_f_target
 
         phase = np.angle(f_mu_vec)
         f_obs = phased_observed(i_obs_a, np.broadcast_to(phase, (n_data, n_h)), mask_a)
@@ -378,7 +378,7 @@ def ensemble_scores(
     roles: Optional[Any] = None,
 ) -> dict[str, Any]:
     """E-step and score update for one or more datasets with modes held fixed."""
-    from phridge.contrib.ensemble.fit import _e_step, _mu_field
+    from phridge.legacy.ensemble_fit import _e_step, _mu_field
     from phridge.contrib.ensemble.mstep import expand_shells, solve_scores_torch, work_weights
     from phridge.contrib.ensemble.options import EnsembleOptions
 

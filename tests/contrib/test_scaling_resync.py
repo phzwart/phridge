@@ -11,7 +11,9 @@ import io
 
 import pytest
 
-engine = pytest.importorskip("phridge.client.intensity.engine")
+pytestmark = pytest.mark.legacy
+
+engine = pytest.importorskip("phridge.legacy.intensity_engine")
 
 
 def _probe(xrs):

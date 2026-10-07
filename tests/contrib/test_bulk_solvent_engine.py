@@ -7,7 +7,9 @@ import types
 import numpy as np
 import pytest
 
-engine = pytest.importorskip("phridge.client.intensity.engine")
+pytestmark = pytest.mark.legacy
+
+engine = pytest.importorskip("phridge.legacy.intensity_engine")
 
 _N = 40
 

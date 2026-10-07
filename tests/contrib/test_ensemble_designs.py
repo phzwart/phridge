@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 torch = pytest.importorskip("torch")
 
 
@@ -135,7 +137,7 @@ def test_note_numbers_xfail_until_reference():
 
 @pytest.mark.slow
 def test_slow_campaign_qualitative_gates():
-    from phridge.contrib.ensemble.fit import em_fit
+    from phridge.legacy.ensemble_fit import em_fit
     from phridge.contrib.ensemble.gauge import principal_angles
     from phridge.contrib.ensemble.synthetic import N_NOTE, simulate_campaign
 

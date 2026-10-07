@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.client.intensity.stats_report import (
     AnisoScale,
     IntensityStatsReport,
@@ -531,7 +533,7 @@ class _FakeIObs:
 
 def _engine_probe(**overrides):
     """An IntensityFModel with the heavy constructor bypassed."""
-    from phridge.client.intensity.engine import IntensityFModel
+    from phridge.legacy.intensity_engine import IntensityFModel
 
     p = _cc_problem(n=4000)
     f_model_amp = np.sqrt(np.maximum(p["i_calc"], 0.0))

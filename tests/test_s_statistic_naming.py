@@ -16,7 +16,9 @@ import warnings
 import numpy as np
 import pytest
 
-from phridge.client.intensity.engine import IntensityFModelInfo
+pytestmark = pytest.mark.legacy
+
+from phridge.legacy.intensity_engine import IntensityFModelInfo
 from phridge.client.intensity.stats_report import (
     IntensityStatsReport,
     ResolutionBinStats,
@@ -509,7 +511,7 @@ def test_r_factors_reports_french_wilson_not_the_posterior_mean():
     docstring says it improves as the data get worse. It must return the French-Wilson
     values and say so in the formatted string.
     """
-    from phridge.client.intensity.engine import IntensityFModel
+    from phridge.legacy.intensity_engine import IntensityFModel
 
     class _Probe(IntensityFModel):
         def __init__(self):  # bypass the heavy constructor
@@ -542,7 +544,7 @@ def test_r_factors_reports_french_wilson_not_the_posterior_mean():
 
 def test_french_wilson_aliases_match_the_plain_names():
     """The explicit aliases exist so a report never has to print a bare ``r_work``."""
-    from phridge.client.intensity.engine import IntensityFModel
+    from phridge.legacy.intensity_engine import IntensityFModel
 
     class _Probe(IntensityFModel):
         def __init__(self):
@@ -559,7 +561,7 @@ def test_french_wilson_aliases_match_the_plain_names():
 
 def test_french_wilson_r_is_wired_to_r_work():
     """r_work/r_free/r_all must route through the French-Wilson bridge."""
-    from phridge.client.intensity.engine import IntensityFModel
+    from phridge.legacy.intensity_engine import IntensityFModel
 
     calls = []
 

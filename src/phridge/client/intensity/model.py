@@ -20,7 +20,7 @@ from phridge.client.intensity.math_utils import (
     isotonic_non_increasing,
     tv_denoise_1d,
 )
-from phridge.client.intensity.refine import IntensityRefineMixin
+from phridge.legacy.intensity_refine import IntensityRefineMixin
 from phridge.contrib.intensity_ll import register
 from phridge.contrib.intensity_ll.mli import log_likelihood_normal, log_likelihood_t, normalize
 from phridge.contrib.intensity_ll.target import IntensityLogLikelihood

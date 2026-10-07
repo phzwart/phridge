@@ -22,6 +22,8 @@ import math
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.client.intensity import nll_log as NL
 from phridge.client.intensity.nll_log import NllJournal, NllPoint, StageKind
 
@@ -353,7 +355,7 @@ class _Flex(list):
 
 
 def _fake_scorer(journal, weights, nll_w, nll_f):
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
     scorer = type("S", (), {})()
     scorer.w = _Flex(weights)
     scorer.nll_w = _Flex(nll_w)
@@ -369,7 +371,7 @@ def _fake_scorer(journal, weights, nll_w, nll_f):
 
 def test_the_missing_nll_sentinel_never_reaches_the_scan_as_a_number():
     """99999 is the scorer's 'never pick this'; printed as a value it would read as an NLL."""
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
     assert hook._unsentinel(1.25) == pytest.approx(1.25)
     assert hook._unsentinel(hook._NLL_SENTINEL) is None
     assert hook._unsentinel(float("nan")) is None
@@ -413,7 +415,7 @@ def test_the_adp_trial_line_carries_the_free_nll_at_a_useful_precision():
     Three decimals cannot separate two ADP trials whose NLLs differ in the fifth, and the
     free value is the one the selection is actually made on.
     """
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
     result = type("R", (), {})()
     result.weight = 12.5
     result.nll_work = 1.2012349
@@ -432,7 +434,7 @@ def test_the_adp_scan_records_only_what_came_from_a_trial():
     compete as if it were a trial.
     """
     journal, _ = _journal()
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
     refiner = type("A", (), {})()
     refiner.log = None
     refiner._phridge_journal = journal
@@ -468,7 +470,7 @@ def test_a_trial_row_is_printed_once_across_the_serial_and_parallel_paths():
     Both paths can reach the same object, so the row carries its own printed flag.
     """
     journal, _ = _journal()
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
     import io
 
     log = io.StringIO()
@@ -486,7 +488,7 @@ def test_a_trial_row_is_printed_once_across_the_serial_and_parallel_paths():
 
 def test_the_nll_pair_prefers_the_single_pass_probe():
     """Two full quadratures for two numbers one call already produced, once per trial."""
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
 
     class _Engine:
         def __init__(self):
@@ -528,7 +530,7 @@ def test_the_nll_pair_prefers_the_single_pass_probe():
 
 def test_a_free_set_that_is_absent_falls_back_to_the_work_value():
     """``_nll_pair`` promises two numbers; with no free set both are the work value."""
-    hook = pytest.importorskip("phridge.client.intensity.phenix_hook")
+    hook = pytest.importorskip("phridge.legacy.intensity_phenix_hook")
 
     class _NoFree:
         def nll_point(self):
@@ -544,7 +546,7 @@ def test_interleaved_blocks_are_mirrored_into_the_journal_for_free():
     The journal must take those values; re-measuring them would double the cost of the
     most expensive thing the controller does.
     """
-    from phridge.client.intensity.interleaved import (
+    from phridge.legacy.intensity_interleaved import (
         BlockBudget,
         BlockOutcome,
         BlockRecord,
@@ -649,7 +651,7 @@ def test_interleaved_blocks_are_shifted_into_the_same_units_without_changing_the
     The delta the block was accepted on must survive the shift, otherwise the journal
     would disagree with the decision it is reporting.
     """
-    from phridge.client.intensity.interleaved import (
+    from phridge.legacy.intensity_interleaved import (
         BlockBudget,
         BlockOutcome,
         BlockRecord,
@@ -693,7 +695,7 @@ def test_interleaved_blocks_are_shifted_into_the_same_units_without_changing_the
 
 
 def test_the_nuisance_stage_says_how_far_the_normalization_moved():
-    from phridge.client.intensity.engine import _nuisance_detail
+    from phridge.legacy.intensity_engine import _nuisance_detail
 
     assert _nuisance_detail("free/1387", (1.2, 1.1), (2.1, 2.0)) == (
         "tune=free/1387, log(εΣ) work 1.200 -> 2.100, free 1.100 -> 2.000"
@@ -707,7 +709,7 @@ def test_the_nuisance_stage_says_how_far_the_normalization_moved():
 
 def test_the_exact_branch_only_buys_an_entry_nll_when_a_journal_wants_one():
     """Without a journal the fully-exact branch has no use for a before-value."""
-    from phridge.client.intensity.interleaved import InterleavedController, InterleavedOptions
+    from phridge.legacy.intensity_interleaved import InterleavedController, InterleavedOptions
 
     bare = InterleavedController(object(), InterleavedOptions(verbose=False))  # type: ignore[arg-type]
     assert bare._journal_entry_nll() is None

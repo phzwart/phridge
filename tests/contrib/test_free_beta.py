@@ -23,6 +23,8 @@ import math
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.contrib.intensity_ll import free_beta as FB
 from phridge.contrib.intensity_ll import wilson as W
 from phridge.models import CrystalSymmetry, ObservationType
@@ -615,7 +617,7 @@ def test_surrogate_is_fitted_against_the_free_beta_likelihood():
 @requires_torch
 def test_engine_hands_the_fitted_beta_to_every_evaluation():
     """One plumbing point: if it is not in the common eval kwargs it reaches nothing."""
-    engine = pytest.importorskip("phridge.client.intensity.engine")
+    engine = pytest.importorskip("phridge.legacy.intensity_engine")
 
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)
     probe._i_obs = None
@@ -650,7 +652,7 @@ def test_engine_defaults_to_free_beta_and_fixes_the_stage_2_scale(monkeypatch):
     """The engine must keep production out of the degenerate state, not just detect it."""
     import io as _io
 
-    engine = pytest.importorskip("phridge.client.intensity.engine")
+    engine = pytest.importorskip("phridge.legacy.intensity_engine")
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)
     monkeypatch.delenv("PHRIDGE_BETA_MODE", raising=False)
     monkeypatch.delenv("PHRIDGE_SIGMA_A_SHAPE", raising=False)

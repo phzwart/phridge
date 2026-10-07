@@ -15,6 +15,8 @@ import math
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.contrib.intensity_ll import wilson as W
 from phridge.models import CrystalSymmetry, ObservationType
 from phridge.packing import PackedMiller
@@ -283,7 +285,7 @@ def test_guard_raises_when_both_anisotropy_carriers_are_free():
     """
     from phridge.client.intensity.stats_report import AnisoScale
 
-    engine = pytest.importorskip("phridge.client.intensity.engine")
+    engine = pytest.importorskip("phridge.legacy.intensity_engine")
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)
 
     live = AnisoScale(
@@ -350,7 +352,7 @@ def test_binned_is_the_default_everywhere():
 
 
 def test_engine_wilson_model_defaults_to_binned(monkeypatch):
-    engine = pytest.importorskip("phridge.client.intensity.engine")
+    engine = pytest.importorskip("phridge.legacy.intensity_engine")
     probe = engine.IntensityFModel.__new__(engine.IntensityFModel)
     monkeypatch.delenv("PHRIDGE_WILSON_MODEL", raising=False)
     assert probe.wilson_model == "binned"
@@ -365,7 +367,7 @@ def test_scaling_constraint_turns_off_both_b_cart_flags():
 
     Both live in the real phenix.refine ``bulk_solvent_and_scale`` scope.
     """
-    engine = pytest.importorskip("phridge.client.intensity.engine")
+    engine = pytest.importorskip("phridge.legacy.intensity_engine")
 
     class _Scope:
         anisotropic_scaling = True

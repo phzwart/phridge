@@ -13,15 +13,15 @@ torch = pytest.importorskip("torch")
 from phridge.client import Bridge  # noqa: E402
 from phridge.client.convert import crystal_from_cctbx  # noqa: E402
 from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx  # noqa: E402
-from phridge.client.xtal_engine import (  # noqa: E402
+from phridge.models import SfEngineParams  # noqa: E402
+from phridge.sfcalc.client import (  # noqa: E402
     RemoteRefinementTarget,
     RemoteStructureFactors,
     RemoteTargetFunctor,
 )
-from phridge.models import SfEngineParams  # noqa: E402
-from phridge.worker.ops.xtal_ops import scattering_model  # noqa: E402
-from phridge.worker.targets import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
-from phridge.worker.xtal.engine import EngineParams, StructureFactorEngine  # noqa: E402
+from phridge.sfcalc.engine import EngineParams, StructureFactorEngine  # noqa: E402
+from phridge.sfcalc.ops import scattering_model  # noqa: E402
+from phridge.sfcalc.targets import LeastSquares, MaximumLikelihoodAmplitude, Observations  # noqa: E402
 
 
 def _structure(space_group="P21", elements=("C", "N", "O", "S"), n_repeat=3, aniso=False, anomalous=False, seed=0):
@@ -400,7 +400,7 @@ def test_gauss_newton_hvp_op_round_trip():
     refiner = RemoteRefinementTarget(bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0))
     out = refiner.compute()
     from phridge.packing_scattering import PackedSfGradients
-    from phridge.client.xtal_engine import _miller_template
+    from phridge.sfcalc.client import _miller_template
 
     n = xs2.scatterers().size()
     v = PackedSfGradients(
@@ -470,7 +470,7 @@ def test_gauss_newton_diagonal_op_round_trip():
         bridge, xs, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0, quality_factor=1000)
     )
     out = refiner.compute()
-    from phridge.client.xtal_engine import _miller_template
+    from phridge.sfcalc.client import _miller_template
 
     diag = bridge.call(
         "gauss_newton_diagonal",

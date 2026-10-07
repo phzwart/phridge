@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from phridge.client.intensity.engine import (
+from phridge.legacy.intensity_engine import (
     IntensityElectronDensityMap,
     IntensityFModel,
     IntensityFModelInfo,
@@ -17,7 +17,7 @@ from phridge.client.intensity.engine import (
     IntensityDataError,
     register_mli_targets,
 )
-from phridge.client.intensity.phenix_hook import (
+from phridge.legacy.intensity_phenix_hook import (
     disable_intensity_in_phenix,
     enable_intensity_in_phenix,
     is_intensity_enabled,
@@ -56,7 +56,7 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     if name in ("apply_omit", "from_files", "main", "parse_omit_selection", "run_intensity_pipeline"):
-        from phridge.client.intensity import cli
+        from phridge.legacy import intensity_cli as cli
 
         return getattr(cli, name)
     if name == "IntensityModel":
@@ -68,7 +68,7 @@ def __getattr__(name: str) -> Any:
 
         return IntensityMapMixin
     if name == "IntensityRefineMixin":
-        from phridge.client.intensity.refine import IntensityRefineMixin
+        from phridge.legacy.intensity_refine import IntensityRefineMixin
 
         return IntensityRefineMixin
     if name in ("_fom_rice_woolfson", "golden_section_search_torch", "isotonic_non_increasing", "tv_denoise_1d"):

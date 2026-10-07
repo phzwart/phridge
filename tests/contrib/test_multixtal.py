@@ -6,6 +6,8 @@ import math
 
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
 from phridge.contrib.multixtal import MultixtalOptions, OP_NAME, register
@@ -202,7 +204,7 @@ def test_selection_bias_guard():
 def test_limits_n1_rank0_no_anomalous():
     pytest.importorskip("torch")
     from phridge.contrib.multixtal.options import MultixtalOptions
-    from phridge.contrib.multixtal.pipeline import run_multixtal_core
+    from phridge.legacy.multixtal_pipeline import run_multixtal_core
     from phridge.contrib.multixtal.structure import f_calc_s_g
 
     model = _tiny_model(fdp=0.0, n=3)
@@ -382,7 +384,7 @@ def test_client_import_is_torch_free():
 def test_score_recovery_and_outlier_flag():
     pytest.importorskip("torch")
     from phridge.contrib.multixtal.options import MultixtalOptions
-    from phridge.contrib.multixtal.pipeline import run_multixtal_core
+    from phridge.legacy.multixtal_pipeline import run_multixtal_core
     from phridge.contrib.multixtal.structure import f_calc_s_g
 
     model = _tiny_model(fdp=1.2, n=4)
