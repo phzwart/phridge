@@ -28,7 +28,7 @@ pytestmark = pytest.mark.legacy
 from phridge.contrib.intensity_ll import free_beta as FB
 from phridge.contrib.intensity_ll import wilson as W
 from phridge.contracts.models import CrystalSymmetry, ObservationType
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 requires_torch = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None,

@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.packing_geometry import PackedRestraints
+from phridge.contracts.packing import PackedRestraints
 
 _OPTIMIZERS = ("lbfgs", "adam", "adamw", "sgd", "gauss_newton")
 _SCHEDULES = ("none", "cosine", "triangular")

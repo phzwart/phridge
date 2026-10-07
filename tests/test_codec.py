@@ -2,7 +2,7 @@ import numpy as np
 
 from phridge.codec import decode_ref, encode_value
 from phridge.contracts.models import CrystalSymmetry, ObjectKind
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 from phridge.redis_store import RedisStore
 
 

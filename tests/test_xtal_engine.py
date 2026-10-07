@@ -11,8 +11,8 @@ from cctbx.development import random_structure  # noqa: E402
 torch = pytest.importorskip("torch")
 
 from phridge.client import Bridge  # noqa: E402
-from phridge.client.convert import crystal_from_cctbx  # noqa: E402
-from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx  # noqa: E402
+from phridge.shims.cctbx import crystal_from_cctbx  # noqa: E402
+from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx  # noqa: E402
 from phridge.contracts.models import SfEngineParams  # noqa: E402
 from phridge.sfcalc.client import (  # noqa: E402
     RemoteRefinementTarget,
@@ -399,7 +399,7 @@ def test_gauss_newton_hvp_op_round_trip():
     xs2, fc2, f_obs = _obs_setup()
     refiner = RemoteRefinementTarget(bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.0))
     out = refiner.compute()
-    from phridge.packing_scattering import PackedSfGradients
+    from phridge.sfcalc.packing import PackedSfGradients
     from phridge.sfcalc.client import _miller_template
 
     n = xs2.scatterers().size()
@@ -540,7 +540,7 @@ def test_gauss_newton_blocks_op_round_trip():
     assert curv.site_frac.shape == (n, 3, 3)
     assert curv.u_star.shape == (n, 6, 6)
     # round-trip pack/unpack
-    from phridge.packing_scattering import unpack_sf_curvatures
+    from phridge.sfcalc.packing import unpack_sf_curvatures
 
     blob = curv.pack()
     again = unpack_sf_curvatures(blob, curv.meta)
@@ -670,7 +670,7 @@ def test_gauss_newton_blocks_match_hvp_at_nonzero_residual():
     refiner = RemoteRefinementTarget(
         bridge, xs2, f_obs, {"name": "ls", "obs_type": "F"}, params=SfEngineParams(d_min=2.5, quality_factor=1000)
     )
-    from phridge.packing_scattering import PackedSfGradients
+    from phridge.sfcalc.packing import PackedSfGradients
     from phridge.sfcalc.client import _miller_template, _packed_xray, psd_target
 
     out = refiner.compute(xs2)

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from phridge.contrib.intensity_ll import local_sigma_a as LSA
 from phridge.contracts.models import CrystalSymmetry, ObservationType
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 requires_torch = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="torch required for ml_i_nuisance_fit"

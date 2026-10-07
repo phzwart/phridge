@@ -8,7 +8,7 @@ import numpy as np
 
 from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.ops import register_op
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 OP_NAME_FIT = "ensemble_fit"
 OP_NAME_SCORES = "ensemble_scores"

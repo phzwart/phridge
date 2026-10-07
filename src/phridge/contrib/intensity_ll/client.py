@@ -32,7 +32,7 @@ class RemoteIntensityMapResult:
     """Map coefficient sets as cctbx miller arrays plus per-reflection weights."""
 
     def __init__(self, raw: dict[str, Any]) -> None:
-        from phridge.client.convert import miller_to_cctbx
+        from phridge.shims.cctbx import miller_to_cctbx
 
         self.raw = raw
 
@@ -122,7 +122,7 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
         self.maps = dict(maps or {})
 
     def __call__(self, f_calc: Any, compute_gradients: bool = True) -> RemoteIntensityMapResult:  # type: ignore[override]
-        from phridge.client.convert import miller_from_cctbx
+        from phridge.shims.cctbx import miller_from_cctbx
 
         kw = self.kwargs()
         kw.pop("compute_curvature", None)
@@ -175,7 +175,7 @@ class RemoteOmitWindowCoefficients:
         k_scale: Any = None,
         residue_ids: Any = None,
     ) -> OmitWindowStore:
-        from phridge.client.convert import miller_from_cctbx
+        from phridge.shims.cctbx import miller_from_cctbx
 
         kw = dict(self._extra)
         kw["f_obs"] = miller_from_cctbx(self.f_obs) if hasattr(self.f_obs, "indices") else self.f_obs

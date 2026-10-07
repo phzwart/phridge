@@ -44,7 +44,7 @@ To prevent environment incompatibilities between CCTBX (frequently running in Py
 │       ├── IntensityElectronDensityMap                                   │
 │       └── IntensityFModelInfo (S_post/S_prior & R_intensity)           │
 │                                                                         │
-│   phridge.client.convert / Bridge                                       │
+│   phridge.shims.cctbx / Bridge                                       │
 │       └── LinkML Serialization: PackedMiller, PackedXrayStructure       │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │

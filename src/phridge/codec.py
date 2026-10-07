@@ -14,7 +14,7 @@ from phridge.contracts.models import (
     ObjectRef,
     SfEngineParams,
 )
-from phridge.packing import (
+from phridge.contracts.packing import (
     PackedMap,
     PackedMiller,
     pack_json,
@@ -24,7 +24,7 @@ from phridge.packing import (
     unpack_miller,
     unpack_npy,
 )
-from phridge.packing_xtal import (
+from phridge.contracts.packing import (
     PackedCartesian,
     PackedComplexMap,
     PackedEmMap,
@@ -44,7 +44,7 @@ from phridge.packing_xtal import (
     unpack_reflections,
     unpack_xray,
 )
-from phridge.packing_geometry import PackedRestraints, unpack_restraints
+from phridge.contracts.packing import PackedRestraints, unpack_restraints
 from phridge.sfcalc.packing import (
     PackedScatteringTable,
     PackedSfCurvatures,

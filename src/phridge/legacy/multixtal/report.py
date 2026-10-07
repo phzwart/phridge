@@ -250,7 +250,7 @@ def _write_maps_mtz(path: Path, job: MultixtalJob, raw: dict[str, Any]) -> None:
     from cctbx import miller
     from cctbx.array_family import flex
     from iotbx import mtz
-    from phridge.client.convert import crystal_to_cctbx
+    from phridge.shims.cctbx import crystal_to_cctbx
 
     crystal = crystal_to_cctbx(job.xray.meta.crystal)
     indices = flex.miller_index([tuple(int(x) for x in row) for row in job.hkl])

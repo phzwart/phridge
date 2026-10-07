@@ -8,8 +8,8 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from phridge.client import Bridge  # noqa: E402
-from phridge.packing_geometry import PackedRestraints  # noqa: E402
-from phridge.packing_xtal import PackedCartesian  # noqa: E402
+from phridge.contracts.packing import PackedRestraints  # noqa: E402
+from phridge.contracts.packing import PackedCartesian  # noqa: E402
 from phridge.worker.geometry.curvature import (  # noqa: E402
     GaussNewtonPreconditioner,
     RestraintCurvature,
@@ -186,7 +186,7 @@ def test_geometry_curvature_ops_round_trip():
 def test_remote_geometry_curvature_api():
     from phridge.client import RemoteGeometry
     from phridge.contracts.models import Atom, CoordinateFrame
-    from phridge.packing_xtal import PackedHierarchy
+    from phridge.contracts.packing import PackedHierarchy
 
     xyz, pr = _ring()
     n = xyz.shape[0]
@@ -233,7 +233,7 @@ def test_block_tridiagonal_exact_on_chain_and_op():
 
 def test_geometry_gn_solve_adp_and_joint_fallback():
     """Verify geometry_gn_solve works when adp_params is omitted (testing math.log fallback)."""
-    from phridge.client.adp_restraints import ADPPriorOptions, build_adp_restraints
+    from phridge.shims.cctbx import ADPPriorOptions, build_adp_restraints
     from phridge.worker.geometry.adp import ADPPriorTables
 
     n = 10

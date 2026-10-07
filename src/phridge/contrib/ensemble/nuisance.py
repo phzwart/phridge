@@ -53,7 +53,7 @@ def fit_one_dataset(
 ) -> dict[str, np.ndarray]:
     """One ``ml_i_nuisance_fit`` call. Falls back to the identities on failure."""
     from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
-    from phridge.packing import PackedMiller
+    from phridge.contracts.packing import PackedMiller
 
     crystal = _p1_crystal(cell)
     hkl_i = np.asarray(hkl, dtype=np.int32)

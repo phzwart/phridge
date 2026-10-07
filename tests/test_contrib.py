@@ -83,7 +83,7 @@ def test_ml_i_requires_sigma_a_or_alpha():
 
 
 def test_shims_still_import():
-    from phridge.packing_scattering import PackedTargetResult
+    from phridge.sfcalc.packing import PackedTargetResult
     from phridge.sfcalc import client as xe
     from phridge.sfcalc import engine as wx
     from phridge.sfcalc import targets as wt

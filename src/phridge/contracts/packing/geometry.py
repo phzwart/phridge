@@ -8,7 +8,7 @@ from typing import Optional
 import numpy as np
 
 from phridge.contracts.models import CrystalSymmetry, GeometryRestraints
-from phridge.packing import as_canonical_float, as_canonical_int
+from phridge.contracts.packing.arrays import as_canonical_float, as_canonical_int
 
 
 def _savez(**arrays: np.ndarray) -> bytes:

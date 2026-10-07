@@ -17,7 +17,7 @@ import time
 import numpy as np
 import torch
 
-from phridge.packing_geometry import PackedRestraints
+from phridge.contracts.packing import PackedRestraints
 from phridge.worker.geometry.curvature import (
     BlockTridiagonalPreconditioner,
     RestraintCurvature,

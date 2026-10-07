@@ -7,9 +7,9 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.cctbx_worker.sessions import get_session, stash_restraints_manager
-from phridge.client.convert_geometry import model_geometry, restraints_from_cctbx
-from phridge.client.convert_xtal import hierarchy_from_cctbx, hierarchy_to_cctbx
-from phridge.packing_xtal import PackedCartesian, PackedHierarchy
+from phridge.shims.cctbx import model_geometry, restraints_from_cctbx
+from phridge.shims.cctbx import hierarchy_from_cctbx, hierarchy_to_cctbx
+from phridge.contracts.packing import PackedCartesian, PackedHierarchy
 
 
 def build_geometry_restraints(
@@ -58,14 +58,14 @@ def geometry_restraints_energy_grad(
     grm = session["grm"]
     n_sites = int(session["n_sites"])
 
-    from scitbx.array_family import flex
+    from phridge.shims.cctbx._flex import vec3_double
 
     if isinstance(sites, PackedCartesian):
         xyz = sites.xyz
         if hasattr(xyz, "detach"):
             xyz = xyz.detach().cpu().numpy()
         xyz = np.asarray(xyz, dtype=np.float64)
-        sites_cart = flex.vec3_double(xyz)
+        sites_cart = vec3_double([tuple(row) for row in xyz])
     elif hasattr(sites, "size") and hasattr(sites, "__iter__") and not isinstance(sites, np.ndarray):
         # flex.vec3_double from prefer_cctbx decode
         sites_cart = sites
@@ -74,7 +74,7 @@ def geometry_restraints_energy_grad(
         xyz = np.asarray(sites, dtype=np.float64)
         if xyz.ndim != 2 or xyz.shape[1] != 3:
             raise ValueError("sites must have shape (N, 3)")
-        sites_cart = flex.vec3_double(xyz)
+        sites_cart = vec3_double([tuple(row) for row in xyz])
 
     if xyz.shape[0] != n_sites:
         raise ValueError(f"n_sites mismatch: sites={xyz.shape[0]} session={n_sites}")

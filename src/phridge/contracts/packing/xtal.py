@@ -25,7 +25,7 @@ from phridge.contracts.models import (
     Scatterer,
     XrayStructure,
 )
-from phridge.packing import (
+from phridge.contracts.packing.arrays import (
     PackedMiller,
     as_canonical_complex,
     as_canonical_float,
@@ -212,7 +212,7 @@ class PackedMapCoefficients:
 
 
 def unpack_map_coefficients(blob: bytes, meta: MapCoefficients) -> PackedMapCoefficients:
-    from phridge.packing import unpack_miller
+    from phridge.contracts.packing.arrays import unpack_miller
 
     packed = unpack_miller(blob, meta.miller)
     return PackedMapCoefficients(packed, label=meta.label)

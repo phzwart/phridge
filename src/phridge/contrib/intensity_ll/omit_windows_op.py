@@ -13,7 +13,7 @@ from phridge.contrib.intensity_ll.omit_windows import (
     assign_residue_block_windows,
     run_omit_windows_core,
 )
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 _OMIT_INPUTS = {
     "f_model": "MillerArray",

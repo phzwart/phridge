@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from phridge.contracts.models import CrystalSymmetry, ObservationType
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="torch required for the worker op"

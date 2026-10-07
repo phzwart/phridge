@@ -97,8 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
-    from phridge.packing_geometry import PackedRestraints
-    from phridge.packing_xtal import PackedCartesian, PackedHierarchy
+    from phridge.contracts.packing import PackedRestraints
+    from phridge.contracts.packing import PackedCartesian, PackedHierarchy
 
     log = DemoLog(title="Torch driver: build_geometry_restraints → geometry_minimize")
     log.heading("Setup")

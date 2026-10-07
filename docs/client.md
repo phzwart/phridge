@@ -6,7 +6,7 @@ side only. Passing a cctbx object into `call`/`submit` goes through
 
 ## Coordinates and xray
 
-`phridge.client.convert` and `phridge.client.convert_xtal`:
+`phridge.shims.cctbx` and `phridge.shims.cctbx`:
 
 - miller arrays, HL coefficients, MTZ `ReflectionFile`
 - real/complex maps, map coefficients, crystal gridding
@@ -88,7 +88,7 @@ ASU / planarity). See `examples/restraint_minimization.py`.
 
 ## EM maps
 
-`iotbx.map_manager` round-trips as `EmMap`. Helpers in `phridge.client.em`:
+`iotbx.map_manager` round-trips as `EmMap`. Helpers in `phridge.shims.cctbx`:
 
 | Function | Role |
 |----------|------|

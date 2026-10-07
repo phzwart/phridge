@@ -209,7 +209,7 @@ def test_include_free_masks_coefficients():
 def test_ml_i_maps_op_round_trip_memory_bridge():
     from phridge.client import Bridge
     from phridge.contracts.models import CrystalSymmetry, ObservationType
-    from phridge.packing import PackedMiller
+    from phridge.contracts.packing import PackedMiller
 
     register()
     fc, io, sig, obs = _synthetic(n=200, seed=5)

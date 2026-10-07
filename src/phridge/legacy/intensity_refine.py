@@ -482,8 +482,8 @@ class IntensityRefineMixin:
         wilson_b: Optional[float] = None,
     ) -> Any:
         """Build hierarchical, scale-invariant ADP prior / B-factor restraints."""
-        from phridge.client.convert_geometry import restraints_from_cctbx
-        from phridge.client.adp_restraints import ADPPriorOptions, build_adp_restraints
+        from phridge.shims.cctbx import restraints_from_cctbx
+        from phridge.shims.cctbx import ADPPriorOptions, build_adp_restraints
         from phridge.worker.geometry.adp import ADPPrior, ADPPriorTables
 
         if self.restraints_manager is None:
@@ -511,7 +511,7 @@ class IntensityRefineMixin:
         verbose: bool = True,
     ) -> dict[str, float]:
         """Fit empirical Bayes hyperparameters for the ADP prior on working reflections."""
-        from phridge.client.adp_restraints import fit_adp_hyperparameters
+        from phridge.shims.cctbx import fit_adp_hyperparameters
 
         if self.adp_prior is None:
             self.build_adp_restraints()

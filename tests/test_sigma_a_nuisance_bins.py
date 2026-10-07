@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from phridge.contracts.models import CrystalSymmetry, ObservationType
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 
 def _packed_arrays(n: int = 2000, seed: int = 0):

@@ -18,7 +18,7 @@ from phridge.contrib.spatial_sigmaa_v2.packing import (
     _to_numpy,
 )
 from phridge.contrib.spatial_sigmaa_v2.per_atom import interpolate_shell, iso_u_star
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedXray
 
 
 def frozen_from_result(result: PackedSpatialSigmaAV2Result) -> tuple[np.ndarray, np.ndarray]:

@@ -19,15 +19,15 @@ from cctbx.array_family import flex  # noqa: E402
 from cctbx.development import random_structure  # noqa: E402
 
 from phridge.client import Bridge, RemoteGeometry  # noqa: E402
-from phridge.client.adp_restraints import (  # noqa: E402
+from phridge.shims.cctbx import (  # noqa: E402
     ADPPriorOptions,
     build_adp_restraints,
     fit_adp_hyperparameters,
 )
 from phridge.legacy.client_joint import JointSiteRefinement, _extract_adp_vec  # noqa: E402
 from phridge.contracts.models import SfEngineParams  # noqa: E402
-from phridge.packing_geometry import PackedRestraints, unpack_restraints  # noqa: E402
-from phridge.packing_xtal import Atom, CoordinateFrame, PackedCartesian, PackedHierarchy  # noqa: E402
+from phridge.contracts.packing import PackedRestraints, unpack_restraints  # noqa: E402
+from phridge.contracts.packing import Atom, CoordinateFrame, PackedCartesian, PackedHierarchy  # noqa: E402
 from phridge.sfcalc.client import RemoteRefinementTarget  # noqa: E402
 from phridge.worker.geometry.adp import (  # noqa: E402
     ADPPrior,

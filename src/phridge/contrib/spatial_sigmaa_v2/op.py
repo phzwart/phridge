@@ -11,8 +11,8 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.ops import register_op
-from phridge.packing import PackedMiller
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedMiller
+from phridge.contracts.packing import PackedXray
 from phridge.sfcalc.ops import scattering_model
 
 OP_NAME = "spatial_sigma_a_v2_step"

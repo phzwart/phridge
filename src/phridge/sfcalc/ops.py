@@ -11,9 +11,9 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.contracts.models import ObservationType, SfEngineParams
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfCurvatures, PackedSfGradients, PackedTargetResult
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedXray
 from phridge.sfcalc.targets import Observations, TargetEval, build_target
 from phridge.sfcalc.engine import EngineParams, ScatteringModel, StructureFactorEngine
 

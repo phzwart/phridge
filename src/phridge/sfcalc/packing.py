@@ -7,8 +7,8 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.contracts.models import ScatteringTable, SfCurvatures, SfGradients, TargetResult
-from phridge.packing import as_canonical_complex, as_canonical_float
-from phridge.packing_xtal import _load_npz, _savez
+from phridge.contracts.packing import as_canonical_complex, as_canonical_float
+from phridge.contracts.packing import _load_npz, _savez
 
 
 def _to_numpy(x: Any) -> Optional[np.ndarray]:

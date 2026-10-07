@@ -29,8 +29,8 @@ from phridge.contrib.intensity_ll.maps import intensity_map_coefficients  # noqa
 from phridge.contrib.intensity_ll.target import IntensityLogLikelihood  # noqa: E402
 from phridge.contracts.models import CrystalSymmetry, ObservationType, Scatterer, SfEngineParams, SymOp  # noqa: E402
 from phridge.ops import get_implementation, get_op  # noqa: E402
-from phridge.packing import PackedMiller  # noqa: E402
-from phridge.packing_xtal import PackedXray  # noqa: E402
+from phridge.contracts.packing import PackedMiller  # noqa: E402
+from phridge.contracts.packing import PackedXray  # noqa: E402
 from phridge.sfcalc.engine import EngineParams, StructureFactorEngine  # noqa: E402
 from phridge.sfcalc.ops import _observations, scattering_model  # noqa: E402
 from phridge.sfcalc.packing import PackedScatteringTable  # noqa: E402

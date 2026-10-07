@@ -6,10 +6,10 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.client.convert_geometry import model_geometry, restraints_from_cctbx, restraints_to_proxies
-from phridge.client.convert_xtal import hierarchy_from_cctbx, sites_cart_from_cctbx
-from phridge.packing_geometry import PackedRestraints
-from phridge.packing_xtal import PackedCartesian, PackedHierarchy
+from phridge.shims.cctbx import model_geometry, restraints_from_cctbx, restraints_to_proxies
+from phridge.shims.cctbx import hierarchy_from_cctbx, sites_cart_from_cctbx
+from phridge.contracts.packing import PackedRestraints
+from phridge.contracts.packing import PackedCartesian, PackedHierarchy
 
 __all__ = [
     "RemoteGeometry",
@@ -210,8 +210,8 @@ class RemoteGeometry:
         )
         if not update_hierarchy:
             return sites
-        from phridge.client.convert import has_cctbx
-        from phridge.client.convert_xtal import hierarchy_to_cctbx
+        from phridge.shims.cctbx import has_cctbx
+        from phridge.shims.cctbx import hierarchy_to_cctbx
 
         if not has_cctbx():
             return sites

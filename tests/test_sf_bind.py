@@ -7,8 +7,8 @@ import pytest
 
 from phridge.client import Bridge
 from phridge.contracts.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
-from phridge.packing import PackedMiller
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedMiller
+from phridge.contracts.packing import PackedXray
 from phridge.sfcalc.ops import sf_bind, sf_calc
 from phridge.sfcalc.packing import PackedScatteringTable
 from phridge.sfcalc.sessions import clear_engines

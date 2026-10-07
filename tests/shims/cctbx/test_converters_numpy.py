@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from phridge.contracts.models import AnomalousLayout, CrystalSymmetry, ObservationType
-from phridge.packing import PackedMap, PackedMiller, unpack_map, unpack_miller
+from phridge.contracts.packing import PackedMap, PackedMiller, unpack_map, unpack_miller
 
 
 def _p1() -> CrystalSymmetry:
@@ -42,7 +42,7 @@ def test_real_map_npz_roundtrip():
 
 
 def test_client_to_canonical_dict_crystal():
-    from phridge.client.convert import to_canonical
+    from phridge.shims.cctbx import to_canonical
 
     cs = to_canonical(
         {"unit_cell": [4, 5, 6, 90, 90, 90], "space_group_hall": "P 1", "space_group_number": 1}

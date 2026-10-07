@@ -127,7 +127,7 @@ def _set_uniform_u_iso(xs, u_iso: float = 0.04):
 
 
 def _nufft_engine(xs, hkl, d_min, **kwargs):
-    from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+    from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
     from phridge.sfcalc.engine.nufft_engine import NufftEngineParams, NufftStructureFactorEngine
     from phridge.sfcalc.ops import scattering_model
 
@@ -689,8 +689,8 @@ def test_job_envelope_nufft_sf_calc():
 def test_nufft_sf_calc_op_smoke():
     from phridge.contrib.nufft_sf.op import nufft_sf_calc
     from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
-    from phridge.packing import PackedMiller
-    from phridge.packing_xtal import PackedXray
+    from phridge.contracts.packing import PackedMiller
+    from phridge.contracts.packing import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
 
     model = _toy_carbon_p1(n_atoms=4, u_iso=0.04, seed=1)
@@ -724,8 +724,8 @@ def test_nufft_sf_calc_op_smoke():
 def test_nufft_sf_bind_reuse():
     from phridge.contrib.nufft_sf.op import nufft_sf_bind, nufft_sf_calc
     from phridge.contracts.models import CrystalSymmetry, Scatterer, SymOp
-    from phridge.packing import PackedMiller
-    from phridge.packing_xtal import PackedXray
+    from phridge.contracts.packing import PackedMiller
+    from phridge.contracts.packing import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
     from phridge.sfcalc.sessions import clear_engines
 

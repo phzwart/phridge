@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 SURROGATE_FIT_OP_NAME = "ml_i_surrogate_fit"
 

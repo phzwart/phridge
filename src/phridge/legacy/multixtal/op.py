@@ -7,7 +7,7 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.ops import register_op
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedXray
 
 OP_NAME = "multixtal_fit"
 

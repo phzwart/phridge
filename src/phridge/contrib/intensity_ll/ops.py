@@ -15,7 +15,7 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.ops import register_op
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 OP_NAME = "ml_i_maps"
 MAPS_OP_NAME = OP_NAME

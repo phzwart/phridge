@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from phridge.packing import PackedMap, PackedMiller
+from phridge.contracts.packing import PackedMap, PackedMiller
 
 
 def resolve_device(device: str) -> str:

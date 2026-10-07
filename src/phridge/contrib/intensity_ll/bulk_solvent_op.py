@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 BULK_SOLVENT_OP_NAME = "ml_i_bulk_solvent_fit"
 

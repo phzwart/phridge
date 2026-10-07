@@ -30,7 +30,7 @@ except ImportError:
     adptbx = None
 
 from phridge.client.geometry import RemoteGeometry
-from phridge.packing_scattering import PackedSfGradients
+from phridge.sfcalc.packing import PackedSfGradients
 from phridge.sfcalc.client import RemoteGradients, RemoteRefinementTarget, _miller_template, _packed_xray, psd_target
 
 

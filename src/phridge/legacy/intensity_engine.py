@@ -220,8 +220,8 @@ def amplitude_scaffold_from_intensities(i_obs: Any) -> Any:
 
 
 from phridge.client.api import Bridge
-from phridge.client.convert import crystal_from_cctbx, miller_from_cctbx, miller_to_cctbx
-from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+from phridge.shims.cctbx import crystal_from_cctbx, miller_from_cctbx, miller_to_cctbx
+from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
 from phridge.contrib.intensity_ll.bulk_solvent_op import BULK_SOLVENT_OP_NAME
 from phridge.contrib.intensity_ll.client import RemoteIntensityMapResult
 from phridge.contrib.intensity_ll.ops import (
@@ -2958,7 +2958,7 @@ class IntensityFModel(
         if not opts.enabled:
             return
         try:
-            from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+            from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
             from phridge.contrib.spatial_sigmaa_v2.alternate import run_macrocycle_step
             from phridge.sfcalc.ops import scattering_model
 

@@ -87,8 +87,8 @@ def test_build_geometry_restraints_memory():
     pytest.importorskip("cctbx")
     pytest.importorskip("mmtbx")
     from phridge.client import RemoteRestraintBuilder
-    from phridge.packing_geometry import PackedRestraints
-    from phridge.packing_xtal import PackedHierarchy
+    from phridge.contracts.packing import PackedRestraints
+    from phridge.contracts.packing import PackedHierarchy
 
     bridge = Bridge(memory=True, timeout=30)
     out = RemoteRestraintBuilder(bridge).build(pdb_string=_helix_pdb(5))
@@ -128,7 +128,7 @@ def test_geometry_restraints_energy_grad_via_handle():
 def test_unknown_restraints_handle_errors():
     pytest.importorskip("cctbx")
     from phridge.cctbx_worker.ops.geometry_ops import geometry_restraints_energy_grad
-    from phridge.packing_xtal import PackedCartesian
+    from phridge.contracts.packing import PackedCartesian
 
     sites = PackedCartesian(np.zeros((3, 3), dtype=np.float64))
     with pytest.raises(KeyError, match="unknown restraints_handle"):
@@ -141,7 +141,7 @@ def test_torch_driver_build_then_minimize():
     pytest.importorskip("mmtbx")
     pytest.importorskip("torch")
     from phridge.client import RemoteGeometry, RemoteRestraintBuilder
-    from phridge.packing_xtal import PackedCartesian
+    from phridge.contracts.packing import PackedCartesian
 
     bridge = Bridge(memory=True, timeout=60)
     built = RemoteRestraintBuilder(bridge).build(pdb_string=_helix_pdb(5))

@@ -349,7 +349,7 @@ def run_omit_windows_from_fmodel(
         opts = options or omit_options_from_env()
         if not opts.enabled:
             return None
-        from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+        from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
         from phridge.contrib.intensity_ll.client import RemoteOmitWindowCoefficients
         from phridge.contrib.intensity_ll.ops import register_ops
 

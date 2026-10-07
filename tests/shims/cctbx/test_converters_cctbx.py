@@ -3,7 +3,7 @@ import pytest
 
 cctbx = pytest.importorskip("cctbx")
 
-from phridge.client.convert import (  # noqa: E402
+from phridge.shims.cctbx import (  # noqa: E402
     crystal_from_cctbx,
     crystal_to_cctbx,
     map_from_cctbx,
@@ -12,7 +12,7 @@ from phridge.client.convert import (  # noqa: E402
     miller_to_cctbx,
     to_canonical,
 )
-from phridge.client.convert_xtal import (  # noqa: E402
+from phridge.shims.cctbx import (  # noqa: E402
     gridding_from_cctbx,
     hierarchy_from_cctbx,
     hierarchy_to_cctbx,
@@ -217,8 +217,8 @@ def test_anisotropic_xray_and_hierarchy_uij():
 
 
 def test_geometry_restraints_i_seq_tables():
-    from phridge.client.convert_geometry import restraints_to_proxies
-    from phridge.packing_geometry import PackedRestraints, unpack_restraints
+    from phridge.shims.cctbx import restraints_to_proxies
+    from phridge.contracts.packing import PackedRestraints, unpack_restraints
 
     packed = PackedRestraints(
         n_sites=3,
@@ -246,7 +246,7 @@ def test_em_map_and_density_at_sites():
     from iotbx.map_manager import map_manager
     from scitbx.array_family import flex
 
-    from phridge.client.em import density_at_sites, em_map_from_map_manager
+    from phridge.shims.cctbx import density_at_sites, em_map_from_map_manager
 
     cs = crystal.symmetry(unit_cell=(10, 10, 10, 90, 90, 90), space_group_symbol="P 1")
     n = (8, 8, 8)
@@ -259,10 +259,10 @@ def test_em_map_and_density_at_sites():
     samples = density_at_sites(packed, np.array([[5.0, 5.0, 5.0]]))
     assert samples.shape == (1,)
 
-    from phridge.client.em import density_at_hierarchy, em_map_as_real_map, em_map_from_numpy
+    from phridge.shims.cctbx import density_at_hierarchy, em_map_as_real_map, em_map_from_numpy
     from phridge.client.geometry import model_geometry
-    from phridge.packing_geometry import PackedRestraints
-    from phridge.packing_xtal import PackedHierarchy
+    from phridge.contracts.packing import PackedRestraints
+    from phridge.contracts.packing import PackedHierarchy
     from phridge.contracts.models import Atom, CoordinateFrame
 
     packed2 = em_map_from_numpy(packed.data, packed.meta.crystal, wrapping=False, label="half1")

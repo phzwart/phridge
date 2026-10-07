@@ -218,7 +218,7 @@ def _download_pdb(code: str, dest: Path) -> None:
 
 
 def _model_from_cctbx(xs):
-    from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+    from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
     from phridge.sfcalc.ops import scattering_model
 
     return scattering_model(xray_from_cctbx(xs), scattering_table_from_cctbx(xs))
@@ -386,7 +386,7 @@ def run_case_via_bridge(
     """Phenix/cctbx client: local FFT, stamp + NUFFT on the torch worker."""
     from phridge.contrib.nufft_sf import register
     from phridge.contracts.models import SfEngineParams
-    from phridge.packing import PackedMiller
+    from phridge.contracts.packing import PackedMiller
     from phridge.sfcalc.client import _miller_template, _packed_xray
 
     register()

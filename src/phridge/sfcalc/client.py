@@ -21,17 +21,22 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.client.convert import crystal_from_cctbx, miller_from_cctbx
-from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+from phridge.shims.cctbx import crystal_from_cctbx, miller_from_cctbx
+from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
 from phridge.contracts.models import SfEngineParams
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 from phridge.sfcalc.packing import PackedSfCurvatures, PackedSfGradients, PackedTargetResult
 
 
 def _flex():
-    from cctbx.array_family import flex
+    from phridge.shims.cctbx import _flex as api
 
-    return flex
+    class _Flex:
+        vec3_double = staticmethod(api.vec3_double)
+        double = staticmethod(api.double)
+        sym_mat3_double = staticmethod(api.sym_mat3_double)
+
+    return _Flex
 
 
 def _hkl_of(miller_set: Any) -> np.ndarray:
@@ -79,12 +84,12 @@ class RemoteGradients:
         return flex.sym_mat3_double([tuple(float(x) for x in row) for row in self.raw.d_u_star])
 
     def d_target_d_u_cart(self):
-        from cctbx import adptbx
+        from phridge.shims.cctbx._adptbx import grad_u_star_as_u_cart
 
         flex = _flex()
         uc = self.xray_structure.unit_cell()
         return flex.sym_mat3_double(
-            [adptbx.grad_u_star_as_u_cart(uc, tuple(float(x) for x in row)) for row in self.raw.d_u_star]
+            [grad_u_star_as_u_cart(uc, tuple(float(x) for x in row)) for row in self.raw.d_u_star]
         )
 
     def d_target_d_occupancy(self):
@@ -104,7 +109,7 @@ class RemoteGradients:
         grad_u_aniso; occupancy if grad_occupancy; fp / fdp if any
         scatterer has grad_fp / grad_fdp (cctbx quirk).
         """
-        from cctbx import adptbx
+        from phridge.shims.cctbx._adptbx import grad_u_star_as_u_cart
 
         flex = _flex()
         xs = self.xray_structure
@@ -121,7 +126,7 @@ class RemoteGradients:
             if fl.use_u_iso() and fl.grad_u_iso():
                 out.append(float(self.raw.d_u_iso[i]))
             if fl.use_u_aniso() and fl.grad_u_aniso():
-                out.extend(adptbx.grad_u_star_as_u_cart(uc, tuple(float(x) for x in self.raw.d_u_star[i])))
+                out.extend(grad_u_star_as_u_cart(uc, tuple(float(x) for x in self.raw.d_u_star[i])))
             if fl.grad_occupancy():
                 out.append(float(self.raw.d_occupancy[i]))
             if any_fp:
@@ -213,7 +218,7 @@ class RemoteStructureFactors:
             handle=self._ensure_bound(),
             **self._inputs(),
         )
-        from phridge.client.convert import miller_to_cctbx
+        from phridge.shims.cctbx import miller_to_cctbx
 
         return miller_to_cctbx(packed if isinstance(packed, PackedMiller) else packed)
 
@@ -370,7 +375,7 @@ class RemoteRefinementTarget:
         return out["target"].meta.value, grads.packed()
 
     def f_calc(self):
-        from phridge.client.convert import miller_to_cctbx
+        from phridge.shims.cctbx import miller_to_cctbx
 
         if self.last is None:
             self.compute()
@@ -464,7 +469,7 @@ class RemoteRefinementTarget:
         search. Returns diagnostics; ``xray_structure`` on the result is a
         refined deep copy.
         """
-        from cctbx.array_family import flex
+        flex = _flex()
 
         xs = (xray_structure if xray_structure is not None else self.xray_structure).deep_copy_scatterers()
         for sc in xs.scatterers():
@@ -554,7 +559,7 @@ class RemoteRefinementTarget:
 
 def _pack_block_diagonal(xray_structure: Any, curv: PackedSfCurvatures):
     """Pack per-atom GN block diagonals in cartesian packing order."""
-    from cctbx import adptbx
+    from phridge.shims.cctbx._adptbx import grad_u_star_as_u_cart
 
     flex = _flex()
     xs = xray_structure
@@ -576,7 +581,7 @@ def _pack_block_diagonal(xray_structure: Any, curv: PackedSfCurvatures):
             for mu in range(6):
                 e = [0.0] * 6
                 e[mu] = 1.0
-                J[:, mu] = adptbx.grad_u_star_as_u_cart(uc, tuple(e))
+                J[:, mu] = grad_u_star_as_u_cart(uc, tuple(e))
             H_cart = J @ curv.u_star[i] @ J.T
             out.extend(np.diag(H_cart).tolist())
         if fl.grad_occupancy():

@@ -9,7 +9,7 @@ import pytest
 
 from phridge.contrib.intensity_ll import aniso_rice as ar
 from phridge.contracts.models import CrystalSymmetry, ObservationType
-from phridge.packing import PackedMiller
+from phridge.contracts.packing import PackedMiller
 
 
 def test_laue_from_number_and_hall():

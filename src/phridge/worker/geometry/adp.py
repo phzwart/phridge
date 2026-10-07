@@ -27,7 +27,7 @@ from typing import Any, Callable, Optional, Sequence
 import numpy as np
 import torch
 
-from phridge.packing_geometry import PackedRestraints
+from phridge.contracts.packing import PackedRestraints
 
 Tensor = torch.Tensor
 

@@ -8,8 +8,8 @@ import numpy as np
 
 from phridge.contrib.nufft_sf.options import NufftEngineOptions
 from phridge.ops import register_op
-from phridge.packing import PackedMiller
-from phridge.packing_xtal import PackedXray
+from phridge.contracts.packing import PackedMiller
+from phridge.contracts.packing import PackedXray
 from phridge.sfcalc.ops import _DEVICE, _bound_engine, _miller_like, _np, _packed_grads, scattering_model
 from phridge.sfcalc.packing import PackedScatteringTable, PackedSfGradients
 

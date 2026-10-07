@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 from scipy import stats
 
-from phridge.client.convert import miller_from_cctbx
+from phridge.shims.cctbx import miller_from_cctbx
 from phridge.contrib.intensity_ll.ops import NUISANCE_FIT_OP_NAME
 
 

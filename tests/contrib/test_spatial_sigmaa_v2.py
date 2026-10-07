@@ -938,7 +938,7 @@ def test_job_input_from_state_flag_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_apply_frozen_modified_model():
     from phridge.contracts.models import CrystalSymmetry, Scatterer
-    from phridge.packing_xtal import PackedXray
+    from phridge.contracts.packing import PackedXray
 
     n = 3
     xray = PackedXray(
@@ -1029,7 +1029,7 @@ def test_apply_hosts_torch_result_arrays():
     """Apply pulls w / U off the compute device before touching PackedXray."""
     torch = pytest.importorskip("torch")
     from phridge.contracts.models import CrystalSymmetry, Scatterer
-    from phridge.packing_xtal import PackedXray
+    from phridge.contracts.packing import PackedXray
 
     n = 2
     xray = PackedXray(

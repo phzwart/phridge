@@ -321,7 +321,7 @@ def test_op_wire_n1():
     from phridge.legacy.multixtal.op import multixtal_fit
     from phridge.legacy.multixtal.structure import f_calc_s_g
     from phridge.contracts.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
-    from phridge.packing_xtal import PackedXray
+    from phridge.contracts.packing import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
 
     model = _tiny_model(fdp=0.0, n=2)

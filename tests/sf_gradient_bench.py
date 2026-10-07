@@ -225,7 +225,7 @@ def cctbx_fft_site_grads(
 
 
 def _phridge_engine(xs, hkl: np.ndarray, d_min: float, device: str, quality_factor: float = DEFAULT_QUALITY):
-    from phridge.client.convert_xtal import scattering_table_from_cctbx, xray_from_cctbx
+    from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
     from phridge.sfcalc.engine import EngineParams, StructureFactorEngine
     from phridge.sfcalc.ops import scattering_model
 
