@@ -121,7 +121,7 @@ def multixtal_fit(
     obs_pass: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Run the phase-1 multi-dataset covariance pipeline."""
-    from phridge.contrib.multixtal.options import MultixtalOptions
+    from phridge.legacy.multixtal.options import MultixtalOptions
     from phridge.legacy.multixtal_pipeline import run_multixtal_core
     from phridge.sfcalc.ops import _engine_params, scattering_model
 
@@ -129,7 +129,7 @@ def multixtal_fit(
     model = scattering_model(xray, table)
     obs = None
     if obs_i is not None and obs_dose is not None:
-        from phridge.contrib.multixtal.unmerged import ObservationTable
+        from phridge.legacy.multixtal.unmerged import ObservationTable
 
         oi = _np(obs_i, np.float64).reshape(-1)
         n_o = oi.size

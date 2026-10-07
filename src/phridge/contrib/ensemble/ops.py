@@ -119,7 +119,7 @@ def _reference_f(
         return np.asarray(f_mu, dtype=np.complex128).reshape(-1)
     if xray is None or sites_frac is None:
         raise ValueError("ensemble_fit needs f_mu or an xray structure and sites_frac")
-    from phridge.contrib.multixtal.structure import f_calc_s_g, model_with_cell
+    from phridge.legacy.multixtal.structure import f_calc_s_g, model_with_cell
     from phridge.sfcalc.ops import _engine_params, scattering_model
 
     model = scattering_model(xray, table)
@@ -146,7 +146,7 @@ def _shell_index(hkl: np.ndarray, cells: Optional[np.ndarray], bin_size: int) ->
     import torch
 
     from phridge.contrib.intensity_ll.rint import equal_count_shell_indices
-    from phridge.contrib.multixtal.structure import resolution_s2
+    from phridge.legacy.multixtal.structure import resolution_s2
 
     cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)
     if cells is not None:
@@ -239,7 +239,7 @@ def ensemble_fit(
         f_mu_vec = f_mu_a.reshape(-1)
     f_var_a = np.zeros((n_data, n_h), dtype=np.complex128) if f_var is None else _np(f_var, np.complex128)
     if f_mask is not None and opts.likelihood == "intensity":
-        from phridge.contrib.multixtal.structure import apply_bulk_solvent, resolution_s2
+        from phridge.legacy.multixtal.structure import apply_bulk_solvent, resolution_s2
 
         cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)
         if cells is not None:

@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.spline import bspline_design_numpy, open_uniform_knots
+from phridge.legacy.multixtal.spline import bspline_design_numpy, open_uniform_knots
 
 
 def real_spherical_harmonics(dirs: np.ndarray, order: int) -> np.ndarray:

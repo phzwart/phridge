@@ -9,8 +9,8 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.contrib.multixtal.indexing import IndexingChoice, choose_indexing
-from phridge.contrib.multixtal.options import DatasetManifest, DatasetSpec, MultixtalOptions, Placement
+from phridge.legacy.multixtal.indexing import IndexingChoice, choose_indexing
+from phridge.legacy.multixtal.options import DatasetManifest, DatasetSpec, MultixtalOptions, Placement
 
 
 @dataclass
@@ -363,7 +363,7 @@ def prepare_job(
 
     obs = _load_unmerged(specs, options, hkl, cells, waves, names, logs)
     if obs is not None and not any(np.any(mask_plus[d]) or np.any(mask_minus[d]) for d in range(n_data)):
-        from phridge.contrib.multixtal.unmerged import crystal_means_from_obs
+        from phridge.legacy.multixtal.unmerged import crystal_means_from_obs
 
         i_plus, i_minus, sig_plus, sig_minus, mask_plus, mask_minus = crystal_means_from_obs(
             obs, n_data, n_h, centric
@@ -408,8 +408,8 @@ def _load_unmerged(
     paths = [s.unmerged for s in specs]
     if not any(paths):
         return None
-    from phridge.contrib.multixtal.dose_io import load_dose_table
-    from phridge.contrib.multixtal.unmerged import observations_from_arrays, read_dials_refl, read_unmerged_mtz
+    from phridge.legacy.multixtal.dose_io import load_dose_table
+    from phridge.legacy.multixtal.unmerged import observations_from_arrays, read_dials_refl, read_unmerged_mtz
 
     crystals: list[dict[str, np.ndarray]] = []
     dose_tables: list[Optional[dict]] = []

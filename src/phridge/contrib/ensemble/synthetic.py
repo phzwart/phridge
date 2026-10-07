@@ -254,7 +254,7 @@ def campaign_with_engine(hmax: int = 1, n_atoms: int = 4) -> np.ndarray:
     short helix of carbon scatterers, the same construction
     ``multixtal.synthetic`` uses for its benchmark atoms.
     """
-    from phridge.contrib.multixtal.structure import f_calc_s_g
+    from phridge.legacy.multixtal.structure import f_calc_s_g
     from phridge.sfcalc.engine.engine import ScatteringModel
     from phridge.sfcalc.engine.symmetry import identity_ops
 

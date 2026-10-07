@@ -9,19 +9,19 @@ import pytest
 
 pytestmark = pytest.mark.legacy
 
-from phridge.contrib.multixtal.baselines import linear_zero_dose, reject_bad_batches, run_baselines
-from phridge.contrib.multixtal.damage import (
+from phridge.legacy.multixtal.baselines import linear_zero_dose, reject_bad_batches, run_baselines
+from phridge.legacy.multixtal.damage import (
     combine_loadings,
     fit_damage_between,
     fit_damage_within,
 )
-from phridge.contrib.multixtal.diagnostics import (
+from phridge.legacy.multixtal.diagnostics import (
     loading_density,
     permutation_null,
     run_diagnostics,
     smoothness_fraction,
 )
-from phridge.contrib.multixtal.dose_io import (
+from phridge.legacy.multixtal.dose_io import (
     attach_dose,
     circular_linear_corr,
     collection_index,
@@ -29,16 +29,16 @@ from phridge.contrib.multixtal.dose_io import (
     report_crystal,
     sensitivities,
 )
-from phridge.contrib.multixtal.dose_model import (
+from phridge.legacy.multixtal.dose_model import (
     build_dose_model,
     fit_exp_time_constants,
     fit_learned_profiles,
     permute_dose_bins_within_reflection,
 )
-from phridge.contrib.multixtal.influence import ClassicalInfluence, analyze_grouped_influence
-from phridge.contrib.multixtal.options import MultixtalOptions
-from phridge.contrib.multixtal.systematics import fit_systematics, real_spherical_harmonics
-from phridge.contrib.multixtal.unmerged import ObservationTable, bijvoet_sign_from_isym, observations_from_arrays
+from phridge.legacy.multixtal.influence import ClassicalInfluence, analyze_grouped_influence
+from phridge.legacy.multixtal.options import MultixtalOptions
+from phridge.legacy.multixtal.systematics import fit_systematics, real_spherical_harmonics
+from phridge.legacy.multixtal.unmerged import ObservationTable, bijvoet_sign_from_isym, observations_from_arrays
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ def _tiny_model(*, fdp: float = 0.0, n: int = 3):
 
 
 def _phase1_bundle(n_data: int = 1, n_h: int = 8, seed: int = 0):
-    from phridge.contrib.multixtal.structure import f_calc_s_g
+    from phridge.legacy.multixtal.structure import f_calc_s_g
     from phridge.sfcalc.engine.engine import EngineParams
 
     model = _tiny_model(fdp=0.0, n=3)
@@ -485,7 +485,7 @@ def test_5_between_crystal_ell_uncorrelated_with_z():
 
     # z from a damage-free residual matches z (the conformational scores are unchanged).
     y_free = mu[None, :] + z @ l + 0.08 * rng.normal(size=(n_data, n_h))
-    from phridge.contrib.multixtal.factors import fit_factors
+    from phridge.legacy.multixtal.factors import fit_factors
 
     f_dam = fit_factors(y - g_mean @ ell_b, w, rank=1, rank_perms=8, rng=np.random.default_rng(5))
     f_free = fit_factors(y_free, w, rank=1, rank_perms=8, rng=np.random.default_rng(5))
@@ -499,8 +499,8 @@ def test_5_between_crystal_ell_uncorrelated_with_z():
 
 
 def test_4_anom_site_ds_and_corrected_map():
-    from phridge.contrib.multixtal.anom_damage import fit_anom_site_decay
-    from phridge.contrib.multixtal.diagnostics import loading_density
+    from phridge.legacy.multixtal.anom_damage import fit_anom_site_decay
+    from phridge.legacy.multixtal.diagnostics import loading_density
 
     rng = np.random.default_rng(4)
     n_data, n_h = 6, 24
@@ -667,10 +667,10 @@ def test_7_diagnostics_physical_flag():
 
 
 def test_options_and_protocols():
-    from phridge.contrib.multixtal.damage import LinearDamage
-    from phridge.contrib.multixtal.dose_model import LinearDose
-    from phridge.contrib.multixtal.interfaces import DamageTerm, DoseModel, SystematicsModel
-    from phridge.contrib.multixtal.systematics import FittedSystematics, SmoothSystematics
+    from phridge.legacy.multixtal.damage import LinearDamage
+    from phridge.legacy.multixtal.dose_model import LinearDose
+    from phridge.legacy.multixtal.interfaces import DamageTerm, DoseModel, SystematicsModel
+    from phridge.legacy.multixtal.systematics import FittedSystematics, SmoothSystematics
 
     MultixtalOptions(dose_model="learned", damage_rank="auto", absorption_order=4)
     MultixtalOptions(dose_model="exp", n_exp_modes=2, damage_rank=1)
@@ -692,7 +692,7 @@ def test_options_and_protocols():
 
 
 def test_cli_damage_flags():
-    from phridge.contrib.multixtal.cli import build_parser, options_from_args
+    from phridge.legacy.multixtal.cli import build_parser, options_from_args
 
     args = build_parser().parse_args(
         [
@@ -720,8 +720,8 @@ def test_cli_damage_flags():
 
 def test_synthetic_unmerged_if_cctbx(tmp_path):
     pytest.importorskip("cctbx")
-    from phridge.contrib.multixtal.synthetic import write_unmerged_mtz
-    from phridge.contrib.multixtal.unmerged import read_unmerged_mtz
+    from phridge.legacy.multixtal.synthetic import write_unmerged_mtz
+    from phridge.legacy.multixtal.unmerged import read_unmerged_mtz
 
     n = 12
     path = write_unmerged_mtz(

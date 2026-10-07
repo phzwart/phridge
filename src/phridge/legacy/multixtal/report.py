@@ -9,8 +9,8 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.client import MultixtalJob
-from phridge.contrib.multixtal.options import MultixtalOptions
+from phridge.legacy.multixtal.client import MultixtalJob
+from phridge.legacy.multixtal.options import MultixtalOptions
 
 
 def write_run_config(out_dir: Path, options: MultixtalOptions, extra: Optional[dict[str, Any]] = None) -> Path:

@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.spline import bspline_design_numpy, open_uniform_knots
+from phridge.legacy.multixtal.spline import bspline_design_numpy, open_uniform_knots
 
 
 @dataclass

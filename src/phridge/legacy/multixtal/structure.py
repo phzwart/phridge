@@ -11,7 +11,7 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from phridge.contrib.multixtal.friedel import s_g_from_real_and_full
+from phridge.legacy.multixtal.friedel import s_g_from_real_and_full
 from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
 
 

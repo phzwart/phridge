@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from phridge.contrib.multixtal.factors import leave_one_out_factors
-from phridge.contrib.multixtal.loadings import FreeInPhaseLoadings
+from phridge.legacy.multixtal.factors import leave_one_out_factors
+from phridge.legacy.multixtal.loadings import FreeInPhaseLoadings
 
 
 @dataclass

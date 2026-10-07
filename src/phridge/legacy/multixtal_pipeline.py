@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.anomalous import (
+from phridge.legacy.multixtal.anomalous import (
     AnomalousFit,
     BijvoetRegression,
     bijvoet_delta,
@@ -15,20 +15,20 @@ from phridge.contrib.multixtal.anomalous import (
     fit_site_q,
     normalize_delta,
 )
-from phridge.contrib.multixtal.explain import DatasetExplanation, explain_datasets
-from phridge.contrib.multixtal.factors import (
+from phridge.legacy.multixtal.explain import DatasetExplanation, explain_datasets
+from phridge.legacy.multixtal.factors import (
     FactorFit,
     apply_scale_leakage_to_y,
     fit_factors,
     scale_leakage,
 )
-from phridge.contrib.multixtal.influence import InfluenceResult, analyze_grouped_influence, analyze_influence
-from phridge.contrib.multixtal.maps_out import MapCoefficients, map_coefficients
-from phridge.contrib.multixtal.nuisance import DatasetNuisance, fit_dataset_nuisance
-from phridge.contrib.multixtal.options import MultixtalOptions
-from phridge.contrib.multixtal.residuals import mate_mean, normalized_residuals
-from phridge.contrib.multixtal.selector import PopulationSelector
-from phridge.contrib.multixtal.structure import f_calc_s_g, resolution_s2, s_hat
+from phridge.legacy.multixtal.influence import InfluenceResult, analyze_grouped_influence, analyze_influence
+from phridge.legacy.multixtal.maps_out import MapCoefficients, map_coefficients
+from phridge.legacy.multixtal.nuisance import DatasetNuisance, fit_dataset_nuisance
+from phridge.legacy.multixtal.options import MultixtalOptions
+from phridge.legacy.multixtal.residuals import mate_mean, normalized_residuals
+from phridge.legacy.multixtal.selector import PopulationSelector
+from phridge.legacy.multixtal.structure import f_calc_s_g, resolution_s2, s_hat
 from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel
 
 
@@ -96,7 +96,7 @@ def run_multixtal_core(
     if sites_frac.ndim == 2:
         sites_frac = np.broadcast_to(sites_frac[None, :, :], (n_data, sites_frac.shape[0], 3)).copy()
 
-    from phridge.contrib.multixtal.structure import model_with_cell
+    from phridge.legacy.multixtal.structure import model_with_cell
 
     f_calc = np.zeros((n_data, n_h), dtype=np.complex128)
     s_arr = np.zeros((n_data, n_h), dtype=np.complex128)
@@ -379,18 +379,18 @@ def _apply_damage_layer(
         result.stats["damage_skip_reason"] = "no_obs" if obs is None or dose.size == 0 else "D=0"
         return
 
-    from phridge.contrib.multixtal.anom_damage import fit_anom_site_decay
-    from phridge.contrib.multixtal.baselines import run_baselines
-    from phridge.contrib.multixtal.damage import fit_damage, observation_residuals
-    from phridge.contrib.multixtal.diagnostics import run_diagnostics
-    from phridge.contrib.multixtal.dose_io import dose_bins, sensitivities
-    from phridge.contrib.multixtal.dose_model import (
+    from phridge.legacy.multixtal.anom_damage import fit_anom_site_decay
+    from phridge.legacy.multixtal.baselines import run_baselines
+    from phridge.legacy.multixtal.damage import fit_damage, observation_residuals
+    from phridge.legacy.multixtal.diagnostics import run_diagnostics
+    from phridge.legacy.multixtal.dose_io import dose_bins, sensitivities
+    from phridge.legacy.multixtal.dose_model import (
         build_dose_model,
         fit_exp_time_constants,
         fit_learned_profiles,
     )
-    from phridge.contrib.multixtal.maps_out import damage_map_coefficients
-    from phridge.contrib.multixtal.systematics import SmoothSystematics, fit_systematics
+    from phridge.legacy.multixtal.maps_out import damage_map_coefficients
+    from phridge.legacy.multixtal.systematics import SmoothSystematics, fit_systematics
 
     def _arr(name: str, default: Any = None) -> np.ndarray:
         if hasattr(obs, name):
@@ -429,7 +429,7 @@ def _apply_damage_layer(
         if getattr(rep, "confound", False) and 0 <= int(rep.crystal) < n_data:
             withheld[int(rep.crystal)] = True
     if not reports:
-        from phridge.contrib.multixtal.dose_io import report_crystal
+        from phridge.legacy.multixtal.dose_io import report_crystal
 
         for d in range(n_data):
             sel = crystal == d
@@ -500,7 +500,7 @@ def _apply_damage_layer(
                     bin_w[b, h] = float(np.sum(w_obs[sel_h]))
         rank_use = options.damage_rank
         if rank_use == "auto":
-            from phridge.contrib.multixtal.dose_model import permute_dose_bins_within_reflection
+            from phridge.legacy.multixtal.dose_model import permute_dose_bins_within_reflection
 
             mat = bin_means * np.sqrt(np.maximum(bin_w, 0.0))
             sv = np.linalg.svd(np.nan_to_num(mat, nan=0.0), compute_uv=False)
@@ -545,7 +545,7 @@ def _apply_damage_layer(
     )
 
     # Outer loop: subtract damage from crystal means, refit phase-1 factors, refit D3.
-    from phridge.contrib.multixtal.damage import crystal_mean_profiles
+    from phridge.legacy.multixtal.damage import crystal_mean_profiles
 
     y_work = np.array(result.y, copy=True)
     factors = result.factors
@@ -658,7 +658,7 @@ def _apply_damage_layer(
                 n_crystal=n_data,
             )
         if result.maps is not None:
-            from phridge.contrib.multixtal.maps_out import plugin_fom
+            from phridge.legacy.multixtal.maps_out import plugin_fom
 
             phase = result.maps.phase_s
             fom = plugin_fom(e_c, sa, centric)

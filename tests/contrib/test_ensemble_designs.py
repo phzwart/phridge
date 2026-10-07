@@ -342,7 +342,7 @@ def test_cli_fit_on_pdb_campaign(tmp_path):
     from phridge.contrib.ensemble.cli import main
 
     try:
-        from phridge.contrib.multixtal.synthetic import write_synthetic_benchmark
+        from phridge.legacy.multixtal.synthetic import write_synthetic_benchmark
 
         write_synthetic_benchmark(tmp_path / "bench", n_datasets=2, d_min=6.0, include_outlier=False)
     except AssertionError as exc:

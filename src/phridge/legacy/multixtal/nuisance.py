@@ -22,10 +22,10 @@ from phridge.contrib.intensity_ll.aniso_rice import (
     quadratic_form,
     quadratic_form_torch,
 )
-from phridge.contrib.multixtal.reflection_model import RiceMomentQuasiLikelihood, sigma_a_from_alpha_beta
-from phridge.contrib.multixtal.residuals import sigma_p_shell
-from phridge.contrib.multixtal.spline import eval_log_spline, open_uniform_knots
-from phridge.contrib.multixtal.structure import apply_bulk_solvent
+from phridge.legacy.multixtal.reflection_model import RiceMomentQuasiLikelihood, sigma_a_from_alpha_beta
+from phridge.legacy.multixtal.residuals import sigma_p_shell
+from phridge.legacy.multixtal.spline import eval_log_spline, open_uniform_knots
+from phridge.legacy.multixtal.structure import apply_bulk_solvent
 
 
 @dataclass

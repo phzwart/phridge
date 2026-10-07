@@ -6,10 +6,10 @@ import argparse
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
-from phridge.contrib.multixtal.client import job_to_op_kwargs, load_manifest, prepare_job
-from phridge.contrib.multixtal.op import OP_NAME, register_ops
-from phridge.contrib.multixtal.options import MultixtalOptions
-from phridge.contrib.multixtal.report import write_reports
+from phridge.legacy.multixtal.client import job_to_op_kwargs, load_manifest, prepare_job
+from phridge.legacy.multixtal.op import OP_NAME, register_ops
+from phridge.legacy.multixtal.options import MultixtalOptions
+from phridge.legacy.multixtal.report import write_reports
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,7 +75,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     opts = options_from_args(args)
     manifest = load_manifest(args.manifest) if args.manifest else None
     if getattr(args, "unmerged", None) and manifest is None:
-        from phridge.contrib.multixtal.options import DatasetManifest, DatasetSpec
+        from phridge.legacy.multixtal.options import DatasetManifest, DatasetSpec
 
         data = list(args.data) or [""] * len(args.unmerged)
         specs = []

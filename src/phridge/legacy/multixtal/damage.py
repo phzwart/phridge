@@ -24,7 +24,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.residuals import normalized_residuals
+from phridge.legacy.multixtal.residuals import normalized_residuals
 
 
 @dataclass
@@ -334,7 +334,7 @@ def zero_dose_intensity(
     for d, item in enumerate(nuisances):
         if d >= n_c:
             break
-        from phridge.contrib.multixtal.reflection_model import sigma_a_from_alpha_beta
+        from phridge.legacy.multixtal.reflection_model import sigma_a_from_alpha_beta
 
         sa = np.maximum(sigma_a_from_alpha_beta(item.alpha, item.beta, item.sigma_p), 1e-6)
         den = item.scale_a * eps * (item.alpha**2 * item.sigma_p + item.beta)

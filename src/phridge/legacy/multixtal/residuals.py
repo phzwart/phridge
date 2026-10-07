@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from phridge.contrib.multixtal.reflection_model import sigma_a_from_alpha_beta
+from phridge.legacy.multixtal.reflection_model import sigma_a_from_alpha_beta
 
 
 def mate_mean(

@@ -13,7 +13,7 @@ from typing import Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.anomalous import fit_site_q
+from phridge.legacy.multixtal.anomalous import fit_site_q
 
 
 @dataclass

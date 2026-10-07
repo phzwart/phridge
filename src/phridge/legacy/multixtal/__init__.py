@@ -10,8 +10,8 @@ docstrings of ``nuisance``, ``spline``, and ``maps_out``).
 
 from __future__ import annotations
 
-from phridge.contrib.multixtal.options import DatasetManifest, DatasetSpec, MultixtalOptions
-from phridge.contrib.multixtal.op import OP_NAME, register_ops
+from phridge.legacy.multixtal.options import DatasetManifest, DatasetSpec, MultixtalOptions
+from phridge.legacy.multixtal.op import OP_NAME, register_ops
 
 __all__ = [
     "DatasetManifest",

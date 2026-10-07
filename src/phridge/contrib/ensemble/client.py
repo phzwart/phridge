@@ -86,8 +86,8 @@ def prepare_ensemble_job(
     free_flags: Optional[np.ndarray] = None,
 ) -> EnsembleJob:
     """Reindex, build the common ASU set and ``F_mask``, then attach ensemble arrays."""
-    from phridge.contrib.multixtal.client import prepare_job
-    from phridge.contrib.multixtal.options import MultixtalOptions
+    from phridge.legacy.multixtal.client import prepare_job
+    from phridge.legacy.multixtal.options import MultixtalOptions
 
     mx = MultixtalOptions(
         d_min=options.d_min,

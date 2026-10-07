@@ -14,9 +14,9 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.dose_model import permute_dose_bins_within_reflection
-from phridge.contrib.multixtal.spline import bspline_design_numpy, open_uniform_knots
-from phridge.contrib.multixtal.systematics import real_spherical_harmonics
+from phridge.legacy.multixtal.dose_model import permute_dose_bins_within_reflection
+from phridge.legacy.multixtal.spline import bspline_design_numpy, open_uniform_knots
+from phridge.legacy.multixtal.systematics import real_spherical_harmonics
 
 
 @dataclass

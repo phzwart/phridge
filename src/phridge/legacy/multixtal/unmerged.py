@@ -8,14 +8,14 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.dose_io import (
+from phridge.legacy.multixtal.dose_io import (
     CrystalDoseReport,
     attach_dose,
     beam_frame_vectors,
     load_dose_table,
     report_crystal,
 )
-from phridge.contrib.multixtal.indexing import choose_indexing
+from phridge.legacy.multixtal.indexing import choose_indexing
 
 
 @dataclass
@@ -207,7 +207,7 @@ def observations_from_arrays(
 
 def collection_wedge(batch: np.ndarray, phi: np.ndarray) -> np.ndarray:
     """Within-wedge frame position in [0, 1] from first-seen BATCH order."""
-    from phridge.contrib.multixtal.dose_io import collection_index
+    from phridge.legacy.multixtal.dose_io import collection_index
 
     idx = collection_index(batch).astype(np.float64)
     mx = float(idx.max()) if idx.size else 0.0

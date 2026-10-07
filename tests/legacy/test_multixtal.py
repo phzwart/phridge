@@ -1,4 +1,4 @@
-"""phridge.contrib.multixtal — registration, Friedel identities, pipeline limits, influence."""
+"""phridge.legacy.multixtal — registration, Friedel identities, pipeline limits, influence."""
 
 from __future__ import annotations
 
@@ -10,16 +10,16 @@ import pytest
 pytestmark = pytest.mark.legacy
 from pydantic import ValidationError
 
-from phridge.contrib.multixtal import MultixtalOptions, OP_NAME, register
-from phridge.contrib.multixtal.friedel import (
+from phridge.legacy.multixtal import MultixtalOptions, OP_NAME, register
+from phridge.legacy.multixtal.friedel import (
     bijvoet_intensity_difference,
     bijvoet_intensity_sum,
     reconstruct_f,
     s_g_from_real_and_full,
     split_s_g,
 )
-from phridge.contrib.multixtal.influence import ClassicalInfluence, effective_n
-from phridge.contrib.multixtal.selector import PopulationSelector, per_dataset_selector
+from phridge.legacy.multixtal.influence import ClassicalInfluence, effective_n
+from phridge.legacy.multixtal.selector import PopulationSelector, per_dataset_selector
 from phridge.ops import get_op
 from phridge.sfcalc.engine.engine import EngineParams, ScatteringModel, StructureFactorEngine
 from phridge.sfcalc.engine.symmetry import identity_ops
@@ -150,14 +150,14 @@ def test_influence_duplicate_dataset_doubles_share():
 
 
 def test_influence_zero_weight_cooks_near_zero():
-    from phridge.contrib.multixtal.factors import weighted_mean
-    from phridge.contrib.multixtal.influence import analyze_influence
+    from phridge.legacy.multixtal.factors import weighted_mean
+    from phridge.legacy.multixtal.influence import analyze_influence
 
     panel = _simulate_panel(n_data=4, rank=0, seed=3)
     y, w = panel["y"], panel["w"]
     w[-1] = 0.0
     mu = weighted_mean(y, w)
-    from phridge.contrib.multixtal.explain import explain_datasets
+    from phridge.legacy.multixtal.explain import explain_datasets
 
     expl = explain_datasets(y, w, mu, np.zeros((4, 0)), np.zeros((0, y.shape[1])), w)
     inf = analyze_influence(y, w, w, mu, np.zeros((4, 0)), np.zeros((0, y.shape[1])), expl.chi2_loo)
@@ -203,9 +203,9 @@ def test_selection_bias_guard():
 
 def test_limits_n1_rank0_no_anomalous():
     pytest.importorskip("torch")
-    from phridge.contrib.multixtal.options import MultixtalOptions
+    from phridge.legacy.multixtal.options import MultixtalOptions
     from phridge.legacy.multixtal_pipeline import run_multixtal_core
-    from phridge.contrib.multixtal.structure import f_calc_s_g
+    from phridge.legacy.multixtal.structure import f_calc_s_g
 
     model = _tiny_model(fdp=0.0, n=3)
     hkl = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1], [2, 0, 0], [0, 2, 0]], dtype=np.int64)
@@ -258,7 +258,7 @@ def test_limits_n1_rank0_no_anomalous():
 
 
 def test_rank_zero_is_population_mean_only():
-    from phridge.contrib.multixtal.factors import fit_factors
+    from phridge.legacy.multixtal.factors import fit_factors
 
     panel = _simulate_panel(n_data=5, rank=1, seed=5)
     fit = fit_factors(panel["y"], panel["w"], rank=0, rank_perms=8, rng=np.random.default_rng(5))
@@ -269,7 +269,7 @@ def test_rank_zero_is_population_mean_only():
 
 
 def test_no_anomalous_intercept_near_zero():
-    from phridge.contrib.multixtal.anomalous import BijvoetRegression
+    from phridge.legacy.multixtal.anomalous import BijvoetRegression
 
     rng = np.random.default_rng(6)
     n_data, n_h = 6, 30
@@ -282,7 +282,7 @@ def test_no_anomalous_intercept_near_zero():
 
 
 def test_spline_positive_and_partition():
-    from phridge.contrib.multixtal.spline import bspline_design_numpy, eval_log_spline, open_uniform_knots
+    from phridge.legacy.multixtal.spline import bspline_design_numpy, eval_log_spline, open_uniform_knots
 
     x = np.linspace(0.0, 0.25, 40)
     knots = open_uniform_knots(0.0, 0.25, 6)
@@ -294,8 +294,8 @@ def test_spline_positive_and_partition():
 
 
 def test_manifest_json(tmp_path):
-    from phridge.contrib.multixtal.client import load_manifest
-    from phridge.contrib.multixtal.options import DatasetManifest
+    from phridge.legacy.multixtal.client import load_manifest
+    from phridge.legacy.multixtal.options import DatasetManifest
 
     path = tmp_path / "datasets.json"
     path.write_text('{"datasets": [{"file": "a.mtz", "labels": "I(+),SIGI(+),I(-),SIGI(-)", "wavelength": 0.98}]}')
@@ -306,7 +306,7 @@ def test_manifest_json(tmp_path):
 
 
 def test_cli_parser():
-    from phridge.contrib.multixtal.cli import build_parser, options_from_args
+    from phridge.legacy.multixtal.cli import build_parser, options_from_args
 
     args = build_parser().parse_args(
         ["--model", "m.pdb", "--data", "a.mtz", "b.mtz", "--out", "out", "--rank", "auto", "--anomalous", "off"]
@@ -318,8 +318,8 @@ def test_cli_parser():
 
 def test_op_wire_n1():
     pytest.importorskip("torch")
-    from phridge.contrib.multixtal.op import multixtal_fit
-    from phridge.contrib.multixtal.structure import f_calc_s_g
+    from phridge.legacy.multixtal.op import multixtal_fit
+    from phridge.legacy.multixtal.structure import f_calc_s_g
     from phridge.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
     from phridge.packing_xtal import PackedXray
     from phridge.sfcalc.packing import PackedScatteringTable
@@ -373,8 +373,8 @@ def test_op_wire_n1():
 
 
 def test_client_import_is_torch_free():
-    import phridge.contrib.multixtal.client as client
-    import phridge.contrib.multixtal.options as options
+    import phridge.legacy.multixtal.client as client
+    import phridge.legacy.multixtal.options as options
 
     assert "torch" not in client.__dict__
     MultixtalOptions()
@@ -383,9 +383,9 @@ def test_client_import_is_torch_free():
 
 def test_score_recovery_and_outlier_flag():
     pytest.importorskip("torch")
-    from phridge.contrib.multixtal.options import MultixtalOptions
+    from phridge.legacy.multixtal.options import MultixtalOptions
     from phridge.legacy.multixtal_pipeline import run_multixtal_core
-    from phridge.contrib.multixtal.structure import f_calc_s_g
+    from phridge.legacy.multixtal.structure import f_calc_s_g
 
     model = _tiny_model(fdp=1.2, n=4)
     hkl = np.array(
@@ -449,7 +449,7 @@ def test_score_recovery_and_outlier_flag():
 
 def test_synthetic_if_cctbx(tmp_path):
     pytest.importorskip("cctbx")
-    from phridge.contrib.multixtal.synthetic import write_synthetic_benchmark
+    from phridge.legacy.multixtal.synthetic import write_synthetic_benchmark
 
     truth = write_synthetic_benchmark(tmp_path, n_datasets=4, d_min=3.0, seed=1, include_outlier=True)
     assert truth.pdb_path.is_file()

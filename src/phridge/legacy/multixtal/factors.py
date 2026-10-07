@@ -7,7 +7,7 @@ from typing import Optional, Union
 
 import numpy as np
 
-from phridge.contrib.multixtal.latent import PointMassGLS
+from phridge.legacy.multixtal.latent import PointMassGLS
 
 
 @dataclass

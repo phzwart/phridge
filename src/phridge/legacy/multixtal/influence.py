@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.multixtal.factors import leave_one_out_factors
+from phridge.legacy.multixtal.factors import leave_one_out_factors
 
 
 @dataclass
