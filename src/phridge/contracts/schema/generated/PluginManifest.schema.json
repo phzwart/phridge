@@ -1145,6 +1145,13 @@
                 "dtype": {
                     "$ref": "#/$defs/ManifestDtype"
                 },
+                "fit_on": {
+                    "description": "When this component is fitted. Empty unless it is a calibration fit.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
                 "from_space": {
                     "$ref": "#/$defs/Space"
                 },
@@ -1850,6 +1857,13 @@
         },
         "dtype": {
             "$ref": "#/$defs/ManifestDtype"
+        },
+        "fit_on": {
+            "description": "When this component is fitted. Empty unless it is a calibration fit.",
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "from_space": {
             "$ref": "#/$defs/Space"

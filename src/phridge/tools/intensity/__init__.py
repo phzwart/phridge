@@ -4,25 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from phridge.legacy.intensity_engine import (
-    IntensityDataError,
-    IntensityElectronDensityMap,
-    IntensityFModel,
-    IntensityFModelInfo,
-    IntensityFmodel,
-    IntensityGradients,
-    IntensityLikelihoodEngine,
-    IntensityTargetFunctor,
-    IntensityTargetResult,
-    IntensityTwinningError,
-    register_mli_targets,
-)
-from phridge.legacy.intensity_phenix_hook import (
-    disable_intensity_in_phenix,
-    enable_intensity_in_phenix,
-    is_intensity_enabled,
-)
-
 __all__ = [
     "IntensityDataError",
     "IntensityElectronDensityMap",
@@ -52,7 +33,36 @@ __all__ = [
 ]
 
 
+_ENGINE = {
+    "IntensityDataError",
+    "IntensityElectronDensityMap",
+    "IntensityFModel",
+    "IntensityFModelInfo",
+    "IntensityFmodel",
+    "IntensityGradients",
+    "IntensityLikelihoodEngine",
+    "IntensityTargetFunctor",
+    "IntensityTargetResult",
+    "IntensityTwinningError",
+    "register_mli_targets",
+}
+
+_PHENIX = {
+    "disable_intensity_in_phenix",
+    "enable_intensity_in_phenix",
+    "is_intensity_enabled",
+}
+
+
 def __getattr__(name: str) -> Any:
+    if name in _ENGINE:
+        from phridge.legacy import intensity_engine as engine
+
+        return getattr(engine, name)
+    if name in _PHENIX:
+        from phridge.legacy import intensity_phenix_hook as hook
+
+        return getattr(hook, name)
     if name in ("apply_omit", "from_files", "main", "parse_omit_selection", "run_intensity_pipeline"):
         from phridge.legacy import intensity_cli as cli
 

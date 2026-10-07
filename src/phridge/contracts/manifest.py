@@ -64,6 +64,7 @@ class PluginManifest(_Strict):
     dtype: Literal["float32", "float64"] = "float64"
     device: Literal["cpu", "cuda", "mps", "any"] = "any"
     version: str = "0"
+    fit_on: Optional[str] = None
 
     @model_validator(mode="after")
     def _check_spaces(self) -> PluginManifest:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from phridge.contracts.tensors import Predictive
+from phridge.contracts.tensors import Observed, Predictive
 
 
 class FieldScale:
@@ -24,3 +24,16 @@ class FieldScale:
             term = cotangent.fields[name] * self.gain
             total = term if total is None else total + term
         return Predictive({"location": total})
+
+
+class QComponent:
+    """One predictive block that can be fitted, applied, and differentiated."""
+
+    def forward(self, pred: Predictive) -> Predictive:
+        raise NotImplementedError
+
+    def adjoint(self, cotangent: Predictive) -> Predictive:
+        raise NotImplementedError
+
+    def fit(self, obs: Observed, mask: Any) -> Predictive:
+        raise NotImplementedError

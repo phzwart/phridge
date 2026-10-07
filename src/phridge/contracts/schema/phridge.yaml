@@ -317,3 +317,7 @@ classes:
         ifabsent: string(any)
       version:
         ifabsent: string(0)
+      fit_on:
+        range: string
+        required: false
+        description: When this component is fitted. Empty unless it is a calibration fit.

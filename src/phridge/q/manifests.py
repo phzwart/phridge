@@ -33,3 +33,6 @@ def component_for(name: str) -> FieldScale:
 def register() -> None:
     for name, manifest in MANIFESTS.items():
         register_manifest(manifest, impl=component_for(name))
+    from phridge.policies.calibrate_intensity import register as register_calibration
+
+    register_calibration()

@@ -455,3 +455,311 @@ def data_frac_spread(data_frac: Any) -> DataFracSpread:
         return DataFracSpread()
     p10, p50, p90 = (float(x) for x in np.percentile(arr, [10.0, 50.0, 90.0]))
     return DataFracSpread(p10=p10, p50=p50, p90=p90)
+
+def _wilson_bin_ids(wilson_bins: Any, s_sq: np.ndarray) -> np.ndarray:
+    """Per-reflection bin index for the binned Σ_W, compact and zero-based."""
+    n = int(np.asarray(s_sq).size)
+    if wilson_bins is not None:
+        raw = np.asarray(wilson_bins, dtype=np.float64).ravel()
+        if raw.shape == (n,) and np.all(np.isfinite(raw)) and np.all(raw >= 0):
+            _, compact = np.unique(raw.astype(np.int64), return_inverse=True)
+            return compact.astype(np.int64)
+    return equal_count_bins(s_sq)
+def _wilson_binned_means_np(
+    y: np.ndarray, bin_id: np.ndarray, valid: np.ndarray, n_bins: int
+) -> tuple[np.ndarray, np.ndarray]:
+    sums = np.bincount(bin_id[valid], weights=y[valid], minlength=n_bins)
+    counts = np.bincount(bin_id[valid], minlength=n_bins)
+    return counts, sums / np.maximum(counts, 1)
+def _fit_binned_wilson(
+    *,
+    io: np.ndarray,
+    sig: np.ndarray,
+    eps: np.ndarray,
+    centric: np.ndarray,
+    bin_id: np.ndarray,
+    s_cart: Optional[np.ndarray],
+    report_mask: np.ndarray,
+    max_iter: int,
+    dtype: Any,
+    device: Any,
+    failures: list[str],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Σ_W = S_k exp(-0.5 sᵀBs), tr B = 0, with S_k profiled so every bin's mean Z is 1."""
+    import torch
+    from phridge.d.rules.mli_quad import log_likelihood_normal, normalize
+    n = io.size
+    valid = (sig > 0) & (eps > 0) & np.isfinite(io) & np.isfinite(sig)
+    n_bins = int(bin_id.max()) + 1
+    y_np = io / np.maximum(eps, 1e-12)
+    _, means0 = _wilson_binned_means_np(y_np, bin_id, valid, n_bins)
+    pos = means0[means0 > 0]
+    floor = 1e-3 * float(np.median(pos)) if pos.size else 1e-8
+    io_t = torch.as_tensor(io, dtype=dtype, device=device)
+    si_t = torch.as_tensor(np.where(valid, sig, 1.0), dtype=dtype, device=device)
+    eps_t = torch.as_tensor(np.where(eps > 0, eps, 1.0), dtype=dtype, device=device)
+    cen_t = torch.as_tensor(centric, device=device)
+    y_t = torch.as_tensor(np.where(valid, y_np, 0.0), dtype=dtype, device=device)
+    w_t = torch.as_tensor(valid.astype(np.float64), dtype=dtype, device=device)
+    bin_t = torch.as_tensor(bin_id, dtype=torch.long, device=device)
+    counts = torch.zeros(n_bins, dtype=dtype, device=device).index_add_(0, bin_t, w_t)
+    counts = counts.clamp(min=1.0)
+    ones = torch.ones(n, dtype=dtype, device=device)
+    sa_w = torch.full((n,), 1e-4, dtype=dtype, device=device)
+    fit_tensor = s_cart is not None
+    s_t = torch.as_tensor(s_cart, dtype=dtype, device=device) if fit_tensor else None
+    p = torch.zeros(6, dtype=dtype, device=device, requires_grad=fit_tensor)
+    eye = torch.eye(3, dtype=dtype, device=device)
+    def _b() -> Any:
+        b = torch.stack(
+            [
+                torch.stack([p[0], p[3], p[4]]),
+                torch.stack([p[3], p[1], p[5]]),
+                torch.stack([p[4], p[5], p[2]]),
+            ]
+        )
+        return b - torch.trace(b) / 3.0 * eye
+    def _sigma_w() -> tuple[Any, Any]:
+        if fit_tensor:
+            a = torch.exp(-0.5 * torch.einsum("ni,ij,nj->n", s_t, _b(), s_t))
+        else:
+            a = ones
+        sums = torch.zeros(n_bins, dtype=dtype, device=device).index_add_(0, bin_t, w_t * y_t / a)
+        means = (sums / counts).clamp(min=floor)
+        return (means[bin_t] * a).clamp(min=1e-12), means
+    def _nll_i() -> Any:
+        sw, _ = _sigma_w()
+        ec, sa_n, zo, sz = normalize(ones, io_t, si_t, eps_t, sw, sa_w)
+        ll = log_likelihood_normal(ec, sa_n, zo, sz, cen_t) - torch.log(eps_t * sw)
+        return -ll
+    n_valid = max(float(valid.sum()), 1.0)
+    if fit_tensor:
+        opt = torch.optim.LBFGS([p], max_iter=int(max_iter), line_search_fn="strong_wolfe")
+        def closure() -> Any:
+            opt.zero_grad()
+            loss = (_nll_i() * w_t).sum() / n_valid
+            loss.backward()
+            return loss
+        try:
+            opt.step(closure)
+        except Exception as exc:
+            failures.append(f"wilson (binned tensor): {type(exc).__name__}: {exc}")
+    with torch.no_grad():
+        sw, means = _sigma_w()
+        per = _nll_i()
+        rep = torch.as_tensor(report_mask & valid, device=device)
+        nll = float(per[rep].mean().item()) if bool(rep.any()) else float("nan")
+        b_np = _b().detach().cpu().numpy().astype(np.float64) if fit_tensor else np.zeros((3, 3))
+        return (
+            sw.detach().cpu().numpy().astype(np.float64),
+            means.detach().cpu().numpy().astype(np.float64),
+            b_np,
+            nll,
+        )
+def _moment_wilson(
+    io: np.ndarray, eps: np.ndarray, s_sq: np.ndarray, tune: np.ndarray, sig: np.ndarray
+) -> tuple[float, float]:
+    """Moment Wilson plot → (Σ₀, B_W). Numpy polyfit, same coefficients as the legacy fit."""
+    valid = tune & (sig > 0) & (eps > 0)
+    if not np.any(valid):
+        valid = tune
+    y_tune = io[valid] / np.maximum(eps[valid], 1e-12)
+    x_tune = s_sq[valid]
+    n_valid = int(valid.sum())
+    n_shells = min(10, max(2, n_valid // 15))
+    sigma_0 = float(np.median(y_tune[y_tune > 0])) if np.any(y_tune > 0) else 100.0
+    b_wilson = 0.0
+    if n_shells >= 2 and (x_tune.max() - x_tune.min()) > 1e-6:
+        bins = np.linspace(x_tune.min(), x_tune.max(), n_shells + 1)
+        bin_idx = np.digitize(x_tune, bins[:-1]) - 1
+        bx, by = [], []
+        pos_mean = float(np.mean(y_tune[y_tune > 0])) if np.any(y_tune > 0) else 100.0
+        for bi in range(n_shells):
+            m = bin_idx == bi
+            if np.any(m):
+                bx.append(float(np.mean(x_tune[m])))
+                by.append(max(float(np.mean(y_tune[m])), 0.05 * pos_mean))
+        if len(bx) >= 2:
+            slope, intercept = np.polyfit(bx, np.log(by), 1)
+            sigma_0 = float(np.exp(intercept))
+            b_wilson = float(max(-2.0 * slope, 0.0))
+    return max(float(sigma_0), 1e-8), max(float(b_wilson), 0.0)
+def _b6(b_cart: np.ndarray) -> np.ndarray:
+    b = np.asarray(b_cart, dtype=np.float64)
+    return np.array([b[0, 0], b[1, 1], b[2, 2], b[0, 1], b[0, 2], b[1, 2]], dtype=np.float64)
+class WilsonAniso:
+    """Σ_W phase: moment Wilson plot, then the model-free intensity fit. No F_calc."""
+    def __init__(self, options: Optional[WilsonOptions] = None, *, max_iter: int = 60) -> None:
+        self.options = options or WilsonOptions()
+        self.max_iter = int(max_iter)
+        self.aniso_tensor = np.zeros(6, dtype=np.float64)
+        self._sigma_w: Optional[np.ndarray] = None
+        self.failures: list[str] = []
+    def forward(self, obs: Any) -> Any:
+        from phridge.contracts.tensors import Predictive
+        if self._sigma_w is None:
+            mask = _tune_mask(obs)
+            self.fit(obs, mask)
+        import torch
+        return Predictive({"sigma_w": torch.as_tensor(self._sigma_w, dtype=torch.float64)})
+    def adjoint(self, cotangent: Any) -> Any:
+        from phridge.contracts.tensors import Predictive
+        return Predictive({"location": cotangent.fields["sigma_w"]})
+    def fit(self, obs: Any, mask: Any) -> Any:
+        """Binned, anisotropic, or isotropic Σ_W. The reference path is binned."""
+        import torch
+        from phridge.contracts.tensors import Predictive
+        from phridge.sfcalc.ops import _DEVICE
+        io, sig, eps, centric, s_sq, hkl, cell, tune = _wilson_inputs(obs, mask)
+        sigma_0, b_wilson = _moment_wilson(io, eps, s_sq, tune, sig)
+        model = self.options.wilson_model
+        want_aniso = bool(self.options.carries_anisotropy)
+        s_cart = reciprocal_cartesian(tuple(float(x) for x in cell), hkl)
+        if s_cart.shape != (hkl.shape[0], 3) or not np.all(np.isfinite(s_cart)):
+            want_aniso = False
+            s_cart = None
+        elif want_aniso:
+            judged = s_cart if model == "binned" else s_cart[tune]
+            if tensor_identifiability(judged) < MIN_TENSOR_IDENTIFIABILITY:
+                want_aniso = False
+        dev = _DEVICE["device"]
+        dtype = torch.float32 if str(dev).startswith("mps") else torch.float64
+        if model == "binned":
+            fit_tensor = bool(want_aniso and s_cart is not None)
+            sigma_w, _means, b_cart, _nll = _fit_binned_wilson(
+                io=io,
+                sig=sig,
+                eps=eps,
+                centric=centric,
+                bin_id=_wilson_bin_ids(None, s_sq),
+                s_cart=s_cart if fit_tensor else None,
+                report_mask=tune,
+                max_iter=self.max_iter,
+                dtype=dtype,
+                device=dev,
+                failures=self.failures,
+            )
+        else:
+            sigma_w, b_cart = _curve_sigma_w(
+                io, sig, eps, centric, s_sq, tune, s_cart, sigma_0, b_wilson,
+                anisotropic=bool(want_aniso and model == "anisotropic" and s_cart is not None),
+                max_iter=self.max_iter, dtype=dtype, device=dev, failures=self.failures,
+            )
+        self._sigma_w = np.asarray(sigma_w, dtype=np.float64)
+        self.aniso_tensor = _b6(b_cart)
+        return Predictive({"sigma_w": torch.as_tensor(self._sigma_w, dtype=torch.float64)})
+def _tune_mask(obs: Any) -> np.ndarray:
+    part = obs.partitions.get("tune")
+    if part is None:
+        n = int(obs.data["i_obs"].shape[0])
+        return np.ones(n, dtype=bool)
+    return np.asarray(part.detach().cpu().numpy() if hasattr(part, "detach") else part, dtype=bool)
+def _wilson_inputs(
+    obs: Any, mask: Any
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _np(value: Any, dtype: Any) -> np.ndarray:
+        if hasattr(value, "detach"):
+            value = value.detach().cpu().numpy()
+        return np.asarray(value, dtype=dtype)
+    io = _np(obs.data["i_obs"], np.float64).reshape(-1)
+    sig = _np(obs.data["sig_i"], np.float64).reshape(-1)
+    eps = _np(obs.data["epsilon"], np.float64).reshape(-1)
+    centric = _np(obs.data["centric"], bool).reshape(-1)
+    s_sq = _np(obs.data["s_sq"], np.float64).reshape(-1)
+    hkl = _np(obs.index["hkl"], np.int32).reshape(-1, 3)
+    cell = _np(obs.data["unit_cell"], np.float64).reshape(-1)
+    tune = _np(mask, bool).reshape(-1)
+    return io, sig, eps, centric, s_sq, hkl, cell, tune
+def _curve_sigma_w(
+    io: np.ndarray,
+    sig: np.ndarray,
+    eps: np.ndarray,
+    centric: np.ndarray,
+    s_sq: np.ndarray,
+    tune: np.ndarray,
+    s_cart: Optional[np.ndarray],
+    sigma_0: float,
+    b_wilson: float,
+    *,
+    anisotropic: bool,
+    max_iter: int,
+    dtype: Any,
+    device: Any,
+    failures: list[str],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Isotropic or anisotropic smooth Wilson curve. Same LBFGS as the legacy stage."""
+    import torch
+    from phridge.d.rules.mli_quad import log_likelihood_normal, normalize
+    io_t = torch.as_tensor(io[tune], dtype=dtype, device=device)
+    si_t = torch.as_tensor(sig[tune], dtype=dtype, device=device)
+    eps_t = torch.as_tensor(eps[tune], dtype=dtype, device=device)
+    cen_t = torch.as_tensor(centric[tune], device=device)
+    s_sq_t = torch.as_tensor(s_sq[tune], dtype=dtype, device=device)
+    fc_wilson = torch.ones_like(io_t)
+    sa_wilson = torch.full_like(io_t, 1e-4)
+    log_s0 = torch.tensor(math.log(sigma_0), dtype=dtype, device=device, requires_grad=True)
+    params: list[Any] = [log_s0]
+    log_diag = off_diag = u_bw = None
+    s_cart_t = None
+    if anisotropic and s_cart is not None:
+        ld_init, od_init = isotropic_cholesky_params(b_wilson)
+        log_diag = torch.tensor(ld_init, dtype=dtype, device=device, requires_grad=True)
+        off_diag = torch.tensor(od_init, dtype=dtype, device=device, requires_grad=True)
+        s_cart_t = torch.as_tensor(s_cart[tune], dtype=dtype, device=device)
+        params += [log_diag, off_diag]
+    else:
+        u_bw = torch.tensor(_inv_softplus(b_wilson), dtype=dtype, device=device, requires_grad=True)
+        params.append(u_bw)
+    def _b_tensor() -> Any:
+        low = torch.zeros(3, 3, dtype=dtype, device=device)
+        d = torch.exp(log_diag)
+        low = low + torch.diag(d)
+        low = low + torch.stack(
+            [
+                torch.zeros(3, dtype=dtype, device=device),
+                torch.stack([off_diag[0], torch.zeros((), dtype=dtype, device=device), torch.zeros((), dtype=dtype, device=device)]),
+                torch.stack([off_diag[1], off_diag[2], torch.zeros((), dtype=dtype, device=device)]),
+            ]
+        )
+        return low @ low.T
+    def _sigma_now(s0_t: Any) -> Any:
+        if anisotropic:
+            quad = torch.einsum("ni,ij,nj->n", s_cart_t, _b_tensor(), s_cart_t)
+        else:
+            quad = torch.nn.functional.softplus(u_bw) * s_sq_t
+        return (s0_t * torch.exp(-0.5 * quad)).clamp(min=1e-12)
+    def _nll() -> Any:
+        s0_t = torch.exp(log_s0).clamp(min=1e-12)
+        sw_now = _sigma_now(s0_t)
+        ec, sa_n, zo, sz = normalize(fc_wilson, io_t, si_t, eps_t, sw_now, sa_wilson)
+        ll_z = log_likelihood_normal(ec, sa_n, zo, sz, cen_t)
+        ll_i = ll_z - torch.log((eps_t * sw_now).clamp(min=1e-12))
+        return -ll_i.sum()
+    opt = torch.optim.LBFGS(params, max_iter=int(max_iter), line_search_fn="strong_wolfe")
+    def _closure() -> Any:
+        opt.zero_grad()
+        loss = _nll()
+        loss.backward()
+        return loss
+    try:
+        opt.step(_closure)
+    except Exception as exc:
+        failures.append(f"wilson: {type(exc).__name__}: {exc}")
+    with torch.no_grad():
+        sigma = float(torch.exp(log_s0).clamp(min=1e-12).item())
+        if anisotropic:
+            b_cart = _b_tensor().detach().cpu().numpy().astype(np.float64)
+        else:
+            bw = float(torch.nn.functional.softplus(u_bw).item())
+            b_cart = np.eye(3, dtype=np.float64) * bw
+    if anisotropic and s_cart is not None:
+        sigma_w = sigma_w_from_b(s_cart=s_cart, sigma_0=sigma, b_cart=b_cart)
+    else:
+        bw = float(np.trace(b_cart) / 3.0)
+        sigma_w = sigma * np.exp(-0.5 * bw * s_sq)
+    return np.asarray(sigma_w, dtype=np.float64), b_cart
+def _inv_softplus(x: float) -> float:
+    x = max(float(x), 1e-8)
+    if x > 20.0:
+        return x
+    return float(math.log(math.expm1(x)))
