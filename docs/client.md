@@ -6,7 +6,7 @@ side only. Passing a cctbx object into `call`/`submit` goes through
 
 ## Coordinates and xray
 
-`phridge.shims.cctbx` and `phridge.shims.cctbx`:
+`phridge.shims.cctbx`:
 
 - miller arrays, HL coefficients, MTZ `ReflectionFile`
 - real/complex maps, map coefficients, crystal gridding

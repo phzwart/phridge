@@ -110,31 +110,9 @@ def build_structure(
     seed: int = 0,
 ):
     """Random x-ray structure with ~n_atoms ASU scatterers (site/occ/u_iso grads on)."""
-    import random
+    from shims.cctbx.conftest import random_xs
 
-    from cctbx import sgtbx
-    from cctbx.array_family import flex
-    from cctbx.development import random_structure
-
-    random.seed(seed)
-    flex.set_random_seed(seed)
-    n_repeat = max(1, int(round(n_atoms / len(elements))))
-    xs = random_structure.xray_structure(
-        space_group_info=sgtbx.space_group_info(space_group),
-        elements=list(elements) * n_repeat,
-        volume_per_atom=50,
-        random_u_iso=True,
-        random_occupancy=True,
-        use_u_aniso=False,
-    )
-    for sc in xs.scatterers():
-        sc.flags.set_grad_site(True)
-        sc.flags.set_grad_occupancy(True)
-        sc.flags.set_grad_u_iso(True)
-        sc.flags.set_grad_u_aniso(False)
-        sc.flags.set_grad_fp(False)
-        sc.flags.set_grad_fdp(False)
-    return xs
+    return random_xs(space_group, n_atoms, elements=elements, seed=seed)
 
 
 def make_fobs(xs_true, d_min: float = DEFAULT_D_MIN):
