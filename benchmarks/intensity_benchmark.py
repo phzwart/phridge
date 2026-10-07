@@ -24,7 +24,7 @@ import numpy as np
 from scipy import stats
 
 from phridge.shims.cctbx import miller_from_cctbx
-from phridge.contrib.intensity_ll.ops import NUISANCE_FIT_OP_NAME
+from phridge.legacy.intensity_ll_ops import NUISANCE_FIT_OP_NAME
 
 
 # ---------------------------------------------------------------------------

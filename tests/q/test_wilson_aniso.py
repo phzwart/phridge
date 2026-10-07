@@ -105,7 +105,7 @@ def _synthetic(
 
 
 def _fit(problem, wilson_model, **kw):
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     n = problem["n"]
     opts = dict(
@@ -332,7 +332,7 @@ def test_binned_is_the_default_everywhere():
     """Per-bin means plus a global tensor; the single-curve forms must be asked for."""
     import inspect
 
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     assert W.WilsonOptions().wilson_model == "binned"
     assert W.WilsonOptions().carries_anisotropy
@@ -421,7 +421,7 @@ def test_degenerate_direction_set_falls_back_to_isotropic_and_says_so():
     Reflections along a single axis leave four of the six components unconstrained, so
     the fit has to decline rather than return numbers for them.
     """
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     n = 1500
     cell = (50.0, 50.0, 50.0, 90.0, 90.0, 90.0)
@@ -467,7 +467,7 @@ def test_reciprocal_vectors_match_the_isotropic_s_sq_metric():
     Raw integer indices would fit a tensor in the wrong basis and the isotropic start
     would not be a start at all.
     """
-    from phridge.contrib.intensity_ll.ops import _compute_s_sq
+    from phridge.legacy.intensity_ll_ops import _compute_s_sq
 
     for cell in (_CELL, (61.0, 74.5, 92.3, 90.0, 104.2, 90.0), (45.2, 58.9, 71.3, 71.1, 84.3, 66.8)):
         hkl = np.array([[1, 0, 0], [0, 3, 0], [0, 0, 5], [2, -3, 4], [-7, 2, 11]])
@@ -550,7 +550,7 @@ def test_binned_tensor_improves_on_bins_alone_and_on_the_single_curve():
 def test_wilson_bins_accept_a_device_tensor():
     """The worker hands array inputs over as device tensors (MPS on a Mac), which
     np.asarray cannot read; the bins must go through the host copy like every input."""
-    from phridge.contrib.intensity_ll.ops import _wilson_bin_ids
+    from phridge.legacy.intensity_ll_ops import _wilson_bin_ids
 
     class _DeviceTensor:
         def __init__(self, values):

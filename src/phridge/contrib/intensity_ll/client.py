@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.contrib.intensity_ll.ops import OP_NAME, register_ops
+from phridge.legacy.intensity_ll_ops import OP_NAME, register_ops
 from phridge.tools.intensity.omit_windows import OMIT_OP_NAME, OmitWindowStore
 from phridge.sfcalc.client import RemoteTargetFunctor, _flex
 

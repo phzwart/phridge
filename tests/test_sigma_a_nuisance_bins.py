@@ -45,7 +45,7 @@ def _packed_arrays(n: int = 2000, seed: int = 0):
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_nuisance_fit_binned_sigma_a_not_flat():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays()
     out = ml_i_nuisance_fit(
@@ -79,7 +79,7 @@ def test_nuisance_fit_binned_sigma_a_not_flat():
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_nuisance_fit_binned_nu_with_tv():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=3000, seed=3)
     common = dict(
@@ -123,7 +123,7 @@ def test_nuisance_fit_binned_nu_with_tv():
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_nuisance_fit_global_nu_still_works():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=1200, seed=4)
     out = ml_i_nuisance_fit(
@@ -146,7 +146,7 @@ def test_nuisance_fit_global_nu_still_works():
 
 
 def test_parse_nu_grid_spec():
-    from phridge.contrib.intensity_ll.ops import parse_nu_grid
+    from phridge.legacy.intensity_ll_ops import parse_nu_grid
 
     assert parse_nu_grid("5:50:5") == [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
     assert parse_nu_grid(None) == parse_nu_grid("5:50:5")
@@ -159,7 +159,7 @@ def test_parse_nu_grid_spec():
 )
 def test_nuisance_fit_nu_grid_refits_sigma_a_beta():
     """Each grid node gets its own σ_A/β; the winner is a node, not the clamped start."""
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=800, seed=5)
     out = ml_i_nuisance_fit(
@@ -205,7 +205,7 @@ def test_nuisance_fit_nu_grid_refits_sigma_a_beta():
 )
 def test_nuisance_fit_nu_grid_bins_picks_per_shell():
     """grid-bins: each σ_A shell keeps the ν that won that shell’s NLL."""
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=800, seed=7)
     out = ml_i_nuisance_fit(
@@ -249,7 +249,7 @@ def test_nuisance_fit_held_nu_survives_torch_payload():
     """Worker may lift a numpy ``nu`` array onto the compute device (MPS)."""
     import torch
 
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=400, seed=3)
     nu = torch.linspace(5.0, 50.0, 400)
@@ -274,7 +274,7 @@ def test_nuisance_fit_held_nu_survives_torch_payload():
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_nuisance_fit_read_mode_still_works():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=800)
     out = ml_i_nuisance_fit(
@@ -297,7 +297,7 @@ def test_nuisance_fit_read_mode_still_works():
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_nuisance_fit_tv_norm_smooths_bin_sigma_a():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=3000, seed=1)
     common = dict(
@@ -329,7 +329,7 @@ def test_nuisance_fit_tv_norm_smooths_bin_sigma_a():
     reason="torch required for ml_i_nuisance_fit",
 )
 def test_intensity_only_wilson_ml_positive_sigma0():
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays(n=2500, seed=2)
     common = dict(
@@ -379,7 +379,7 @@ def test_intensity_only_wilson_ml_positive_sigma0():
 )
 def test_one_dimensional_hkl_falls_back_and_does_not_grow_a_tensor():
     """The historical generator only varies h; directions do not determine M."""
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     f_calc, f_obs, tune, s2, _ = _packed_arrays()
     out = ml_i_nuisance_fit(

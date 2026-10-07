@@ -224,7 +224,7 @@ from phridge.shims.cctbx import crystal_from_cctbx, miller_from_cctbx, miller_to
 from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
 from phridge.q.scales.solvent import BULK_SOLVENT_OP_NAME
 from phridge.contrib.intensity_ll.client import RemoteIntensityMapResult
-from phridge.contrib.intensity_ll.ops import (
+from phridge.legacy.intensity_ll_ops import (
     MAPS_OP_NAME,
     NUISANCE_FIT_OP_NAME,
     TARGET_AND_GRADIENTS_OP_NAME,

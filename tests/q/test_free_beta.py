@@ -129,7 +129,7 @@ def _planted(
 
 
 def _fit(problem, **kw):
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     opts = dict(
         tune_mask=np.ones(problem["n"], dtype=bool),

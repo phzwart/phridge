@@ -110,7 +110,7 @@ def _directional_problem(seed=0, n=4000, k_z=0.35):
 
 
 def _fit(p, **kw):
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     common = dict(
         f_calc=p["f_calc"],

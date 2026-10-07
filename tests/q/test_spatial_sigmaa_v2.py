@@ -173,7 +173,7 @@ def test_flag_on_constructs_block(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_optional_op_slots_do_not_change_required_inputs():
-    from phridge.contrib.intensity_ll.ops import (
+    from phridge.legacy.intensity_ll_ops import (
         _NUISANCE_INPUTS,
         _TARGET_AND_GRADIENTS_INPUTS,
         ml_i_nuisance_fit,
@@ -559,7 +559,7 @@ def test_empty_fields_are_uniform_read_limit():
 
 def test_nuisance_fit_still_ignores_unfitted_v2_block():
     """Nuisance fit does not read the v2 block; the field step is a separate op."""
-    from phridge.contrib.intensity_ll import ops as intensity_ops
+    from phridge.legacy import intensity_ll_ops as intensity_ops
 
     fit_src = inspect.getsource(intensity_ops.ml_i_nuisance_fit)
     assert "_ = spatial_sigma_a_v2" in fit_src

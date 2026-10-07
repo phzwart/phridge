@@ -344,7 +344,7 @@ def run_omit_windows_from_fmodel(
             return None
         from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
         from phridge.contrib.intensity_ll.client import RemoteOmitWindowCoefficients
-        from phridge.contrib.intensity_ll.ops import register_ops
+        from phridge.legacy.intensity_ll_ops import register_ops
 
         register_ops()
         bridge = fmodel.bridge

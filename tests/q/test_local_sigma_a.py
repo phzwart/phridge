@@ -140,7 +140,7 @@ def _split_problem(*, d_mol=1.0, d_sol=0.35, seed=0, n=4000):
 
 
 def _fit(p, **kw):
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
 
     opts = dict(
         tune_mask=p["tune"],

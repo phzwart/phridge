@@ -52,7 +52,7 @@ def fit_one_dataset(
     tune_mask: Optional[np.ndarray] = None,
 ) -> dict[str, np.ndarray]:
     """One ``ml_i_nuisance_fit`` call. Falls back to the identities on failure."""
-    from phridge.contrib.intensity_ll.ops import ml_i_nuisance_fit
+    from phridge.legacy.intensity_ll_ops import ml_i_nuisance_fit
     from phridge.contracts.packing import PackedMiller
 
     crystal = _p1_crystal(cell)

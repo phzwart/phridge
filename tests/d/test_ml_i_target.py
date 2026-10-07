@@ -15,7 +15,7 @@ torch = pytest.importorskip("torch")
 
 from test_ml_i_omit_windows import _synthetic_structure  # noqa: E402
 
-from phridge.contrib.intensity_ll.ops import ml_i_target_and_gradients  # noqa: E402
+from phridge.legacy.intensity_ll_ops import ml_i_target_and_gradients  # noqa: E402
 from phridge.d.rules.mli_quad.target import IntensityLogLikelihood  # noqa: E402
 from phridge.sfcalc.ops import _observations  # noqa: E402
 

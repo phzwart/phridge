@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from phridge.contrib.intensity_ll.ops import (
+from phridge.legacy.intensity_ll_ops import (
     NUISANCE_FIT_OP_NAME,
     OP_NAME as MAPS_OP_NAME,
     TARGET_AND_GRADIENTS_OP_NAME,
