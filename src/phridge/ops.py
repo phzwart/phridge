@@ -2,7 +2,7 @@
 
 Third-party packages register ops with :func:`register_op` (catalog + optional
 impl). Workers discover them via ``--preload`` / ``PHRIDGE_PRELOAD`` or the
-``phridge.ops`` / ``phridge.targets`` setuptools entry-point groups. See
+``phridge.plugins`` setuptools entry-point group. See
 ``docs/extending.md``.
 """
 
@@ -178,12 +178,11 @@ def preload_modules(modules: Iterable[str]) -> list[str]:
     return loaded
 
 
-def load_entry_points(group: str = "phridge.ops") -> list[str]:
+def load_entry_points(group: str = "phridge.plugins") -> list[str]:
     """Load setuptools / hatch entry points in ``group``.
 
     Each entry point must resolve to a zero-argument callable that registers
-    ops or targets (typically via :func:`register_op` / ``register_target``).
-    Returns the entry-point names that were invoked.
+    an op or a plugin manifest. Returns the entry-point names that were invoked.
     """
     try:
         from importlib.metadata import entry_points
@@ -205,7 +204,7 @@ def load_entry_points(group: str = "phridge.ops") -> list[str]:
     return loaded
 
 
-DEFAULT_ENTRY_POINT_GROUPS: tuple[str, ...] = ("phridge.ops", "phridge.targets")
+DEFAULT_ENTRY_POINT_GROUPS: tuple[str, ...] = ("phridge.plugins",)
 
 
 def bootstrap_plugins(
@@ -217,9 +216,9 @@ def bootstrap_plugins(
 ) -> dict[str, Any]:
     """Load entry points then explicit preload modules (preload wins on clash).
 
-    By default loads both ``phridge.ops`` and ``phridge.targets``. Pass
-    ``group=`` for a single group (legacy) or ``groups=`` for an explicit list.
-    ``load_eps=False`` / ``--no-entry-points`` skips every group.
+    By default loads ``phridge.plugins``. Pass ``group=`` for a single group
+    or ``groups=`` for an explicit list. A hook may register an op, a manifest,
+    or both. ``load_eps=False`` / ``--no-entry-points`` skips every group.
     """
     if group is not None:
         ep_groups: tuple[str, ...] = (str(group),)
@@ -487,7 +486,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     parser.add_argument(
         "--no-entry-points",
         action="store_true",
-        help="Skip loading phridge.ops / phridge.targets entry-point groups",
+        help="Skip loading phridge.plugins entry points",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     env_preload = os.environ.get("PHRIDGE_PRELOAD", "")

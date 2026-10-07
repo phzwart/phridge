@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from phridge.client import Bridge, JobFailed
+from phridge.api import Bridge, JobFailed
 from phridge.contracts.models import JobStatus
 from phridge.ops import get_op, list_ops
 from phridge.redis_store import ObjectTooLargeError, RedisStore

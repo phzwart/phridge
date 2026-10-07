@@ -41,8 +41,8 @@ import iotbx.pdb
 import iotbx.reflection_file_reader
 from scitbx.array_family import flex
 
-from phridge.client.intensity_tool import from_files, IntensityModel
-from phridge.contrib.intensity_ll.synthetic import sample_student_t, compute_base_sigmas
+from phridge.tools.intensity_tool import from_files, IntensityModel
+from phridge.tools.intensity.synthetic import sample_student_t, compute_base_sigmas
 
 DEFAULT_PDB = ROOT / "examples/1ee2/1ee2.pdb"
 DEFAULT_MTZ = ROOT / "examples/1ee2/1ee2.mtz"

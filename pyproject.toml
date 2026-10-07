@@ -41,17 +41,21 @@ dev = [
 phridge-worker = "phridge.worker.runner:main"
 phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"
-phridge-view = "phridge.client.viewer:main"
-phridge-multixtal = "phridge.legacy.multixtal.cli:main"
-phridge-ensemble = "phridge.tools.ensemble.cli:main"
+phridge-view = "phridge.tools.viewer:main"
 
-[project.entry-points."phridge.targets"]
-intensity_ll = "phridge.d.rules.mli_quad:register"
-
-[project.entry-points."phridge.ops"]
-spatial_sigmaa_v2 = "phridge.q.error_models.spatial:register"
-multixtal = "phridge.legacy.multixtal:register"
-nufft_sf = "phridge.transforms.fourier.nufft:register"
+[project.entry-points."phridge.plugins"]
+ten_eyck = "phridge.transforms.fourier.ten_eyck:register"
+nufft = "phridge.transforms.fourier.nufft:register"
+direct = "phridge.transforms.fourier.direct:register"
+torch_geometry = "phridge.r.restraints.torch_geometry:register"
+distance_mask = "phridge.r.components:register"
+amplitude = "phridge.d.rules.amplitude:register"
+mli_quad = "phridge.d.rules.mli_quad:register"
+q_components = "phridge.q.manifests:register"
+spatial_sigma_a = "phridge.q.error_models.spatial:register"
+identity = "phridge.transforms.observation.identity:register"
+perturbation_modes = "phridge.r.generators.perturbation_modes:register"
+s_family = "phridge.report.s_family_manifest:register"
 ensemble = "phridge.tools.ensemble:register"
 
 [tool.hatch.metadata]

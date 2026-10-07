@@ -13,7 +13,7 @@ try:
 except ImportError:
     flex = None
 
-from phridge.client.intensity import from_files
+from phridge.tools.intensity import from_files
 
 
 def print_detailed_comparison(rep: Any) -> None:

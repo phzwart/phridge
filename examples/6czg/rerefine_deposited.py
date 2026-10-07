@@ -31,8 +31,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from phridge.client.intensity_tool import from_files
-from phridge.contrib.intensity_ll.benchmark import ReflectionSplit, compare
+from phridge.tools.intensity_tool import from_files
+from benchmarks.intensity_benchmark import ReflectionSplit, compare
 from examples.common import print_detailed_comparison, run_rerefinement
 
 DIR_6CZG = Path(__file__).resolve().parent
@@ -157,7 +157,7 @@ def main():
     print(" HELD-OUT CROSS-VALIDATED LIKELIHOOD BENCHMARKS")
     print("=" * 85)
 
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     bridge = Bridge(memory=True)
 
     ref_model = from_files(str(pdb_path), str(mtz_path), d_min=2.2, device="cpu", use_bulk_solvent=True)

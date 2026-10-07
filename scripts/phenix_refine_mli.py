@@ -30,7 +30,7 @@ os.environ.setdefault("PHRIDGE_MEMORY", "1")
 os.environ.setdefault("PHRIDGE_HEARTBEAT", "1")
 os.environ.setdefault("PHRIDGE_HEARTBEAT_INTERVAL", "30")
 
-from phridge.client.intensity import (
+from phridge.tools.intensity import (
     IntensityTwinningError,
     enable_intensity_in_phenix,
     is_intensity_enabled,

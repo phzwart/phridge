@@ -8,7 +8,7 @@ import types
 import numpy as np
 import pytest
 
-from phridge.client import Bridge
+from phridge.api import Bridge
 from phridge.ops import (
     get_implementation,
     get_op,

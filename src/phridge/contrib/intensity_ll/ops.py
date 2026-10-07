@@ -2431,8 +2431,8 @@ def register_ops() -> None:
         inputs=dict(_TARGET_AND_GRADIENTS_INPUTS),
         outputs=dict(_TARGET_AND_GRADIENTS_OUTPUTS),
     )
-    from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME
-    from phridge.contrib.intensity_ll.omit_windows_op import (
+    from phridge.tools.intensity.omit_windows import OMIT_OP_NAME
+    from phridge.tools.intensity.omit_windows_op import (
         _OMIT_INPUTS,
         _OMIT_OUTPUTS,
         ml_i_omit_windows,
@@ -2454,7 +2454,7 @@ def register_ops() -> None:
         outputs=dict(_BULK_SOLVENT_OUTPUTS),
     )
 
-    from phridge.contrib.intensity_ll.surrogate_op import (
+    from phridge.tools.intensity.surrogate_op import (
         _SURROGATE_INPUTS,
         _SURROGATE_OUTPUTS,
         SURROGATE_FIT_OP_NAME,

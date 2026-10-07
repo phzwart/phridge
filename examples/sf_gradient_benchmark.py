@@ -252,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bridge = None
     if time_remote:
-        from phridge.client import Bridge
+        from phridge.api import Bridge
 
         bridge = Bridge(memory=True, device=args.device, timeout=600)
 

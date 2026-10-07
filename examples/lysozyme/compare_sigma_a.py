@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from cctbx.array_family import flex
-from phridge.client.intensity_tool import from_files
+from phridge.tools.intensity_tool import from_files
 
 LYSOZYME_DIR = Path(__file__).resolve().parent
 PDB_PATH = LYSOZYME_DIR / "1iee.pdb"

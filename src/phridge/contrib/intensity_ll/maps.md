@@ -125,7 +125,7 @@ from the Cauchy end, and preferably estimated with $\sigma_A$ on the free set.
 ## 6. Use from Phenix
 
 ```python
-from phridge.client import Bridge
+from phridge.api import Bridge
 from phridge.contrib.intensity_ll.client import RemoteIntensityMaps
 
 maps = RemoteIntensityMaps(
@@ -328,7 +328,7 @@ plus ``{prefix}_omit_windows.window_meta.json``. Open the MTZ in Coot/PyMOL like
 any map-coefficient file.
 
 Optional: ``PHRIDGE_OMIT_SAVE_NPZ=1`` keeps a diagnostic per-window ``.npz``
-(reader: `phridge.contrib.intensity_ll.omit_windows.load_omit_windows`).
+(reader: `phridge.tools.intensity.omit_windows.load_omit_windows`).
 ``PHRIDGE_OMIT_RESOLUTION_FACTOR`` (default ``0.25``) sets the FFT grid for
 stitching.
 

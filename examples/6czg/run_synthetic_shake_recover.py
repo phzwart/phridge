@@ -35,9 +35,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client import Bridge
-from phridge.client.intensity_tool import from_files, IntensityModel
-from phridge.contrib.intensity_ll.benchmark import ReflectionSplit, compare, ComparisonReport
+from phridge.api import Bridge
+from phridge.tools.intensity_tool import from_files, IntensityModel
+from benchmarks.intensity_benchmark import ReflectionSplit, compare, ComparisonReport
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

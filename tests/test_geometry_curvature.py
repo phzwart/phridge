@@ -7,7 +7,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from phridge.client import Bridge  # noqa: E402
+from phridge.api import Bridge  # noqa: E402
 from phridge.contracts.packing import PackedRestraints  # noqa: E402
 from phridge.contracts.packing import PackedCartesian  # noqa: E402
 from phridge.r.restraints.torch_geometry.curvature import (  # noqa: E402
@@ -184,7 +184,7 @@ def test_geometry_curvature_ops_round_trip():
 
 
 def test_remote_geometry_curvature_api():
-    from phridge.client import RemoteGeometry
+    from phridge.tools.geometry import RemoteGeometry
     from phridge.contracts.models import Atom, CoordinateFrame
     from phridge.contracts.packing import PackedHierarchy
 

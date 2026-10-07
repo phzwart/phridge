@@ -194,7 +194,7 @@ class PosteriorNodes:
     """Frozen quadrature nodes and the joint posterior on them.
 
     This is the single object both :func:`posterior_moments` and the Rice surrogate
-    fit (:mod:`phridge.contrib.intensity_ll.surrogate`) read, so no consumer can
+    fit (:mod:`phridge.tools.intensity.surrogate`) read, so no consumer can
     drift onto a different set of nodes than the one the likelihood integrated on.
     """
 

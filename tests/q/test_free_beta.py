@@ -583,7 +583,7 @@ def test_surrogate_is_fitted_against_the_free_beta_likelihood():
     records has to match the exact score w.r.t. the real E_C.
     """
     torch = pytest.importorskip("torch")
-    from phridge.contrib.intensity_ll.surrogate import fit_surrogate_for_observations
+    from phridge.tools.intensity.surrogate import fit_surrogate_for_observations
     from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
 
     prob = _laundering_problem(seed=17)

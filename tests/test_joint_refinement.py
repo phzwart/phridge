@@ -14,8 +14,8 @@ from cctbx.development import random_structure  # noqa: E402
 
 torch = pytest.importorskip("torch")
 
-from phridge.client import Bridge  # noqa: E402
-from phridge.client.geometry import RemoteGeometry  # noqa: E402
+from phridge.api import Bridge  # noqa: E402
+from phridge.tools.geometry import RemoteGeometry  # noqa: E402
 from phridge.legacy.client_joint import JointSiteRefinement  # noqa: E402
 from phridge.contracts.models import Atom, CoordinateFrame, SfEngineParams  # noqa: E402
 from phridge.contracts.packing import PackedRestraints  # noqa: E402

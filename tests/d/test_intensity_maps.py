@@ -207,7 +207,7 @@ def test_include_free_masks_coefficients():
 
 # ------------------------------------------------------------------ op round trip (memory bridge)
 def test_ml_i_maps_op_round_trip_memory_bridge():
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.contracts.models import CrystalSymmetry, ObservationType
     from phridge.contracts.packing import PackedMiller
 
@@ -251,7 +251,7 @@ def test_remote_intensity_maps_cctbx_round_trip():
     from cctbx.array_family import flex
     from cctbx.development import random_structure
 
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.contrib.intensity_ll.client import RemoteIntensityMaps
 
     flex.set_random_seed(0)

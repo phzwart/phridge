@@ -239,3 +239,37 @@ def reflections_to_mtz(packed: PackedReflections) -> Any:
     for label, array in arrays[1:]:
         dataset.add_miller_array(array, column_root_label=label)
     return dataset.mtz_object()
+
+
+def miller_set_on_hkl(template: Any, hkl: Any) -> Any:
+    """Miller set on ``hkl`` with ``template``'s crystal symmetry."""
+    rows = np.asarray(hkl, dtype=np.int32).reshape(-1, 3)
+    try:
+        indices = miller_index(np.ascontiguousarray(rows))
+    except Exception:
+        indices = miller_index([tuple(int(x) for x in row) for row in rows])
+    return template.customized_copy(indices=indices)
+
+
+def complex_amplitude_array(miller_set: Any, data: Any) -> Any:
+    from cctbx import miller
+
+    values = complex_double(np.ascontiguousarray(data, dtype=np.complex128))
+    return miller.array(miller_set, data=values).set_observation_type_xray_amplitude()
+
+
+def fft_map(*, crystal_gridding: Any, fourier_coefficients: Any) -> Any:
+    from cctbx import miller
+
+    return miller.fft_map(
+        crystal_gridding=crystal_gridding,
+        fourier_coefficients=fourier_coefficients,
+    )
+
+
+def real_map_flex(values: Any, shape: tuple[int, ...]) -> Any:
+    from phridge.shims.cctbx._flex import grid
+
+    flex_map = double(np.ascontiguousarray(values).ravel())
+    flex_map.reshape(grid(tuple(int(x) for x in shape)))
+    return flex_map

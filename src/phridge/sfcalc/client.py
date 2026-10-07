@@ -34,6 +34,7 @@ def _flex():
     class _Flex:
         vec3_double = staticmethod(api.vec3_double)
         double = staticmethod(api.double)
+        complex_double = staticmethod(api.complex_double)
         sym_mat3_double = staticmethod(api.sym_mat3_double)
 
     return _Flex
@@ -670,7 +671,7 @@ class StructureFactorServer:
         if bridge is not None:
             self.bridge = bridge
         else:
-            from phridge.client import Bridge
+            from phridge.api import Bridge
 
             if memory:
                 self.bridge = Bridge(memory=True, device=device, timeout=timeout)

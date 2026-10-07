@@ -36,7 +36,7 @@ from phridge.d.maps import (  # noqa: E402
     posterior_node_cache,
 )
 from phridge.d.rules.mli_quad import normalize  # noqa: E402
-from phridge.contrib.intensity_ll.surrogate import (  # noqa: E402
+from phridge.tools.intensity.surrogate import (  # noqa: E402
     FIT_EXACT_ROUTE,
     FIT_FALLBACK_INIT,
     SurrogateFitOptions,
@@ -453,7 +453,7 @@ class _SyntheticProblem:
 
 
 class _TorchHost:
-    """:class:`~phridge.client.intensity.interleaved.InterleavedHost` for the torch path."""
+    """:class:`~phridge.tools.intensity.interleaved.InterleavedHost` for the torch path."""
 
     def __init__(self, problem: _SyntheticProblem, sites: torch.Tensor):
         self.p = problem
@@ -714,7 +714,7 @@ def test_tolerance_zero_rejects_any_uphill_step():
 
 # ================================================================ op / options / naming
 def test_surrogate_fit_op_registers_and_round_trips():
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.ops import get_op
 
     register_ops()
@@ -857,8 +857,8 @@ def test_visible_fraction_refresh_selects_low_rho2_reflections():
 _FORBIDDEN = re.compile(r"\b(F_p|f_p|beta_p|F_surrogate|surrogate_amplitude)\b")
 _TELEMETRY_SOURCES = (
     Path("src/phridge/legacy/intensity_interleaved.py"),
-    Path("src/phridge/contrib/intensity_ll/surrogate.py"),
-    Path("src/phridge/contrib/intensity_ll/surrogate_op.py"),
+    Path("src/phridge/tools/intensity/surrogate.py"),
+    Path("src/phridge/tools/intensity/surrogate_op.py"),
 )
 
 

@@ -20,7 +20,7 @@ import numpy as np
 import scipy.stats
 import torch
 
-from phridge.client.intensity_tool import from_files
+from phridge.tools.intensity_tool import from_files
 
 HERE = Path(__file__).resolve().parent
 PDB_PATH = HERE / "1iee.pdb"

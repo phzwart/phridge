@@ -396,7 +396,7 @@ def test_omit_mode_zero_occ(tmp_path: Path):
 
 def test_viewer_server(tmp_path: Path):
     import urllib.request
-    from phridge.client.viewer import launch_viewer, open_static_viewer
+    from phridge.tools.viewer import launch_viewer, open_static_viewer
 
     pdb_file = tmp_path / "v_model.pdb"
     pdb_file.write_text("ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00 20.00           N\n")

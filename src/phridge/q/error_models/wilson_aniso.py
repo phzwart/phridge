@@ -48,7 +48,7 @@ if the prior actually describes the observations' directional falloff:
   over as "model error".
 
 With the prior carrying it, ``k_anisotropic`` has nothing legitimate left to carry.
-:func:`phridge.client.intensity.engine.IntensityFModel._assert_single_anisotropy_carrier`
+:func:`phridge.tools.intensity.engine.IntensityFModel._assert_single_anisotropy_carrier`
 enforces this by measuring the anisotropy actually applied to ``F_calc`` and raising
 if both carriers are live -- a flag would only record the intent, not the outcome.
 

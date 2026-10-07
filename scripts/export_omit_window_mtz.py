@@ -29,8 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     from iotbx import reflection_file_reader
-    from phridge.client.intensity.omit import write_omit_window_mtz, write_stitched_omit_mtz
-    from phridge.contrib.intensity_ll.omit_windows import load_omit_windows
+    from phridge.tools.intensity.omit import write_omit_window_mtz, write_stitched_omit_mtz
+    from phridge.tools.intensity.omit_windows import load_omit_windows
 
     store = load_omit_windows(args.npz)
     miller_arrays = reflection_file_reader.any_reflection_file(args.miller).as_miller_arrays()

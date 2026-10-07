@@ -11,7 +11,7 @@ from cctbx import crystal, miller, sgtbx, xray
 from cctbx.array_family import flex
 from cctbx.development import random_structure
 
-from phridge.client.intensity import (
+from phridge.tools.intensity import (
     IntensityElectronDensityMap,
     IntensityFModel,
     IntensityGradients,
@@ -452,7 +452,7 @@ def test_client_clean_import_no_torch():
 
     code = (
         "import sys\n"
-        "from phridge.client.intensity import IntensityFModel, IntensityElectronDensityMap\n"
+        "from phridge.tools.intensity import IntensityFModel, IntensityElectronDensityMap\n"
         "assert 'torch' not in sys.modules, f'torch was unexpectedly imported: {list(sys.modules.keys())}'\n"
         "print('SUCCESS_NO_TORCH')\n"
     )

@@ -19,7 +19,7 @@ side only. Passing a cctbx object into `call`/`submit` goes through
 Converters:
 
 ```python
-from phridge.client.geometry import model_geometry, restraints_from_cctbx, restraints_to_proxies
+from phridge.tools.geometry import model_geometry, restraints_from_cctbx, restraints_to_proxies
 
 packed = restraints_from_cctbx(manager)   # cctbx.geometry_restraints.manager
 proxies = restraints_to_proxies(packed)   # dict of proxy lists, not a full manager
@@ -38,7 +38,8 @@ energy+gradients. Use `RemoteGeometry.from_build` (or pass the handle) for
 CCTBX `E`/`∂E/∂x`; use packed restraints alone for torch `minimize`.
 
 ```python
-from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
 
 bridge = Bridge("redis://localhost:6379/0")  # needs torch + cctbx workers
 # bridge = Bridge(memory=True)  # both runtimes in-process (dev)
@@ -64,7 +65,8 @@ sites back to a cctbx hierarchy (or packed sites when cctbx is unavailable /
 `update_hierarchy=False`).
 
 ```python
-from phridge.client import Bridge, RemoteGeometry
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry
 
 bridge = Bridge("redis://gpu-box:6379/0")
 # bridge = Bridge(memory=True)  # no redis-server; runs the op in-process
@@ -107,7 +109,7 @@ parameter derivatives when compute runs on a **torch GPU worker** — often on
 **another machine**. Full guide: [sf_server.md](sf_server.md).
 
 ```python
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
 f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)

@@ -85,7 +85,7 @@ def run(args: argparse.Namespace) -> dict:
         )
         return {"out": str(path), "n_data": int(job.i_obs.shape[0])}
     if args.command == "fit":
-        from phridge.client import Bridge
+        from phridge.api import Bridge
         from phridge.tools.ensemble.client import job_to_op_kwargs, prepare_ensemble_job
 
         options = _options_from_fit(args)
@@ -118,7 +118,7 @@ def run(args: argparse.Namespace) -> dict:
         (out / "stats.json").write_text(json.dumps(raw["stats"], indent=2))
         return {"out": str(out), "stats": raw["stats"]}
     if args.command == "scores":
-        from phridge.client import Bridge
+        from phridge.api import Bridge
 
         blob = np.load(args.job)
         bridge = Bridge(memory=True) if args.memory else Bridge()
@@ -142,7 +142,7 @@ def run(args: argparse.Namespace) -> dict:
         np.savez(path, scores=raw["scores"], score_cov=raw["score_cov"], fom=raw["fom"])
         return {"out": str(path), "loglik": raw["loglik"]}
     if args.command == "maps":
-        from phridge.client import Bridge
+        from phridge.api import Bridge
 
         blob = np.load(args.job)
         bridge = Bridge(memory=True) if args.memory else Bridge()

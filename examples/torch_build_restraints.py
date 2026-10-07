@@ -96,7 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", type=Path, default=DEFAULT_MD)
     args = parser.parse_args(argv)
 
-    from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+    from phridge.api import Bridge
+    from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
     from phridge.contracts.packing import PackedRestraints
     from phridge.contracts.packing import PackedCartesian, PackedHierarchy
 

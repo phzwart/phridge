@@ -28,7 +28,7 @@ import numpy as np  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client import StructureFactorServer  # noqa: E402
+from phridge.sfcalc.client import StructureFactorServer  # noqa: E402
 from phridge.contracts.models import SfEngineParams  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -121,7 +121,7 @@ redis-server
 phridge-worker --redis-url redis://0.0.0.0:6379/0 --device cuda
 
 # On the Phenix workstation:
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
 """,
         lang="bash",

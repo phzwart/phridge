@@ -35,7 +35,7 @@ from iotbx.reflection_file_reader import any_reflection_file
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client.intensity_tool import run_intensity_pipeline
+from phridge.tools.intensity_tool import run_intensity_pipeline
 
 LYSOZYME_DIR = Path(__file__).resolve().parent
 PDB_FILE = LYSOZYME_DIR / "1iee.pdb"

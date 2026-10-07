@@ -668,7 +668,7 @@ def patch_phil_master_params() -> bool:
 
 
 class PhenixLbfgsBlockRunner:
-    """:class:`~phridge.client.intensity.interleaved.BlockRunner` over Phenix's LBFGS.
+    """:class:`~phridge.tools.intensity.interleaved.BlockRunner` over Phenix's LBFGS.
 
     Phenix's ``mmtbx.refinement.minimization.lbfgs`` does the whole minimization in its
     constructor, so one construction is exactly one re-runnable inner block: the model

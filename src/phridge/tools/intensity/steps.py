@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 
-from phridge.client.intensity.math_utils import golden_section_search_torch, isotonic_non_increasing, tv_denoise_1d
+from phridge.tools.intensity.math_utils import golden_section_search_torch, isotonic_non_increasing, tv_denoise_1d
 from phridge.d.rules.mli_quad import log_likelihood_normal, log_likelihood_t, normalize
 from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
 from phridge.d.rules.amplitude import Observations

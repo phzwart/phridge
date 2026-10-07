@@ -10,7 +10,7 @@ from cctbx.development import random_structure  # noqa: E402
 
 torch = pytest.importorskip("torch")
 
-from phridge.client import Bridge  # noqa: E402
+from phridge.api import Bridge  # noqa: E402
 from phridge.shims.cctbx import crystal_from_cctbx  # noqa: E402
 from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx  # noqa: E402
 from phridge.contracts.models import SfEngineParams  # noqa: E402
@@ -243,7 +243,7 @@ def test_crystal_symmetry_carries_symops():
 
 def test_structure_factor_server_f_calc_and_gradients():
     """cctbx-feel StructureFactorServer façade (memory Bridge)."""
-    from phridge.client import StructureFactorServer
+    from phridge.sfcalc.client import StructureFactorServer
 
     sf = StructureFactorServer(memory=True, device="cpu")
     xs = _structure("P21", n_repeat=1, seed=11)

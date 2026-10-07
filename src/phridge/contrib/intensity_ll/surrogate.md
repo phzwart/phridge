@@ -1,7 +1,7 @@
 # The Rice surrogate and interleaved refinement
 
 `surrogate.py` builds a per-reflection surrogate for the exact marginal intensity
-likelihood, and `phridge.client.intensity.interleaved` spends the exact target only at
+likelihood, and `phridge.tools.intensity.interleaved` spends the exact target only at
 block boundaries. This note records the math, the conventions, and the reasons the
 design is the way it is.
 

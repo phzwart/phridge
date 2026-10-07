@@ -4,7 +4,7 @@ The exact marginal intensity target (``ml_i``) costs one adaptive quadrature per
 evaluation, and a refinement macro cycle asks for hundreds: bulk-solvent scaling,
 weight scans, minimizer line searches, simulated annealing. This module runs those
 inner evaluations on a per-reflection Rice surrogate
-(:mod:`phridge.contrib.intensity_ll.surrogate`) that speaks the stock ``ml_f``
+(:mod:`phridge.tools.intensity.surrogate`) that speaks the stock ``ml_f``
 interface, and spends the exact target only at block boundaries.
 
 The loop, per macro cycle
@@ -236,7 +236,7 @@ class CheckpointResult:
 class InterleavedHost(Protocol):
     """The model / target side of the loop.
 
-    Implemented by :class:`~phridge.client.intensity.engine.IntensityFModel` in host
+    Implemented by :class:`~phridge.tools.intensity.engine.IntensityFModel` in host
     mode, and by the test harness for the torch-only path.
     """
 

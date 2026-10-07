@@ -219,7 +219,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument(
         "--no-entry-points",
         action="store_true",
-        help="Skip loading phridge.ops / phridge.targets entry-point groups",
+        help="Skip loading phridge.plugins entry points",
     )
     args = parser.parse_args(argv)
     if args.runtime == "cctbx":

@@ -1,5 +1,10 @@
 # Examples
 
+Checked-in examples keep inputs, configs, and the scripts that produce them.
+Refinement outputs (`rerefined_no_shake`, `synthetic_*`, `benchmark_results`,
+`drift_results`, `shake_recover_*`, `water_omission_study`) are not in the
+tree; those artifacts live with the release assets.
+
 Runnable demos: **cctbx** packs molecule + restraints into Redis, the
 **phridge worker** runs torch `LBFGS` / `Adam` / `SGD`, the client blocks and
 converts results back to cctbx. A torch-driver demo builds restraints on the
@@ -40,7 +45,8 @@ table for **LBFGS**, **Adam**, **AdamW**, and **SGD** on the same distorted
 Phenix-facing API:
 
 ```python
-from phridge.client import Bridge, RemoteGeometry
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry
 
 bridge = Bridge(memory=True)  # or Bridge("redis://localhost:6379/0") + worker
 geo = RemoteGeometry(bridge, hierarchy, restraints_manager)
@@ -60,7 +66,8 @@ Writes [`torch_build_restraints.md`](torch_build_restraints.md). Flow:
 `RemoteGeometry.minimize` (torch runtime).
 
 ```python
-from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
 
 bridge = Bridge(memory=True)
 out = RemoteRestraintBuilder(bridge).build(pdb_string=pdb)
@@ -86,7 +93,8 @@ Writes [`latent_restraints_adam.md`](latent_restraints_adam.md). Encoder:
 [`residue_encoder.py`](residue_encoder.py).
 
 ```python
-from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
 
 bridge = Bridge(memory=True)
 built = RemoteRestraintBuilder(bridge).build(pdb_string=pdb)
@@ -110,7 +118,7 @@ itself uses `memory=True` (no Redis); production uses
 `StructureFactorServer("redis://gpu-host:6379/0")`.
 
 ```python
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
 f_calc = sf.f_calc(xray_structure, miller_set, d_min=2.0)

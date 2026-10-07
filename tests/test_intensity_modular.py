@@ -8,11 +8,11 @@ pytestmark = pytest.mark.legacy
 
 import numpy as np
 
-import phridge.client.intensity as intensity
+import phridge.tools.intensity as intensity
 import phridge.legacy.intensity_tool as intensity_tool
 from phridge.legacy.intensity_cli import parse_omit_selection
 from phridge.d.map_coefficients import IntensityMapMixin
-from phridge.client.intensity.math_utils import (
+from phridge.tools.intensity.math_utils import (
     isotonic_non_increasing,
     tv_denoise_1d,
 )

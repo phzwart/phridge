@@ -2,7 +2,7 @@
 
 Example::
 
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.contrib.intensity_ll.client import RemoteIntensityMaps
 
     maps = RemoteIntensityMaps(bridge, i_obs, {"name": "ml_i", "nu": 6.0},
@@ -24,7 +24,7 @@ from typing import Any, Optional
 import numpy as np
 
 from phridge.contrib.intensity_ll.ops import OP_NAME, register_ops
-from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME, OmitWindowStore
+from phridge.tools.intensity.omit_windows import OMIT_OP_NAME, OmitWindowStore
 from phridge.sfcalc.client import RemoteTargetFunctor, _flex
 
 

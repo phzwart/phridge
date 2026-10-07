@@ -28,7 +28,7 @@ redis-server
 phridge-worker --redis-url redis://0.0.0.0:6379/0 --device cuda
 
 # On the Phenix workstation:
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
 ```
 

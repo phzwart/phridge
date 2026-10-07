@@ -99,7 +99,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             if getattr(args, "dose_table", None) and not spec.dose_table:
                 spec.dose_table = args.dose_table
     job = prepare_job(args.model, args.data, opts, manifest=manifest)
-    from phridge.client import Bridge
+    from phridge.api import Bridge
 
     kwargs = job_to_op_kwargs(job)
     bridge = Bridge(memory=True) if args.memory else Bridge()

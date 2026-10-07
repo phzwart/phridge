@@ -13,7 +13,7 @@ import pytest
 cctbx = pytest.importorskip("cctbx")
 torch = pytest.importorskip("torch")
 
-from phridge.client import Bridge  # noqa: E402
+from phridge.api import Bridge  # noqa: E402
 
 from sf_gradient_bench import (  # noqa: E402
     SPACE_GROUPS,

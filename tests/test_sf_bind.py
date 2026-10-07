@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phridge.client import Bridge
+from phridge.api import Bridge
 from phridge.contracts.models import CrystalSymmetry, Scatterer, SfEngineParams, SymOp
 from phridge.contracts.packing import PackedMiller
 from phridge.contracts.packing import PackedXray

@@ -562,7 +562,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     dtypes = [x.strip() for x in str(args.dtypes).split(",") if x.strip()]
     bridge = None
     if args.redis_url:
-        from phridge.client import Bridge
+        from phridge.api import Bridge
 
         bridge = Bridge(args.redis_url, timeout=3600.0)
     rows: list[Row] = []

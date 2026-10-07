@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 from cctbx.array_family import flex
 
-from phridge.client import Bridge
-from phridge.client.intensity_tool import from_files
-from phridge.contrib.intensity_ll.benchmark import ReflectionSplit, compare
+from phridge.api import Bridge
+from phridge.tools.intensity_tool import from_files
+from benchmarks.intensity_benchmark import ReflectionSplit, compare
 
 
 def main():

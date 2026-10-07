@@ -36,7 +36,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client.intensity_tool import from_files
+from phridge.tools.intensity_tool import from_files
 
 DIR_6CZG = Path(__file__).resolve().parent
 PDB_FILE = DIR_6CZG / "6czg.pdb"

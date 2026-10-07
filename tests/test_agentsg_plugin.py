@@ -16,7 +16,7 @@ if str(EXAMPLES) not in sys.path:
 
 import plugins.agentsg_niggli  # noqa: E402,F401
 
-from phridge.client import Bridge  # noqa: E402
+from phridge.api import Bridge  # noqa: E402
 
 
 INPUT = (9.0, 5.0, 7.0, 80.0, 100.0, 95.0)

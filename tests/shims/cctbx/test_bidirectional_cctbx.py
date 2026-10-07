@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phridge.client import Bridge
+from phridge.api import Bridge
 from phridge.contracts.models import WorkerRuntime
 from phridge.ops import get_op, list_ops
 from phridge.redis_store import (
@@ -86,7 +86,7 @@ def _helix_pdb(n_res: int = 5) -> str:
 def test_build_geometry_restraints_memory():
     pytest.importorskip("cctbx")
     pytest.importorskip("mmtbx")
-    from phridge.client import RemoteRestraintBuilder
+    from phridge.tools.geometry import RemoteRestraintBuilder
     from phridge.contracts.packing import PackedRestraints
     from phridge.contracts.packing import PackedHierarchy
 
@@ -104,7 +104,7 @@ def test_build_geometry_restraints_memory():
 def test_geometry_restraints_energy_grad_via_handle():
     pytest.importorskip("cctbx")
     pytest.importorskip("mmtbx")
-    from phridge.client import RemoteGeometry, RemoteRestraintBuilder
+    from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
 
     bridge = Bridge(memory=True, timeout=30)
     built = RemoteRestraintBuilder(bridge).build(pdb_string=_helix_pdb(5))
@@ -140,7 +140,7 @@ def test_torch_driver_build_then_minimize():
     pytest.importorskip("cctbx")
     pytest.importorskip("mmtbx")
     pytest.importorskip("torch")
-    from phridge.client import RemoteGeometry, RemoteRestraintBuilder
+    from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
     from phridge.contracts.packing import PackedCartesian
 
     bridge = Bridge(memory=True, timeout=60)

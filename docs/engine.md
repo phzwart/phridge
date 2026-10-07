@@ -115,7 +115,7 @@ Prefer the **structure-factor server** façade when FFT work should run on a
 [sf_server.md](sf_server.md):
 
 ```python
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 
 # GPU server Redis (often another host):
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")
@@ -130,7 +130,7 @@ Lower-level drop-ins (`RemoteStructureFactors`, `RemoteRefinementTarget`) take
 an explicit `Bridge`:
 
 ```python
-from phridge.client import Bridge
+from phridge.api import Bridge
 from phridge.sfcalc.client import RemoteStructureFactors, RemoteTargetFunctor, RemoteRefinementTarget
 # or: from phridge.client.xtal_engine import ...  (shim)
 

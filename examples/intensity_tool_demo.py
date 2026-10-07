@@ -39,7 +39,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client.intensity_tool import IntensityModel, from_files, run_intensity_pipeline
+from phridge.tools.intensity_tool import IntensityModel, from_files, run_intensity_pipeline
 
 DEMO_DIR = ROOT / "examples" / "intensity_demo_output"
 DEMO_DIR.mkdir(parents=True, exist_ok=True)

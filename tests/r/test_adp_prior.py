@@ -18,7 +18,8 @@ from cctbx import sgtbx  # noqa: E402
 from cctbx.array_family import flex  # noqa: E402
 from cctbx.development import random_structure  # noqa: E402
 
-from phridge.client import Bridge, RemoteGeometry  # noqa: E402
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry  # noqa: E402
 from phridge.shims.cctbx import (  # noqa: E402
     ADPPriorOptions,
     build_adp_restraints,

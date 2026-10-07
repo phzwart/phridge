@@ -17,7 +17,7 @@ One atom/scatterer row index `i` is used everywhere:
 
 `ModelGeometry` is a JSON header that records `n_sites` and which of
 hierarchy / xray / restraints are present. It does not duplicate
-payloads. `phridge.client.geometry.model_geometry(...)` verifies the
+payloads. `phridge.tools.geometry.model_geometry(...)` verifies the
 identity and writes the header.
 
 Ramachandran, NCS, and DEN managers are not packed; they are not flat

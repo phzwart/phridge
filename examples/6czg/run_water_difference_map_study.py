@@ -38,7 +38,7 @@ import iotbx.pdb
 import iotbx.reflection_file_reader
 from scitbx.array_family import flex
 
-from phridge.client.intensity_tool import from_files, IntensityModel
+from phridge.tools.intensity_tool import from_files, IntensityModel
 from examples.common import (
     build_noise_free_mtz as make_noise_free_mtz,
     min_sym_dist_to_coords,

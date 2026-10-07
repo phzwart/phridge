@@ -11,7 +11,7 @@ import torch
 from phridge.shims.cctbx._flex import complex_double as flex_complex_double
 from phridge.shims.cctbx._flex import double as flex_double
 
-from phridge.client.intensity.math_utils import _fom_rice_woolfson
+from phridge.tools.intensity.math_utils import _fom_rice_woolfson
 from phridge.d.rules.amplitude import Observations
 
 

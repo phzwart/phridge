@@ -149,7 +149,7 @@ register_op("agentsg_niggli_reduce", agentsg_niggli_reduce,
 
     import plugins.agentsg_niggli  # noqa: F401 — register_op side effect
 
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.ops import get_op
 
     log.heading("1. Register external op")
@@ -169,7 +169,7 @@ register_op("agentsg_niggli_reduce", agentsg_niggli_reduce,
     log.code(
         """\
 import plugins.agentsg_niggli  # registers the op
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)
 out = bridge.call(
@@ -209,7 +209,7 @@ out = bridge.call(
         """\
 from cctbx import uctbx
 from plugins.agentsg_niggli import niggli_cell
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)
 uc = uctbx.unit_cell((9, 5, 7, 80, 100, 95))

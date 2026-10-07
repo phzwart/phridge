@@ -76,7 +76,7 @@ ready key (with short polls) and then reads the envelope. `submit` /
 `result` are the non-blocking pair: enqueue now, wait later.
 
 ```python
-from phridge.client import Bridge
+from phridge.api import Bridge
 import numpy as np
 
 bridge = Bridge("redis://localhost:6379/0")
@@ -147,7 +147,7 @@ calling process on `submit`. Dispatch follows `OpSpec.runtime` (torch vs
 cctbx `process_envelope`).
 
 ```python
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)           # CPU by default
 bridge = Bridge(memory=True, device="cuda")

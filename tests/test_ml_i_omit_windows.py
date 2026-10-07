@@ -12,7 +12,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from phridge.contrib.intensity_ll import OMIT_OP_NAME, register  # noqa: E402
-from phridge.contrib.intensity_ll.omit_windows import (  # noqa: E402
+from phridge.tools.intensity.omit_windows import (  # noqa: E402
     OmitWindowOptions,
     OmitWindowStore,
     assign_box_windows,
@@ -365,7 +365,7 @@ def test_gold_equivalence_one_window():
 
 
 def WindowPartition_from_one(w, n_atoms):
-    from phridge.contrib.intensity_ll.omit_windows import WindowPartition, WindowSpec
+    from phridge.tools.intensity.omit_windows import WindowPartition, WindowSpec
 
     atom_to = np.full(n_atoms, -1, dtype=np.int64)
     atom_to[w.atom_indices] = 0
@@ -473,7 +473,7 @@ def test_env_off_read_only_guarantee():
 
 
 def test_fractional_box_masks_partition_cell():
-    from phridge.client.intensity.omit import fractional_box_mask
+    from phridge.tools.intensity.omit import fractional_box_mask
 
     n_real = (8, 8, 8)
     # 2×2×1 tiling
@@ -497,7 +497,7 @@ def test_fractional_box_masks_partition_cell():
     reason="cctbx required for MTZ / stitch write",
 )
 def test_write_stitched_omit_mtz(tmp_path):
-    from phridge.client.intensity.omit import write_stitched_omit_mtz
+    from phridge.tools.intensity.omit import write_stitched_omit_mtz
 
     data = _synthetic_structure(n_atoms=10, seed=8)
     eng = data["eng"]

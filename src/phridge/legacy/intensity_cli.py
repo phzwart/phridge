@@ -445,7 +445,7 @@ def run_intensity_pipeline(
     print(f"Wrote output files: {files}")
 
     if view:
-        from phridge.client.viewer import view_refinement_result
+        from phridge.tools.viewer import view_refinement_result
         fofc_path = Path(files["fofc"]) if "fofc" in files else None
         view_refinement_result(
             model_pdb=Path(refined_pdb),

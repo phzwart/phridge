@@ -36,7 +36,7 @@ must share the **same Redis URL**.
 
 ```python
 # import cctbx before torch if both ever share a process; Phenix need not import torch at all
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 
 # Production: URL of the GPU machine's Redis
 sf = StructureFactorServer("redis://gpu-lab.example.edu:6379/0")

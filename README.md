@@ -57,7 +57,7 @@ may compute in float32; it casts back before `put`.
 
 **Model–geometry correspondence:** `Hierarchy.atoms[i].i`,
 `XrayStructure.scatterers[i].i`, and every restraint `i_seq` share one
-index space. Use `phridge.client.geometry.model_geometry(...)` to check
+index space. Use `phridge.tools.geometry.model_geometry(...)` to check
 that and emit `ModelGeometry`. See [docs/types.md](docs/types.md).
 
 ## Install
@@ -132,7 +132,7 @@ XGROUP CREATE phridge:jobs:cctbx phridge-workers:cctbx 0 MKSTREAM
 ```
 
 ```python
-from phridge.client import Bridge
+from phridge.api import Bridge
 import numpy as np
 
 bridge = Bridge(redis_url="redis://localhost:6379/0")
@@ -229,7 +229,8 @@ docs/                        Contract, packing, client helpers, extending
 examples/                    demos + examples/plugins/ (third-party ops)
 src/phridge/contracts/models.py  committed pydantic
 src/phridge/packing*.py      npz encode/decode
-src/phridge/client/          Bridge, converters, EM + geometry helpers
+src/phridge/api.py           Bridge
+src/phridge/tools/           geometry, viewer, intensity drivers
 src/phridge/worker/          stream loop, torch helpers, science ops
 src/phridge/ops.py           OpSpec catalog + register_op / preload
 ```

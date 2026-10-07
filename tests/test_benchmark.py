@@ -28,8 +28,8 @@ from cctbx import sgtbx
 from cctbx.array_family import flex
 from cctbx.development import random_structure
 
-from phridge.client import Bridge
-from phridge.contrib.intensity_ll.benchmark import (
+from phridge.api import Bridge
+from benchmarks.intensity_benchmark import (
     ComparisonReport,
     LadderReport,
     NuisanceParams,

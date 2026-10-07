@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from phridge.client.viewer import HTML_TEMPLATE, STATIC_HTML_TEMPLATE, open_static_viewer
+from phridge.tools.viewer import HTML_TEMPLATE, STATIC_HTML_TEMPLATE, open_static_viewer
 
 
 def test_viewer_assets_loaded():

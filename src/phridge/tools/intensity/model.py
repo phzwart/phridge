@@ -13,10 +13,10 @@ from phridge.shims.cctbx._flex import complex_double as flex_complex_double
 from phridge.shims.cctbx._flex import double as flex_double
 from phridge.shims.cctbx._flex import flex_mean
 
-from phridge.client import StructureFactorServer
+from phridge.sfcalc.client import StructureFactorServer
 from phridge.d.map_coefficients import IntensityMapMixin
 from phridge.tools.intensity.steps import IntensityStepsMixin
-from phridge.client.intensity.math_utils import (
+from phridge.tools.intensity.math_utils import (
     golden_section_search_torch,
     isotonic_non_increasing,
     tv_denoise_1d,

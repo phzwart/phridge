@@ -260,7 +260,7 @@ def test_em_map_and_density_at_sites():
     assert samples.shape == (1,)
 
     from phridge.shims.cctbx import density_at_hierarchy, em_map_as_real_map, em_map_from_numpy
-    from phridge.client.geometry import model_geometry
+    from phridge.tools.geometry import model_geometry
     from phridge.contracts.packing import PackedRestraints
     from phridge.contracts.packing import PackedHierarchy
     from phridge.contracts.models import Atom, CoordinateFrame

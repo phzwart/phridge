@@ -118,7 +118,7 @@ The client must know the op **name** before enqueue (`get_op` gate):
 
 ```python
 import mypkg.plugin  # registers OpSpec
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge("redis://gpu:6379/0")
 out = bridge.call("denoise", array=..., strength=0.2)
@@ -182,7 +182,7 @@ Phenix-facing helper (same module) converts cctbx ↔ JSON:
 ```python
 from cctbx import uctbx
 from plugins.agentsg_niggli import niggli_cell
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)
 uc_red = niggli_cell(uctbx.unit_cell((9, 5, 7, 80, 100, 95)), bridge=bridge)

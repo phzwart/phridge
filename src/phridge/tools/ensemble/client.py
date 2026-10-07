@@ -206,7 +206,7 @@ class RemoteEnsembleFit:
         self.bridge = bridge
 
     def fit(self, job: EnsembleJob) -> EnsembleFitResult:
-        from phridge.client import Bridge
+        from phridge.api import Bridge
         from phridge.tools.ensemble.ops import OP_NAME_FIT, register_ops
 
         register_ops()

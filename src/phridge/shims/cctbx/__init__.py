@@ -247,3 +247,9 @@ def _cctbx_to_canonical(value: Any) -> Any:
             raise TypeError("3-D flex maps need crystal symmetry; use map_from_cctbx(data, crystal)")
         return np.asarray(value)
     raise TypeError(f"no cctbx converter for {type(value)!r}")
+
+
+def require_cctbx_stack() -> None:
+    """Import cctbx and mmtbx so a missing install fails at worker startup."""
+    import cctbx  # noqa: F401
+    import mmtbx  # noqa: F401

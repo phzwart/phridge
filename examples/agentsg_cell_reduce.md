@@ -73,7 +73,7 @@ change_of_basis=[[0, 0, 1], [-1, 0, 0], [0, -1, 0]]
 
 ```python
 import plugins.agentsg_niggli  # registers the op
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)
 out = bridge.call(
@@ -104,7 +104,7 @@ source=agentsg
 ```python
 from cctbx import uctbx
 from plugins.agentsg_niggli import niggli_cell
-from phridge.client import Bridge
+from phridge.api import Bridge
 
 bridge = Bridge(memory=True)
 uc = uctbx.unit_cell((9, 5, 7, 80, 100, 95))

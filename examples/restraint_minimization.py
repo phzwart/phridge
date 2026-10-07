@@ -25,7 +25,8 @@ import iotbx.pdb
 import mmtbx.model
 from mmtbx.secondary_structure.build import ss_idealization as ssb
 
-from phridge.client import Bridge, RemoteGeometry
+from phridge.api import Bridge
+from phridge.tools.geometry import RemoteGeometry
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_MD = HERE / "restraint_minimization.md"

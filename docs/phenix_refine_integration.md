@@ -75,7 +75,7 @@ The Phenix client requires **zero PyTorch dependencies**; all heavy tensor calcu
 
 ## 3. The Interception Mechanism (`phenix_hook.py`)
 
-The integration hook (`phridge.client.intensity.phenix_hook`) dynamically patches six core touchpoints in `mmtbx` and `phenix.refine` when `enable_intensity_in_phenix()` is invoked:
+The integration hook (`phridge.tools.intensity.phenix_hook`) dynamically patches six core touchpoints in `mmtbx` and `phenix.refine` when `enable_intensity_in_phenix()` is invoked:
 
 ```mermaid
 flowchart TD
@@ -337,7 +337,7 @@ If executing inside custom refinement pipelines or Jupyter notebooks:
 
 ```python
 import phenix.refinement
-from phridge.client.intensity import enable_intensity_in_phenix
+from phridge.tools.intensity import enable_intensity_in_phenix
 
 # 1. Activate the mli_quad hooks
 enable_intensity_in_phenix()
@@ -359,7 +359,7 @@ For researchers writing custom refinement workflows using `cctbx` and `mmtbx.f_m
 from iotbx import reflection_file_reader
 from iotbx.pdb import combined_status
 import iotbx.pdb
-from phridge.client.intensity import IntensityFModel, enable_intensity_in_phenix
+from phridge.tools.intensity import IntensityFModel, enable_intensity_in_phenix
 
 enable_intensity_in_phenix()
 

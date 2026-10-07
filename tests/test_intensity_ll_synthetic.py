@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phridge.contrib.intensity_ll.synthetic import (
+from phridge.tools.intensity.synthetic import (
     SyntheticIntensityResult,
     compute_base_sigmas,
     generate_synthetic_series,

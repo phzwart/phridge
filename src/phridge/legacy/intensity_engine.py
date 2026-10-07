@@ -219,7 +219,7 @@ def amplitude_scaffold_from_intensities(i_obs: Any) -> Any:
     ).set_observation_type_xray_amplitude()
 
 
-from phridge.client.api import Bridge
+from phridge.api import Bridge
 from phridge.shims.cctbx import crystal_from_cctbx, miller_from_cctbx, miller_to_cctbx
 from phridge.shims.cctbx import scattering_table_from_cctbx, xray_from_cctbx
 from phridge.q.scales.solvent import BULK_SOLVENT_OP_NAME
@@ -387,7 +387,7 @@ def _make_intensity_bridge(
     silently connecting to Redis (that caused ConnectionRefused after we stopped
     auto-starting redis-server).
     """
-    from phridge.client.api import Bridge
+    from phridge.api import Bridge
 
     want_mem = _memory_bridge_preferred(memory)
     has_torch = False
@@ -2820,7 +2820,7 @@ class IntensityFModel(
     def use_surrogate(self, enabled: bool) -> None:
         """Switch the target functor between the exact quadrature and the surrogate.
 
-        Part of the :class:`~phridge.client.intensity.interleaved.InterleavedHost`
+        Part of the :class:`~phridge.tools.intensity.interleaved.InterleavedHost`
         contract; the controller owns every call.
         """
         self._use_surrogate = bool(enabled) and self._surrogate is not None
@@ -3206,10 +3206,10 @@ class IntensityFModel(
 
         This is the only place the surrogate arrays are ever created or refreshed, and
         the returned NLL is the value that adjudicates the block that follows. See
-        :mod:`phridge.client.intensity.interleaved`.
+        :mod:`phridge.tools.intensity.interleaved`.
         """
         from phridge.legacy.intensity_interleaved import CheckpointResult
-        from phridge.contrib.intensity_ll.surrogate_op import SURROGATE_FIT_OP_NAME
+        from phridge.tools.intensity.surrogate_op import SURROGATE_FIT_OP_NAME
 
         kw = self._common_eval_kwargs()
         kw["target"] = self.target_spec
@@ -3220,7 +3220,7 @@ class IntensityFModel(
         alpha_p = np.asarray(raw["alpha_p"], dtype=np.float64)
         beta_p = np.asarray(raw["beta_p"], dtype=np.float64)
         mask = np.asarray(raw["mask"], dtype=np.int64)
-        from phridge.contrib.intensity_ll.surrogate import FIT_EXACT_ROUTE
+        from phridge.tools.intensity.surrogate import FIT_EXACT_ROUTE
 
         self._surrogate = {
             # Internal arrays. Never printed, never written to an output file.
@@ -3985,7 +3985,7 @@ class IntensityFModel(
             self.show(log=log)
         # Optional windowed omit coefficients (read-only; never fails refinement)
         try:
-            from phridge.client.intensity.omit import omit_options_from_env, omit_windows_enabled, run_omit_windows_from_fmodel
+            from phridge.tools.intensity.omit import omit_options_from_env, omit_windows_enabled, run_omit_windows_from_fmodel
 
             if omit_windows_enabled():
                 opts = omit_options_from_env()

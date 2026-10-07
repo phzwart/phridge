@@ -1,6 +1,6 @@
 """Crystallographic intensity likelihood target (``ml_i``).
 
-Entry point: ``phridge.targets`` → ``phridge.contrib.intensity_ll:register``.
+Entry point: ``phridge.plugins`` → ``phridge.d.rules.mli_quad:register``.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from phridge.contrib.intensity_ll.ops import (
     TARGET_AND_GRADIENTS_OP_NAME,
     register_ops,
 )
-from phridge.contrib.intensity_ll.omit_windows import OMIT_OP_NAME
-from phridge.contrib.intensity_ll.surrogate_op import SURROGATE_FIT_OP_NAME
+from phridge.tools.intensity.omit_windows import OMIT_OP_NAME
+from phridge.tools.intensity.surrogate_op import SURROGATE_FIT_OP_NAME
 from phridge.d.rules.mli_quad.target import IntensityLogLikelihood, IntensityLogLikelihoodOptions
 
 __all__ = [

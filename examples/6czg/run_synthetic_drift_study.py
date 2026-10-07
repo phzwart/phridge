@@ -33,9 +33,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from phridge.client import Bridge
-from phridge.client.intensity_tool import from_files, IntensityModel
-from phridge.contrib.intensity_ll.benchmark import ReflectionSplit, compare, ComparisonReport
+from phridge.api import Bridge
+from phridge.tools.intensity_tool import from_files, IntensityModel
+from benchmarks.intensity_benchmark import ReflectionSplit, compare, ComparisonReport
 
 DIR_6CZG = ROOT / "examples" / "6czg"
 SYNTH_DIR = DIR_6CZG / "synthetic_t"

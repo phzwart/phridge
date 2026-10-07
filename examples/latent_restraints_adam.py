@@ -238,7 +238,8 @@ def main(argv: list[str] | None = None) -> int:
     import torch
     from residue_encoder import ResidueEncoder, residue_slices_from_atoms
 
-    from phridge.client import Bridge, RemoteGeometry, RemoteRestraintBuilder
+    from phridge.api import Bridge
+    from phridge.tools.geometry import RemoteGeometry, RemoteRestraintBuilder
 
     log = DemoLog(title="Latent Adam: CCTBX restraints via phridge")
     log.heading("Setup")

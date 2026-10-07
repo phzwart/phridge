@@ -374,7 +374,7 @@ def test_reference_oracles_absent():
 
 
 def test_op_roundtrip_known_f():
-    from phridge.client import Bridge
+    from phridge.api import Bridge
     from phridge.tools.ensemble.synthetic import simulate_campaign
 
     register()

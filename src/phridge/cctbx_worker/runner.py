@@ -179,12 +179,13 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument(
         "--no-entry-points",
         action="store_true",
-        help="Skip loading phridge.ops / phridge.targets entry-point groups",
+        help="Skip loading phridge.plugins entry points",
     )
     args = parser.parse_args(argv)
     try:
-        import cctbx  # noqa: F401
-        import mmtbx  # noqa: F401
+        from phridge.shims.cctbx import require_cctbx_stack
+
+        require_cctbx_stack()
     except ImportError as exc:
         raise SystemExit(
             "cctbx worker requires cctbx and mmtbx "

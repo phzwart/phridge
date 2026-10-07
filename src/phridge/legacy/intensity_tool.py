@@ -1,16 +1,16 @@
-"""Backward-compatibility shim for phridge.client.intensity_tool.
+"""Backward-compatibility shim for phridge.tools.intensity_tool.
 
-All functionality has been modularized into ``phridge.client.intensity.*``:
+All functionality has been modularized into ``phridge.tools.intensity.*``:
   - ``phridge.tools.intensity.model.IntensityModel``
-  - ``phridge.client.intensity.cli``: ``from_files``, ``run_intensity_pipeline``, ``main``
+  - ``phridge.tools.intensity.cli``: ``from_files``, ``run_intensity_pipeline``, ``main``
   - ``phridge.d.map_coefficients.IntensityMapMixin``
-  - ``phridge.client.intensity.refine.IntensityRefineMixin``
-  - ``phridge.client.intensity.math_utils``: ``tv_denoise_1d``, ``isotonic_non_increasing``
+  - ``phridge.tools.intensity.refine.IntensityRefineMixin``
+  - ``phridge.tools.intensity.math_utils``: ``tv_denoise_1d``, ``isotonic_non_increasing``
 """
 
 from __future__ import annotations
 
-from phridge.client.intensity import (
+from phridge.tools.intensity import (
     IntensityMapMixin,
     IntensityModel,
     IntensityRefineMixin,

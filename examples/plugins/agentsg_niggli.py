@@ -16,7 +16,7 @@ Install::
 Phenix-facing wrapper (cctbx in / cctbx out)::
 
     from plugins.agentsg_niggli import niggli_cell
-    from phridge.client import Bridge
+    from phridge.api import Bridge
 
     bridge = Bridge(memory=True)  # or redis URL + worker --preload
     uc_red = niggli_cell(unit_cell, bridge=bridge)
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional, Sequence, Union
 
-from phridge.client.api import Bridge
+from phridge.api import Bridge
 from phridge.ops import register_op
 
 CellLike = Union[Mapping[str, Any], Sequence[Any]]

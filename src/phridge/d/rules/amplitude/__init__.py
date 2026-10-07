@@ -24,5 +24,11 @@ __all__ = [
     "MaximumLikelihoodAmplitude",
     "build_target",
     "list_targets",
+    "register",
     "register_target",
 ]
+
+
+def register() -> None:
+    """Importing this package already registers the ls and ml_f targets."""
+    return None
