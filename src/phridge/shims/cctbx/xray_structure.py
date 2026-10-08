@@ -194,3 +194,61 @@ def xray_structure_from_pdb(path: str) -> Any:
     import iotbx.pdb
 
     return iotbx.pdb.input(file_name=str(path)).xray_structure_simple()
+
+
+def write_pdb_file(path: str, structure: Any) -> None:
+    """Write a PDB and a matching mmCIF. iotbx stays in this shim."""
+    from pathlib import Path
+
+    root = _hierarchy(structure)
+    destination = Path(path)
+    symmetry = structure.crystal_symmetry()
+    destination.write_text(root.as_pdb_string(crystal_symmetry=symmetry), encoding="utf-8")
+    destination.with_suffix(".cif").write_text(_cif_text(structure), encoding="utf-8")
+
+
+def _hierarchy(structure: Any) -> Any:
+    import iotbx.pdb
+
+    root = iotbx.pdb.hierarchy.root()
+    model = iotbx.pdb.hierarchy.model()
+    chain = iotbx.pdb.hierarchy.chain(id="A")
+    sites = list(structure.sites_cart())
+    for index, scatterer in enumerate(structure.scatterers()):
+        residue = iotbx.pdb.hierarchy.residue_group(resseq=f"{index + 1:4d}", icode=" ")
+        group = iotbx.pdb.hierarchy.atom_group(resname="GLY", altloc=" ")
+        atom = iotbx.pdb.hierarchy.atom()
+        atom.name = " CA "
+        atom.element = str(scatterer.scattering_type)[:2].rjust(2)
+        atom.xyz = tuple(float(value) for value in sites[index])
+        atom.occ = float(scatterer.occupancy)
+        atom.b = 20.0
+        group.append_atom(atom)
+        residue.append_atom_group(group)
+        chain.append_residue_group(residue)
+    model.append_chain(chain)
+    root.append_model(model)
+    root.atoms().reset_i_seq()
+    return root
+
+
+def _cif_text(structure: Any) -> str:
+    a, b, c, alpha, beta, gamma = structure.unit_cell().parameters()
+    lines = [
+        "data_phridge",
+        "_cell.length_a " + str(float(a)),
+        "_cell.length_b " + str(float(b)),
+        "_cell.length_c " + str(float(c)),
+        "_cell.angle_alpha " + str(float(alpha)),
+        "_cell.angle_beta " + str(float(beta)),
+        "_cell.angle_gamma " + str(float(gamma)),
+        "loop_",
+        "_atom_site.id",
+        "_atom_site.Cartn_x",
+        "_atom_site.Cartn_y",
+        "_atom_site.Cartn_z",
+    ]
+    for index, xyz in enumerate(structure.sites_cart()):
+        lines.append(f"{index + 1} {float(xyz[0])} {float(xyz[1])} {float(xyz[2])}")
+    return "\n".join(lines) + "\n"
+

@@ -61,6 +61,9 @@ class ObservedSpec(BaseModel):
 
     n: int = 1
     n_shell: Optional[int] = None
+    pdb: Optional[str] = None
+    mtz: Optional[str] = None
+    kind: Literal["amplitude", "intensity"] = "amplitude"
 
 
 class Config(BaseModel):

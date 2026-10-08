@@ -18,7 +18,7 @@ calls ``SigmaABeta.fit`` at each node. There is no extra alternation.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -126,6 +126,16 @@ class CalibrateIntensity(Policy):
             sigma_a_refl=torch.as_tensor(sigma_a_refl, dtype=torch.float64),
             beta_residual=torch.as_tensor(beta_residual, dtype=torch.float64),
         )
+
+    def next(self, obs_history: Sequence[Any]) -> Optional[Any]:
+        """One calibration, then stop. The controller protocol alongside ``run``."""
+        from phridge.policies.base import Action
+
+        for item in obs_history:
+            name = getattr(item, "action", None) or getattr(item, "name", None)
+            if name == "calibrate":
+                return None
+        return Action(name="calibrate")
 
 
 def components_for(options: IntensityCalibrationOptions) -> dict[str, Any]:

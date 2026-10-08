@@ -273,3 +273,48 @@ def real_map_flex(values: Any, shape: tuple[int, ...]) -> Any:
     flex_map = double(np.ascontiguousarray(values).ravel())
     flex_map.reshape(grid(tuple(int(x) for x in shape)))
     return flex_map
+
+
+def read_mtz_file(path: str) -> PackedReflections:
+    """Open an MTZ path. iotbx stays in this shim."""
+    import iotbx.mtz
+
+    return reflections_from_mtz(iotbx.mtz.object(file_name=str(path)))
+
+
+def write_mtz_file(path: str, packed: PackedReflections) -> None:
+    """Write packed reflections to ``path``."""
+    reflections_to_mtz(packed).write(file_name=str(path))
+
+
+def write_observation_mtz(
+    path: str,
+    unit_cell: tuple[float, ...],
+    symbol: str,
+    hkl: Any,
+    values: Any,
+    sigmas: Any,
+    free_flags: Any,
+    *,
+    label: str = "F",
+    intensity: bool = False,
+) -> None:
+    """Write amplitudes or intensities plus a free-flag column."""
+    from cctbx import crystal, miller
+
+    symmetry = crystal.symmetry(unit_cell=tuple(float(x) for x in unit_cell), space_group_symbol=symbol)
+    rows = np.asarray(hkl, dtype=np.int32).reshape(-1, 3)
+    indices = miller_index([tuple(int(v) for v in row) for row in rows])
+    miller_set = miller.set(crystal_symmetry=symmetry, indices=indices, anomalous_flag=False)
+    data = double(np.ascontiguousarray(values, dtype=np.float64))
+    array = miller.array(miller_set=miller_set, data=data)
+    if intensity:
+        array.set_observation_type_xray_intensity()
+    else:
+        array.set_observation_type_xray_amplitude()
+    array.set_sigmas(double(np.ascontiguousarray(sigmas, dtype=np.float64)))
+    dataset = array.as_mtz_dataset(column_root_label=label)
+    flags = miller.array(miller_set=miller_set, data=double(np.ascontiguousarray(free_flags, dtype=np.float64)))
+    dataset.add_miller_array(flags, column_root_label="FreeR_flag")
+    dataset.mtz_object().write(file_name=str(path))
+
