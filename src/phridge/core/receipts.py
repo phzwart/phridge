@@ -16,6 +16,7 @@ class Receipt:
     output_version: tuple[int, int]
     wall_time: float
     partitions_consulted: tuple[str, ...] = ()
+    payload: tuple[tuple[str, tuple[int, ...], tuple[float, ...]], ...] = ()
 
 
 class ReceiptLog:
