@@ -1,0 +1,28 @@
+---
+description: Repo-wide phridge rules — import walls, manifests, size caps, receipts
+alwaysApply: true
+---
+
+# Repo-wide rules
+
+These rules apply to every change outside `legacy/`. Contrib packages also follow
+[`.cursor/rules/phridge-contrib.mdc`](.cursor/rules/phridge-contrib.mdc).
+
+- Import walls are tests. cctbx-family imports live only under `src/phridge/io/`,
+  `src/phridge/shims/`, `src/phridge/worker/cctbx_runner.py`, and `legacy/`.
+  Core spaces import torch, numpy, pydantic, redis, and phridge.
+- A manifest exists before the code that implements it. Register the plugin,
+  then write the body.
+- One slot has one conformance suite.
+- Size caps: no module over 800 lines and no function over 150 lines, outside
+  `legacy/`. Nested functions count toward the outer function.
+- No refinement loops outside `core/controller.py` and `policies/`. The
+  conformance harness under `testing/` may call an optimizer once per case.
+- Public functions in `r/`, `q/`, `d/`, `transforms/`, `optim/`, and `core/`
+  take and return torch tensors or named tuples in `phridge.contracts.tensors`.
+- Options that cross a package boundary are a pydantic `BaseModel` with
+  `extra="forbid"`.
+- Receipts are the record of what happened. Do not add a second logging channel
+  for the same facts.
+- `examples/` holds inputs only.
+- `legacy/` may not gain a line.

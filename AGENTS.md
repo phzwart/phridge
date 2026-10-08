@@ -1,49 +1,23 @@
-# Agent directive: `phridge.contrib`
+# Repo-wide rules
 
-Non-negotiable rules for anything under `src/phridge/contrib/`.
-Also mirrored by `.cursor/rules/phridge-contrib.mdc`.
+These rules apply to every change outside `legacy/`. Contrib packages also follow
+[`.cursor/rules/phridge-contrib.mdc`](.cursor/rules/phridge-contrib.mdc).
 
-## Typing
-
-- Use `from __future__ import annotations` in every module.
-- Public callables, `register()` hooks, target/op option models, and I/O helpers must have complete type annotations.
-- Do not expose untyped `**kwargs` at the package boundary; validate options with pydantic instead.
-
-## Pydantic
-
-- Any JSON / options / target-spec dict that crosses the contrib boundary must be validated with a pydantic `BaseModel` (or an existing LinkML-generated model from `phridge.contracts.models` via `model_validate`).
-- Prefer `model_config = {"extra": "forbid"}` on contrib option models.
-- Do not read ad-hoc keys from raw `dict`s in public constructors.
-
-## LinkML / JSON Schema
-
-- Prefer existing packed types (`array`, `json`, `MillerArray`, …) so most contrib targets need **no** new schema.
-- New science object *kinds* or envelope fields require LinkML in `schema/` + regenerated JSON Schema (`make schema-docs` / `scripts/generate_models.py`).
-- When schema surface changes, add fixtures that `jsonschema.validate` against `schema/generated/*.schema.json` (see `tests/test_linkml_validate.py`).
-- When registering new **ops**, cover `JobEnvelope` / op JSON in tests.
-- Contract path details: [`docs/extending.md`](../../../docs/extending.md) (LinkML checklist). Prefer that path; do not invent a second validation story.
-
-## Tests required per contrib package
-
-1. Registration smoke (`register()` / entry point → name in `list_targets()` or op catalog).
-2. Pydantic accept/reject for option models.
-3. LinkML/jsonschema coverage whenever schema surface changes.
-4. A small numeric / evaluate smoke for targets.
-
-## Layout
-
-```
-src/phridge/contrib/<name>/
-  __init__.py    # register() zero-arg; safe if called twice
-  …              # typed modules; pydantic options; no torch on client helpers
-```
-
-Wire discovery in `pyproject.toml`:
-
-```toml
-[project.entry-points."phridge.targets"]
-my_target = "phridge.contrib.<name>:register"
-# or phridge.ops for new ops
-```
-
-Put shared FFT / SF-server core in `phridge.sfcalc`, not here.
+- Import walls are tests. cctbx-family imports live only under `src/phridge/io/`,
+  `src/phridge/shims/`, `src/phridge/worker/cctbx_runner.py`, and `legacy/`.
+  Core spaces import torch, numpy, pydantic, redis, and phridge.
+- A manifest exists before the code that implements it. Register the plugin,
+  then write the body.
+- One slot has one conformance suite.
+- Size caps: no module over 800 lines and no function over 150 lines, outside
+  `legacy/`. Nested functions count toward the outer function.
+- No refinement loops outside `core/controller.py` and `policies/`. The
+  conformance harness under `testing/` may call an optimizer once per case.
+- Public functions in `r/`, `q/`, `d/`, `transforms/`, `optim/`, and `core/`
+  take and return torch tensors or named tuples in `phridge.contracts.tensors`.
+- Options that cross a package boundary are a pydantic `BaseModel` with
+  `extra="forbid"`.
+- Receipts are the record of what happened. Do not add a second logging channel
+  for the same facts.
+- `examples/` holds inputs only.
+- `legacy/` may not gain a line.

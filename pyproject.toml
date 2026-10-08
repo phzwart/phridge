@@ -38,6 +38,7 @@ dev = [
 ]
 
 [project.scripts]
+phridge = "phridge.cli:main"
 phridge-worker = "phridge.worker.runner:main"
 phridge-cctbx-worker = "phridge.cctbx_worker.runner:main"
 phridge-ops = "phridge.ops:main"

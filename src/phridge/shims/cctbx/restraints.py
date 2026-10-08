@@ -44,6 +44,67 @@ def _csr(seq_lists: list[list[int]]) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(flat, dtype=np.int32), np.asarray(offsets, dtype=np.int32)
 
 
+def _geometry_proxies(manager: Any) -> dict[str, Any]:
+    angles = getattr(manager, "angle_proxies", None) or []
+    ang_i, items = _i_seqs_array(angles, 3)
+    dihedrals = getattr(manager, "dihedral_proxies", None) or []
+    dih_i, ditems = _i_seqs_array(dihedrals, 4)
+    chirs = getattr(manager, "chirality_proxies", None) or []
+    ch_i, citems = _i_seqs_array(chirs, 4)
+    planes = list(getattr(manager, "planarity_proxies", None) or [])
+    plane_seqs = [list(p.i_seqs) for p in planes]
+    p_flat, p_off = _csr(plane_seqs)
+    parallels = list(getattr(manager, "parallelity_proxies", None) or [])
+    pi_seqs = [list(p.i_seqs) for p in parallels]
+    pj_seqs = [list(p.j_seqs) for p in parallels]
+    pi_flat, pi_off = _csr(pi_seqs)
+    pj_flat, pj_off = _csr(pj_seqs)
+    sim_pairs: list[tuple[int, int]] = []
+    sim_off = [0]
+    sim_w: list[float] = []
+    sims = getattr(manager, "bond_similarity_proxies", None) or []
+    for proxy in sims:
+        pairs = list(proxy.i_seqs)
+        weights = list(getattr(proxy, "weights", []))
+        for k, pair in enumerate(pairs):
+            sim_pairs.append((int(pair[0]), int(pair[1])))
+            sim_w.append(float(weights[k]) if k < len(weights) else 1.0)
+        sim_off.append(len(sim_pairs))
+    return {
+        "ang_i": ang_i,
+        "ang_ideal": np.array([float(p.angle_ideal) for p in items], dtype=np.float64) if items else None,
+        "ang_w": np.array([float(p.weight) for p in items], dtype=np.float64) if items else None,
+        "ang_o": np.array([int(getattr(p, "origin_id", 0) or 0) for p in items], dtype=np.int32) if items else None,
+        "dih_i": dih_i,
+        "dih_ideal": np.array([float(p.angle_ideal) for p in ditems], dtype=np.float64) if ditems else None,
+        "dih_w": np.array([float(p.weight) for p in ditems], dtype=np.float64) if ditems else None,
+        "dih_per": np.array([int(getattr(p, "periodicity", 0) or 0) for p in ditems], dtype=np.int32) if ditems else None,
+        "dih_o": np.array([int(getattr(p, "origin_id", 0) or 0) for p in ditems], dtype=np.int32) if ditems else None,
+        "ch_i": ch_i,
+        "ch_v": np.array([float(p.volume_ideal) for p in citems], dtype=np.float64) if citems else None,
+        "ch_w": np.array([float(p.weight) for p in citems], dtype=np.float64) if citems else None,
+        "ch_b": np.array([1 if getattr(p, "both_signs", False) else 0 for p in citems], dtype=np.uint8) if citems else None,
+        "ch_o": np.array([int(getattr(p, "origin_id", 0) or 0) for p in citems], dtype=np.int32) if citems else None,
+        "planes": planes,
+        "plane_seqs": plane_seqs,
+        "p_flat": p_flat,
+        "p_off": p_off,
+        "p_w": np.array([float(np.mean(list(p.weights))) if getattr(p, "weights", None) is not None else 1.0 for p in planes], dtype=np.float64) if planes else None,
+        "p_o": np.array([int(getattr(p, "origin_id", 0) or 0) for p in planes], dtype=np.int32) if planes else None,
+        "parallels": parallels,
+        "pi_flat": pi_flat,
+        "pi_off": pi_off,
+        "pj_flat": pj_flat,
+        "pj_off": pj_off,
+        "par_w": np.array([float(p.weight) for p in parallels], dtype=np.float64) if parallels else None,
+        "par_ang": np.array([float(getattr(p, "target_angle_deg", 0.0) or 0.0) for p in parallels], dtype=np.float64) if parallels else None,
+        "par_o": np.array([int(getattr(p, "origin_id", 0) or 0) for p in parallels], dtype=np.int32) if parallels else None,
+        "sim_pairs": sim_pairs,
+        "sim_off": sim_off,
+        "sim_w": sim_w,
+    }
+
+
 def restraints_from_cctbx(manager: Any, n_sites: Optional[int] = None) -> PackedRestraints:
     """Pack cctbx.geometry_restraints.manager (or an object with the same proxy attrs)."""
     if n_sites is None:
@@ -79,40 +140,20 @@ def restraints_from_cctbx(manager: Any, n_sites: Optional[int] = None) -> Packed
             rt = getattr(proxy, "rt_mx_ji", None)
             asu_rt.append(str(rt) if rt is not None else "x,y,z")
 
-    angles = getattr(manager, "angle_proxies", None) or []
-    ang_i, items = _i_seqs_array(angles, 3)
-    ang_ideal = np.array([float(p.angle_ideal) for p in items], dtype=np.float64) if items else None
-    ang_w = np.array([float(p.weight) for p in items], dtype=np.float64) if items else None
-    ang_o = np.array([int(getattr(p, "origin_id", 0) or 0) for p in items], dtype=np.int32) if items else None
-
-    dihedrals = getattr(manager, "dihedral_proxies", None) or []
-    dih_i, ditems = _i_seqs_array(dihedrals, 4)
-    dih_ideal = np.array([float(p.angle_ideal) for p in ditems], dtype=np.float64) if ditems else None
-    dih_w = np.array([float(p.weight) for p in ditems], dtype=np.float64) if ditems else None
-    dih_per = np.array([int(getattr(p, "periodicity", 0) or 0) for p in ditems], dtype=np.int32) if ditems else None
-    dih_o = np.array([int(getattr(p, "origin_id", 0) or 0) for p in ditems], dtype=np.int32) if ditems else None
-
-    chirs = getattr(manager, "chirality_proxies", None) or []
-    ch_i, citems = _i_seqs_array(chirs, 4)
-    ch_v = np.array([float(p.volume_ideal) for p in citems], dtype=np.float64) if citems else None
-    ch_w = np.array([float(p.weight) for p in citems], dtype=np.float64) if citems else None
-    ch_b = np.array([1 if getattr(p, "both_signs", False) else 0 for p in citems], dtype=np.uint8) if citems else None
-    ch_o = np.array([int(getattr(p, "origin_id", 0) or 0) for p in citems], dtype=np.int32) if citems else None
-
-    planes = list(getattr(manager, "planarity_proxies", None) or [])
-    plane_seqs = [list(p.i_seqs) for p in planes]
-    p_flat, p_off = _csr(plane_seqs)
-    p_w = np.array([float(np.mean(list(p.weights))) if getattr(p, "weights", None) is not None else 1.0 for p in planes], dtype=np.float64) if planes else None
-    p_o = np.array([int(getattr(p, "origin_id", 0) or 0) for p in planes], dtype=np.int32) if planes else None
-
-    parallels = list(getattr(manager, "parallelity_proxies", None) or [])
-    pi_seqs = [list(p.i_seqs) for p in parallels]
-    pj_seqs = [list(p.j_seqs) for p in parallels]
-    pi_flat, pi_off = _csr(pi_seqs)
-    pj_flat, pj_off = _csr(pj_seqs)
-    par_w = np.array([float(p.weight) for p in parallels], dtype=np.float64) if parallels else None
-    par_ang = np.array([float(getattr(p, "target_angle_deg", 0.0) or 0.0) for p in parallels], dtype=np.float64) if parallels else None
-    par_o = np.array([int(getattr(p, "origin_id", 0) or 0) for p in parallels], dtype=np.int32) if parallels else None
+    proxies = _geometry_proxies(manager)
+    ang_i = proxies["ang_i"]
+    ang_ideal, ang_w, ang_o = proxies["ang_ideal"], proxies["ang_w"], proxies["ang_o"]
+    dih_i = proxies["dih_i"]
+    dih_ideal, dih_w, dih_per, dih_o = proxies["dih_ideal"], proxies["dih_w"], proxies["dih_per"], proxies["dih_o"]
+    ch_i = proxies["ch_i"]
+    ch_v, ch_w, ch_b, ch_o = proxies["ch_v"], proxies["ch_w"], proxies["ch_b"], proxies["ch_o"]
+    planes, plane_seqs = proxies["planes"], proxies["plane_seqs"]
+    p_flat, p_off, p_w, p_o = proxies["p_flat"], proxies["p_off"], proxies["p_w"], proxies["p_o"]
+    parallels = proxies["parallels"]
+    pi_flat, pi_off = proxies["pi_flat"], proxies["pi_off"]
+    pj_flat, pj_off = proxies["pj_flat"], proxies["pj_off"]
+    par_w, par_ang, par_o = proxies["par_w"], proxies["par_ang"], proxies["par_o"]
+    sim_pairs, sim_off, sim_w = proxies["sim_pairs"], proxies["sim_off"], proxies["sim_w"]
 
     nb_i, nb_vdw = [], []
     pair_proxies = None
@@ -140,18 +181,6 @@ def restraints_from_cctbx(manager: Any, n_sites: Optional[int] = None) -> Packed
             site = site[0]
         ref_xyz.append(tuple(float(x) for x in site))
         ref_w.append(float(getattr(proxy, "weight", 1.0) or 1.0))
-
-    sim_pairs: list[tuple[int, int]] = []
-    sim_off = [0]
-    sim_w: list[float] = []
-    sims = getattr(manager, "bond_similarity_proxies", None) or []
-    for proxy in sims:
-        pairs = list(proxy.i_seqs)
-        weights = list(getattr(proxy, "weights", []))
-        for k, pair in enumerate(pairs):
-            sim_pairs.append((int(pair[0]), int(pair[1])))
-            sim_w.append(float(weights[k]) if k < len(weights) else 1.0)
-        sim_off.append(len(sim_pairs))
 
     model_indices = None
     if getattr(manager, "model_indices", None) is not None:
@@ -407,6 +436,78 @@ class ADPPriorOptions(BaseModel):
         return self
 
 
+def _adp_packed(
+    restraints: PackedRestraints,
+    n_sites: int,
+    opts: ADPPriorOptions,
+    aniso_flags: np.ndarray,
+    p_arr: np.ndarray,
+    w_arr: np.ndarray,
+    tau_arr: np.ndarray,
+    cls_arr: np.ndarray,
+    r_arr: np.ndarray,
+    rw_arr: np.ndarray,
+) -> PackedRestraints:
+    return PackedRestraints(
+        n_sites=n_sites,
+        crystal=restraints.meta.crystal,
+        bond_i_seqs=restraints.bond_i_seqs,
+        bond_distance_ideal=restraints.bond_distance_ideal,
+        bond_weight=restraints.bond_weight,
+        bond_slack=restraints.bond_slack,
+        bond_origin_id=restraints.bond_origin_id,
+        bond_asu_i_seqs=restraints.bond_asu_i_seqs,
+        bond_asu_distance_ideal=restraints.bond_asu_distance_ideal,
+        bond_asu_weight=restraints.bond_asu_weight,
+        bond_asu_rt_mx=restraints.bond_asu_rt_mx,
+        angle_i_seqs=restraints.angle_i_seqs,
+        angle_ideal=restraints.angle_ideal,
+        angle_weight=restraints.angle_weight,
+        angle_origin_id=restraints.angle_origin_id,
+        dihedral_i_seqs=restraints.dihedral_i_seqs,
+        dihedral_angle_ideal=restraints.dihedral_angle_ideal,
+        dihedral_weight=restraints.dihedral_weight,
+        dihedral_periodicity=restraints.dihedral_periodicity,
+        dihedral_origin_id=restraints.dihedral_origin_id,
+        chirality_i_seqs=restraints.chirality_i_seqs,
+        chirality_volume_ideal=restraints.chirality_volume_ideal,
+        chirality_weight=restraints.chirality_weight,
+        chirality_both_signs=restraints.chirality_both_signs,
+        chirality_origin_id=restraints.chirality_origin_id,
+        planarity_i_seqs=restraints.planarity_i_seqs,
+        planarity_offsets=restraints.planarity_offsets,
+        planarity_weight=restraints.planarity_weight,
+        planarity_origin_id=restraints.planarity_origin_id,
+        parallelity_i_offsets=restraints.parallelity_i_offsets,
+        parallelity_i_seqs=restraints.parallelity_i_seqs,
+        parallelity_j_offsets=restraints.parallelity_j_offsets,
+        parallelity_j_seqs=restraints.parallelity_j_seqs,
+        parallelity_weight=restraints.parallelity_weight,
+        parallelity_target_angle=restraints.parallelity_target_angle,
+        parallelity_origin_id=restraints.parallelity_origin_id,
+        nonbonded_i_seqs=restraints.nonbonded_i_seqs,
+        nonbonded_vdw=restraints.nonbonded_vdw,
+        refcoord_i_seq=restraints.refcoord_i_seq,
+        refcoord_xyz=restraints.refcoord_xyz,
+        refcoord_weight=restraints.refcoord_weight,
+        bondsim_pair_i_seqs=restraints.bondsim_pair_i_seqs,
+        bondsim_offsets=restraints.bondsim_offsets,
+        bondsim_weight=restraints.bondsim_weight,
+        adp_pair_i_seqs=p_arr,
+        adp_pair_weight=w_arr,
+        adp_pair_tau=tau_arr,
+        adp_pair_class=cls_arr,
+        rigid_bond_i_seqs=r_arr,
+        rigid_bond_weight=rw_arr,
+        wilson_b=opts.wilson_b,
+        adp_nu=opts.nu,
+        adp_level_weight=opts.level_weight,
+        adp_is_aniso=aniso_flags.astype(np.uint8),
+        model_indices=restraints.model_indices,
+        conformer_indices=restraints.conformer_indices,
+    )
+
+
 def build_adp_restraints(
     hierarchy: Any,
     restraints: PackedRestraints,
@@ -524,65 +625,7 @@ def build_adp_restraints(
     r_arr = np.array(rigid_list, dtype=np.int32) if rigid_list else np.zeros((0, 2), dtype=np.int32)
     rw_arr = np.full(len(rigid_list), opts.w_hirshfeld, dtype=np.float64) if rigid_list else np.zeros(0, dtype=np.float64)
 
-    # Return new PackedRestraints with ADP prior arrays populated
-    return PackedRestraints(
-        n_sites=n_sites,
-        crystal=restraints.meta.crystal,
-        bond_i_seqs=restraints.bond_i_seqs,
-        bond_distance_ideal=restraints.bond_distance_ideal,
-        bond_weight=restraints.bond_weight,
-        bond_slack=restraints.bond_slack,
-        bond_origin_id=restraints.bond_origin_id,
-        bond_asu_i_seqs=restraints.bond_asu_i_seqs,
-        bond_asu_distance_ideal=restraints.bond_asu_distance_ideal,
-        bond_asu_weight=restraints.bond_asu_weight,
-        bond_asu_rt_mx=restraints.bond_asu_rt_mx,
-        angle_i_seqs=restraints.angle_i_seqs,
-        angle_ideal=restraints.angle_ideal,
-        angle_weight=restraints.angle_weight,
-        angle_origin_id=restraints.angle_origin_id,
-        dihedral_i_seqs=restraints.dihedral_i_seqs,
-        dihedral_angle_ideal=restraints.dihedral_angle_ideal,
-        dihedral_weight=restraints.dihedral_weight,
-        dihedral_periodicity=restraints.dihedral_periodicity,
-        dihedral_origin_id=restraints.dihedral_origin_id,
-        chirality_i_seqs=restraints.chirality_i_seqs,
-        chirality_volume_ideal=restraints.chirality_volume_ideal,
-        chirality_weight=restraints.chirality_weight,
-        chirality_both_signs=restraints.chirality_both_signs,
-        chirality_origin_id=restraints.chirality_origin_id,
-        planarity_i_seqs=restraints.planarity_i_seqs,
-        planarity_offsets=restraints.planarity_offsets,
-        planarity_weight=restraints.planarity_weight,
-        planarity_origin_id=restraints.planarity_origin_id,
-        parallelity_i_offsets=restraints.parallelity_i_offsets,
-        parallelity_i_seqs=restraints.parallelity_i_seqs,
-        parallelity_j_offsets=restraints.parallelity_j_offsets,
-        parallelity_j_seqs=restraints.parallelity_j_seqs,
-        parallelity_weight=restraints.parallelity_weight,
-        parallelity_target_angle=restraints.parallelity_target_angle,
-        parallelity_origin_id=restraints.parallelity_origin_id,
-        nonbonded_i_seqs=restraints.nonbonded_i_seqs,
-        nonbonded_vdw=restraints.nonbonded_vdw,
-        refcoord_i_seq=restraints.refcoord_i_seq,
-        refcoord_xyz=restraints.refcoord_xyz,
-        refcoord_weight=restraints.refcoord_weight,
-        bondsim_pair_i_seqs=restraints.bondsim_pair_i_seqs,
-        bondsim_offsets=restraints.bondsim_offsets,
-        bondsim_weight=restraints.bondsim_weight,
-        adp_pair_i_seqs=p_arr,
-        adp_pair_weight=w_arr,
-        adp_pair_tau=tau_arr,
-        adp_pair_class=cls_arr,
-        rigid_bond_i_seqs=r_arr,
-        rigid_bond_weight=rw_arr,
-        wilson_b=opts.wilson_b,
-        adp_nu=opts.nu,
-        adp_level_weight=opts.level_weight,
-        adp_is_aniso=aniso_flags.astype(np.uint8),
-        model_indices=restraints.model_indices,
-        conformer_indices=restraints.conformer_indices,
-    )
+    return _adp_packed(restraints, n_sites, opts, aniso_flags, p_arr, w_arr, tau_arr, cls_arr, r_arr, rw_arr)
 
 
 def fit_adp_hyperparameters(

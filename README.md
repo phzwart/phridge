@@ -1,10 +1,18 @@
 # phridge
 
-Bidirectional bridge between Phenix/cctbx and PyTorch via Redis. Redis is
-mandatory and the only shared store: blobs, per-runtime job streams
-(`phridge:jobs:torch` / `phridge:jobs:cctbx`), and a per-job ready list.
-Phenix never imports torch; the torch worker never imports cctbx; the
-CCTBX worker never imports torch.
+Torch-native crystallographic refinement. Parameters, the dependency graph,
+and the objective live in `phridge.core`. Optimizers, policies, and builders
+are slots around that object. The Redis bridge to a cctbx worker is
+`phridge.worker`.
+
+cctbx and iotbx are reached only through `phridge.shims` and `phridge.io`.
+
+```bash
+phridge validate examples/configs/intensity_mli.yaml
+phridge refine examples/configs/amplitude_ml.yaml --policy stock_macrocycle --out out
+phridge plugins list
+phridge graph examples/configs/intensity_mli.yaml --node mli_quad
+```
 
 More detail: [docs/README.md](docs/README.md) (including
 [Redis / `Bridge(memory=True)`](docs/redis.md)). The torch worker also
@@ -64,7 +72,7 @@ that and emit `ModelGeometry`. See [docs/types.md](docs/types.md).
 
 ```bash
 make venv                        # .venv with tests + cctbx-base
-pip install -e ".[dev]"          # same, into an existing venv
+pip install -e ".[dev]"          # same, into an existing venv; installs the phridge command
 pip install -e ".[cctbx]"        # pip cctbx-base only (not a Phenix bundle)
 pip install -e ".[worker]"       # torch worker
 ```
