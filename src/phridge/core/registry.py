@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, Optional
+from typing import Any, Literal, NamedTuple, Optional, Protocol, Sequence
 
 from phridge.contracts.manifest import Space
 
 TransformName = Literal["identity", "log", "logit"]
+
+
+class Packable(Protocol):
+    """Anything ``pack`` can read: a ``PackEntry`` or a resolved move-set entry."""
+
+    block_id: str
+    view_mask: Any
 
 
 class PackEntry(NamedTuple):
@@ -97,7 +104,7 @@ class Registry:
     def bump_epoch(self) -> None:
         self._epoch += 1
 
-    def pack(self, entries: list[PackEntry]) -> Packed:
+    def pack(self, entries: Sequence[Packable]) -> Packed:
         """Free blocks become one unconstrained vector. Frozen blocks are left out."""
         import torch
 
@@ -111,15 +118,16 @@ class Registry:
             block = self.block(entry.block_id)
             if block.frozen:
                 continue
+            used_bounds = _entry_bounds(entry, block)
             flat = _view(block.value, entry.view_mask)
-            transformed = _forward(block.transform, flat, block.bounds)
+            transformed = _forward(block.transform, flat, used_bounds)
             n = int(transformed.numel())
             slices[block.id] = slice(cursor, cursor + n)
             cursor += n
             pieces.append(transformed.reshape(-1))
             scale = float(getattr(entry, "scale", 1.0))
             scale_pieces.append(torch.full((n,), scale, dtype=transformed.dtype, device=transformed.device))
-            bounds[block.id] = block.bounds
+            bounds[block.id] = used_bounds
             transform_ops[block.id] = block.transform
         if pieces:
             vector = torch.cat(pieces)
@@ -129,7 +137,7 @@ class Registry:
             scales = torch.empty(0, dtype=torch.float64)
         return Packed(vector, slices, bounds, transform_ops, scales)
 
-    def unpack(self, packed_vector: Any, entries: list[PackEntry]) -> None:
+    def unpack(self, packed_vector: Any, entries: Sequence[Packable]) -> None:
         """Write the inverse transform back. Only touched blocks bump ``value_version``."""
         layout = _layout(self, entries)
         for entry in entries:
@@ -138,7 +146,7 @@ class Registry:
                 continue
             sl = layout[block.id]
             chunk = packed_vector[sl]
-            raw = _inverse(block.transform, chunk, block.bounds)
+            raw = _inverse(block.transform, chunk, _entry_bounds(entry, block))
             if entry.view_mask is None:
                 block.value = raw.reshape(block.shape).to(dtype=block.value.dtype)
             else:
@@ -148,7 +156,22 @@ class Registry:
             block.value_version += 1
 
 
-def _layout(registry: Registry, entries: list[PackEntry]) -> dict[str, slice]:
+def _entry_bounds(entry: Packable, block: Block) -> Optional[tuple[Any, Any]]:
+    import torch
+
+    override = getattr(entry, "bounds", None)
+    if override is None:
+        return block.bounds
+    lo, hi = override
+    if isinstance(lo, torch.Tensor):
+        return override
+    return (
+        torch.tensor(float(lo), dtype=block.value.dtype, device=block.value.device),
+        torch.tensor(float(hi), dtype=block.value.dtype, device=block.value.device),
+    )
+
+
+def _layout(registry: Registry, entries: Sequence[Packable]) -> dict[str, slice]:
     cursor = 0
     out: dict[str, slice] = {}
     for entry in entries:
