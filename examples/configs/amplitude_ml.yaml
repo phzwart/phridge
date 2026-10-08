@@ -1,0 +1,17 @@
+components:
+  - name: french_wilson
+    impl: phridge.core.local:french_wilson
+    reads: []
+    produces: [F]
+    space: D
+    slot: observation
+  - name: ml_f
+granularity: reflection
+partitions:
+  scheme: two
+  seed: 0
+  unit: reflection
+controller: lbfgs
+observed:
+  n: 4
+move_sets: []

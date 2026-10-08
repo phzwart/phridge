@@ -1,0 +1,20 @@
+components:
+  - name: distance_mask
+  - name: ten_eyck
+  - name: wilson_aniso
+  - name: sigma_a_beta
+  - name: nu_screen
+  - name: mli_quad
+  - name: statistics
+    plugin: s_family
+    reads: [partition.audit]
+granularity: reflection
+partitions:
+  scheme: four
+  seed: 1
+  unit: reflection
+controller: lbfgs
+observed:
+  n: 8
+  n_shell: 2
+move_sets: []
