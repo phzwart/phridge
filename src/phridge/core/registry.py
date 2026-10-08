@@ -148,12 +148,25 @@ class Registry:
             chunk = packed_vector[sl]
             raw = _inverse(block.transform, chunk, _entry_bounds(entry, block))
             if entry.view_mask is None:
-                block.value = raw.reshape(block.shape).to(dtype=block.value.dtype)
+                block.value = _keep_dtype(raw.reshape(block.shape), block.value.dtype)
             else:
-                updated = block.value.clone()
-                updated.reshape(-1)[entry.view_mask.reshape(-1)] = raw.to(dtype=updated.dtype)
+                updated = _scatter(block.value, entry.view_mask, raw)
                 block.value = updated
             block.value_version += 1
+
+
+def _keep_dtype(value: Any, dtype: Any) -> Any:
+    if value.dtype == dtype:
+        return value
+    return value.to(dtype=dtype)
+
+
+def _scatter(value: Any, mask: Any, raw: Any) -> Any:
+    import torch
+
+    flat = value.detach().reshape(-1).clone()
+    selected = _keep_dtype(raw.reshape(-1), flat.dtype)
+    return torch.where(mask.reshape(-1), selected, flat).reshape(value.shape)
 
 
 def _entry_bounds(entry: Packable, block: Block) -> Optional[tuple[Any, Any]]:

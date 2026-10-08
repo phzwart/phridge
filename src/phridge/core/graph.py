@@ -31,6 +31,7 @@ class Node:
     produces: tuple[str, ...] = ()
     provides: tuple[str, ...] = ()
     partitions_consulted: tuple[str, ...] = ()
+    adjoint: Optional[Callable[[Any], Any]] = None
 
 
 class Graph:
