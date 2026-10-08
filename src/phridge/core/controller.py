@@ -152,14 +152,30 @@ class Controller:
         self._proposed = True
         return self._land("propose", State.Ready)
 
-    def apply(self, block_id: str, new_shape: tuple[int, ...], new_value: Any) -> Observation:
-        """Reshape one block. Only after ``propose``. This is the structural event."""
+    def apply(self, block_id: Any, new_shape: tuple[int, ...] | None = None, new_value: Any = None) -> Observation:
+        """Reshape one block, or apply an ``RChange`` after ``propose``."""
+        from phridge.transforms.build.base import RChange
+
+        if isinstance(block_id, RChange):
+            return self._apply_change(block_id)
         if not self._proposed:
             raise ControllerRefused("apply", "apply only after a propose")
         self.registry.reshape(block_id, new_shape, new_value)
         if block_id in self.graph.nodes:
-            self.graph.structural_bump(block_id)
+            self.graph.structural_bump(str(block_id))
         self._proposed = False
+        return self._land("apply", State.Ready)
+
+    def _apply_change(self, change: Any) -> Observation:
+        if not self._proposed:
+            raise ControllerRefused("apply", "apply only after a propose")
+        _append_atoms(self.registry, change)
+        for key, value in change.reinit.items():
+            _write_block(self.registry, key, value)
+        self._proposed = False
+        for name in ("sites", "atoms"):
+            if name in self.graph.nodes:
+                self.graph.structural_bump(name)
         return self._land("apply", State.Ready)
 
     def replay(self, registry: Registry) -> None:
@@ -221,3 +237,31 @@ def _snapshot(registry: Registry) -> tuple[tuple[str, tuple[int, ...], tuple[flo
         flat = tuple(float(value) for value in block.value.detach().cpu().reshape(-1).tolist())
         rows.append((block.id, tuple(int(dim) for dim in block.shape), flat))
     return tuple(rows)
+
+
+def _append_atoms(registry: Registry, change: Any) -> None:
+    import torch
+
+    added = change.add
+    if added is None or added.sites_frac is None:
+        return
+    if "sites" not in getattr(registry, "_blocks", {}):
+        return
+    sites = registry.block("sites").value
+    extra = added.sites_frac if torch.is_tensor(added.sites_frac) else torch.tensor(added.sites_frac, dtype=sites.dtype)
+    merged = torch.cat([sites.detach(), extra.to(dtype=sites.dtype)], dim=0)
+    registry.reshape("sites", tuple(merged.shape), merged)
+
+
+def _write_block(registry: Registry, key: str, value: Any) -> None:
+    import torch
+
+    if key not in getattr(registry, "_blocks", {}):
+        return
+    block = registry.block(key)
+    tensor = value if torch.is_tensor(value) else torch.tensor(value, dtype=block.value.dtype)
+    tensor = tensor.to(dtype=block.value.dtype)
+    if tuple(tensor.shape) == tuple(block.shape):
+        registry.set_value(key, tensor)
+    else:
+        registry.reshape(key, tuple(tensor.shape), tensor)
