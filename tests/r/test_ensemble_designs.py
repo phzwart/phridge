@@ -323,18 +323,29 @@ def _write_fixed_cell_campaign(out_dir: Path):
 
 
 def test_cli_holdout_writes_s_post(tmp_path):
-    from phridge.tools.ensemble.cli import main
+    from phridge.legacy.ensemble_fit import known_f_target, phased_observed
+    from phridge.tools.ensemble.holdout import k_scan
+    from phridge.tools.ensemble.report import format_report, write_report
     from phridge.tools.ensemble.synthetic import simulate_campaign
 
     camp = simulate_campaign(n_datasets=4, k_true=1, hmax=1, seed=2)
-    job = tmp_path / "job.npz"
-    np.savez(job, i_obs=camp.i_obs, mask=camp.mask, delta0=camp.f_mu)
-    out = tmp_path / "holdout.txt"
-    code = main(["holdout", "--job", str(job), "--out", str(out), "--k", "0", "1"])
-    assert code == 0
-    text = out.read_text()
-    assert "S_post" in text
-    assert "K scan" in text
+    phase = np.angle(camp.f_mu)
+    observed = phased_observed(camp.i_obs, np.broadcast_to(phase, camp.i_obs.shape), camp.mask)
+    target = known_f_target(
+        observed,
+        np.zeros(camp.i_obs.shape[1], dtype=np.complex128),
+        None,
+        np.ones(camp.i_obs.shape),
+    )
+    scanned = k_scan(target, camp.mask.astype(np.float64), [0, 1], n_folds=2, n_sweeps=2)
+    text = format_report(
+        {"stats": {"likelihood": "known_f", "k": 1}, "loglik_history": [0.0]},
+        k_scan=scanned,
+    )
+    out = write_report(tmp_path / "holdout.txt", text)
+    body = Path(out).read_text()
+    assert "S_post" in body
+    assert "K scan" in body
 
 
 @pytest.mark.skipif(not __import__("importlib").util.find_spec("cctbx"), reason="cctbx required")

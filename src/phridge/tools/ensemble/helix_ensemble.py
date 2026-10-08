@@ -532,7 +532,7 @@ def fit_from_mean_model(
     E-step is at ``z = 0`` on that mean model; the sweeps then estimate
     ``Δ0``, the modes, and the scores.
     """
-    from phridge.legacy.ensemble_fit import em_fit
+    raise RuntimeError("ensemble EM fit stays in phridge.legacy until Plan I")
     from phridge.r.generators.perturbation_modes.gauge import principal_angles
     from phridge.tools.ensemble.synthetic import equal_count_shells
 

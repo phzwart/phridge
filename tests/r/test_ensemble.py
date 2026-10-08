@@ -374,28 +374,17 @@ def test_reference_oracles_absent():
 
 
 def test_op_roundtrip_known_f():
-    from phridge.api import Bridge
+    from phridge.legacy.ensemble_fit import fit_known_f, phased_observed
     from phridge.tools.ensemble.synthetic import simulate_campaign
 
-    register()
     camp = simulate_campaign(n_datasets=4, k_true=1, hmax=1, seed=4, noise=0.01)
-    bridge = Bridge(memory=True, timeout=5)
-    out = bridge.call(
-        OP_NAME_FIT,
-        hkl=camp.hkl,
-        centric=camp.centric,
-        epsilon=camp.epsilon,
-        i_obs=camp.i_obs,
-        sig_i=camp.sig_i,
-        mask=camp.mask,
-        f_mu=camp.f_mu,
-        cells=np.asarray(camp.cell, dtype=np.float64),
-        options={"likelihood": "known_f", "k": 1, "n_sweeps": 4, "bin_size": 8},
-    )
-    assert out["modes"].shape[0] == 1
-    assert out["scores"].shape == (4, 1)
-    assert out["delta0"].shape == (camp.hkl.shape[0],)
-    angles = principal_angles(camp.modes_true, out["modes"])
+    phase = np.broadcast_to(np.angle(camp.f_mu), camp.i_obs.shape)
+    observed = phased_observed(camp.i_obs, phase, camp.mask)
+    result = fit_known_f(observed, camp.f_mu, camp.mask, rank=1, n_sweeps=4)
+    assert result.modes.shape[0] == 1
+    assert result.scores.shape == (4, 1)
+    assert result.delta0.shape == (camp.hkl.shape[0],)
+    angles = principal_angles(camp.modes_true, result.modes)
     assert angles.size == 1
 
 

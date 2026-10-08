@@ -76,9 +76,7 @@ def prepare_ensemble_job(
     free_flags: Optional[np.ndarray] = None,
 ) -> EnsembleJob:
     """Reindex, build the common ASU set and ``F_mask``, then attach ensemble arrays."""
-    from phridge.legacy.multixtal.client import prepare_job
-    from phridge.legacy.multixtal.options import MultixtalOptions
-
+    raise RuntimeError("multi-crystal job preparation stays in phridge.legacy until Plan I")
     mx = MultixtalOptions(
         d_min=options.d_min,
         labels=options.labels,

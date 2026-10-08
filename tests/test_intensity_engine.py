@@ -11,7 +11,7 @@ from cctbx import crystal, miller, sgtbx, xray
 from cctbx.array_family import flex
 from cctbx.development import random_structure
 
-from phridge.tools.intensity import (
+from phridge.legacy.intensity_engine import (
     IntensityElectronDensityMap,
     IntensityFModel,
     IntensityGradients,

@@ -21,7 +21,6 @@ from phridge.tools.intensity.math_utils import (
     isotonic_non_increasing,
     tv_denoise_1d,
 )
-from phridge.legacy.intensity_refine import IntensityRefineMixin
 from phridge.contrib.intensity_ll import register
 from phridge.d.rules.mli_quad import log_likelihood_normal, log_likelihood_t, normalize
 from phridge.d.rules.mli_quad.target import IntensityLogLikelihood
@@ -29,7 +28,7 @@ from phridge.d.rules.amplitude import Observations
 from phridge.d.rules.amplitude.maximum_likelihood import MaximumLikelihoodAmplitude
 
 
-class IntensityModel(IntensityStepsMixin, IntensityRefineMixin, IntensityMapMixin):
+class IntensityModel(IntensityStepsMixin, IntensityMapMixin):
     """Drives intensity-based refinement, direct parameter estimation, and map generation.
 
     Parameters

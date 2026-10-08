@@ -30,7 +30,8 @@ from phridge.legacy.intensity_interleaved import (  # noqa: E402
     TargetMode,
     TorchOptimBlockRunner,
 )
-from phridge.contrib.intensity_ll import SURROGATE_FIT_OP_NAME, register_ops  # noqa: E402
+from phridge.contrib.intensity_ll import SURROGATE_FIT_OP_NAME  # noqa: E402
+from phridge.legacy.intensity_ll_ops import register_ops  # noqa: E402
 from phridge.d.maps import (  # noqa: E402
     posterior_moments,
     posterior_node_cache,

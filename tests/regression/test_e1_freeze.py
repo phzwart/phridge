@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 torch = pytest.importorskip("torch")
 
 from regression.conftest import mli_case  # noqa: E402

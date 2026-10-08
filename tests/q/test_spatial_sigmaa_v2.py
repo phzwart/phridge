@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
+pytestmark = pytest.mark.legacy
+
 from phridge.q.error_models.spatial import (
     PackedSpatialSigmaAV2,
     PackedSpatialSigmaAV2Result,

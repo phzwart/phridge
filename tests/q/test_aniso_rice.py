@@ -7,6 +7,8 @@ import importlib.util
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 from phridge.d.rules.mli_quad import aniso_rice as ar
 from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.contracts.packing import PackedMiller

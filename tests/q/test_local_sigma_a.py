@@ -9,6 +9,8 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
+pytestmark = pytest.mark.legacy
+
 from phridge.q.error_models import local_sigma_a as LSA
 from phridge.contracts.models import CrystalSymmetry, ObservationType
 from phridge.contracts.packing import PackedMiller

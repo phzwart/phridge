@@ -55,18 +55,6 @@ _PHENIX = {
 
 
 def __getattr__(name: str) -> Any:
-    if name in _ENGINE:
-        from phridge.legacy import intensity_engine as engine
-
-        return getattr(engine, name)
-    if name in _PHENIX:
-        from phridge.legacy import intensity_phenix_hook as hook
-
-        return getattr(hook, name)
-    if name in ("apply_omit", "from_files", "main", "parse_omit_selection", "run_intensity_pipeline"):
-        from phridge.legacy import intensity_cli as cli
-
-        return getattr(cli, name)
     if name == "IntensityModel":
         from phridge.tools.intensity.model import IntensityModel
 
@@ -75,10 +63,6 @@ def __getattr__(name: str) -> Any:
         from phridge.d.map_coefficients import IntensityMapMixin
 
         return IntensityMapMixin
-    if name == "IntensityRefineMixin":
-        from phridge.legacy.intensity_refine import IntensityRefineMixin
-
-        return IntensityRefineMixin
     if name in ("_fom_rice_woolfson", "golden_section_search_torch", "isotonic_non_increasing", "tv_denoise_1d"):
         from phridge.tools.intensity import math_utils
 

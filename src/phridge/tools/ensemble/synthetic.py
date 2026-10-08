@@ -248,14 +248,11 @@ def write_difference_maps(path: str, maps: CampaignDifferenceMaps) -> None:
 
 
 def campaign_with_engine(hmax: int = 1, n_atoms: int = 4) -> np.ndarray:
-    """Structure factors through ``multixtal.structure.f_calc_s_g``.
+    """Structure factors of a short carbon helix through the Ten Eyck engine."""
+    import torch
 
-    Requires the torch structure-factor engine. The scattering model is a
-    short helix of carbon scatterers, the same construction
-    ``multixtal.synthetic`` uses for its benchmark atoms.
-    """
-    from phridge.legacy.multixtal.structure import f_calc_s_g
-    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel
+    from phridge.transforms.fourier.ten_eyck.engine import ScatteringModel, StructureFactorEngine
+    from phridge.transforms.fourier.ten_eyck.grids import EngineParams
     from phridge.transforms.fourier.ten_eyck.symmetry import identity_ops
 
     sites = helix_sites(n_atoms)
@@ -278,5 +275,11 @@ def campaign_with_engine(hmax: int = 1, n_atoms: int = 4) -> np.ndarray:
         rot=rot,
         trans=trans,
     )
-    f_full, _s, _g = f_calc_s_g(model, hkl)
-    return np.asarray(f_full, dtype=np.complex128)
+    s2 = np.sum(np.asarray(hkl, dtype=np.float64) ** 2, axis=1)
+    d_min = float(1.0 / np.sqrt(float(np.max(s2)))) if s2.size and float(np.max(s2)) > 0.0 else 2.0
+    params = EngineParams(d_min=d_min)
+    eng = StructureFactorEngine(model, hkl, params, device="cpu")
+    sites_t, occ, u_iso, u_star, fp, fdp = eng.tensors()
+    with torch.no_grad():
+        f_full = eng.f_calc(sites_t, occ, u_iso, u_star, fp, fdp)
+    return f_full.detach().cpu().numpy().astype(np.complex128)

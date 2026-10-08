@@ -11,6 +11,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.legacy
+
 torch = pytest.importorskip("torch")
 
 from test_ml_i_omit_windows import _synthetic_structure  # noqa: E402

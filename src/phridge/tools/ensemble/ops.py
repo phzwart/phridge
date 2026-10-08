@@ -117,36 +117,14 @@ def _reference_f(
 ) -> np.ndarray:
     if f_mu is not None:
         return np.asarray(f_mu, dtype=np.complex128).reshape(-1)
-    if xray is None or sites_frac is None:
-        raise ValueError("ensemble_fit needs f_mu or an xray structure and sites_frac")
-    from phridge.legacy.multixtal.structure import f_calc_s_g, model_with_cell
-    from phridge.sfcalc.ops import _engine_params, scattering_model
-
-    model = scattering_model(xray, table)
-    sites = np.asarray(sites_frac, dtype=np.float64)
-    cell_rows = np.asarray(cells, dtype=np.float64) if cells is not None else None
-    if sites.ndim == 3:
-        # Per-dataset placement, matching run_multixtal_core. F_mu is dataset 0
-        # in that dataset's cell; the loop still evaluates every dataset so a
-        # later per-dataset phase can reuse the same engine path.
-        out = []
-        for d in range(sites.shape[0]):
-            cell = cell_rows[d] if cell_rows is not None else model.unit_cell
-            placed = model_with_cell(model, cell, sites[d])
-            f_full, _s, _g = f_calc_s_g(placed, hkl, params=_engine_params(params) if params is not None else None)
-            out.append(f_full)
-        return np.asarray(out[0], dtype=np.complex128)
-    cell = cell_rows[0] if cell_rows is not None and cell_rows.ndim == 2 else model.unit_cell
-    placed = model_with_cell(model, cell, sites)
-    f_full, _s, _g = f_calc_s_g(placed, hkl, params=_engine_params(params) if params is not None else None)
-    return np.asarray(f_full, dtype=np.complex128)
+    raise RuntimeError("structure-factor placement stays in phridge.legacy until Plan I")
 
 
 def _shell_index(hkl: np.ndarray, cells: Optional[np.ndarray], bin_size: int) -> np.ndarray:
     import torch
 
     from phridge.d.rules.mli_quad.rint import equal_count_shell_indices
-    from phridge.legacy.multixtal.structure import resolution_s2
+    from phridge.q.error_models.spatial.moments import resolution_s2
 
     cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)
     if cells is not None:
@@ -198,12 +176,10 @@ def _result_dict(result: Any, heldout: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ensemble_holdout(opts, i_obs_a, mask_a, role_a, f_mu_vec, f_var_a, shells, n_data, n_h):
-    from phridge.legacy.ensemble_fit import known_f_target, phased_observed
-    from phridge.tools.ensemble.holdout import crystal_folds, half_split, k_scan
-
     heldout: dict[str, Any] = {}
     if not (opts.holdout.enabled and opts.likelihood == "known_f"):
         return heldout
+    raise RuntimeError("ensemble hold-out stays in phridge.legacy until Plan I")
     phase = np.angle(f_mu_vec)
     f_obs = phased_observed(i_obs_a, np.broadcast_to(phase, (n_data, n_h)), mask_a)
     target = known_f_target(f_obs, f_mu_vec, f_var_a, np.ones((n_data, n_h)))
@@ -247,8 +223,6 @@ def ensemble_fit(
 ) -> dict[str, Any]:
     """Shared Δ0, modes, and per-dataset scores."""
     from phridge.tools.ensemble.cloud import latent_cloud
-    from phridge.legacy.ensemble_fit import em_fit, fit_known_f, phased_observed
-    from phridge.tools.ensemble.holdout import crystal_folds, half_split, k_scan
     from phridge.r.generators.perturbation_modes.mstep import expand_shells
     from phridge.tools.ensemble.options import EnsembleOptions
 
@@ -267,8 +241,7 @@ def ensemble_fit(
         f_mu_vec = f_mu_a.reshape(-1)
     f_var_a = np.zeros((n_data, n_h), dtype=np.complex128) if f_var is None else _np(f_var, np.complex128)
     if f_mask is not None and opts.likelihood == "intensity":
-        from phridge.legacy.multixtal.structure import apply_bulk_solvent, resolution_s2
-
+        raise RuntimeError("bulk-solvent placement stays in phridge.legacy until Plan I")
         cell = (30.0, 30.0, 40.0, 90.0, 90.0, 90.0)
         if cells is not None:
             rows = _np(cells, np.float64)
@@ -285,6 +258,7 @@ def ensemble_fit(
     shells = _shell_index(hkl_a, _np(cells) if cells is not None else None, opts.bin_size)
     role_a = None if roles is None else _np(roles, np.int8)
     if opts.likelihood == "known_f":
+        raise RuntimeError("known_f ensemble fit stays in phridge.legacy until Plan I")
         phase_src = f_mu_vec if f_phase is None else _np(f_phase, np.complex128)
         if np.asarray(phase_src).ndim == 1:
             phase = np.angle(phase_src)
@@ -304,6 +278,7 @@ def ensemble_fit(
             shell_index=shells,
         )
     else:
+        raise RuntimeError("intensity ensemble fit stays in phridge.legacy until Plan I")
         wilson = np.maximum(np.mean(np.where(mask_a, np.maximum(i_obs_a, 0.0), np.nan), axis=1), 1.0)
         hl_a = None if hl is None else _np(hl, np.complex128)
         weight = float(opts.phase_injection.hl_weight) if opts.phase_injection.enabled else 0.0
@@ -345,8 +320,7 @@ def ensemble_fit(
             projection=opts.projection.model_dump() if opts.projection.enabled else None,
         )
         if opts.direct:
-            from phridge.legacy.ensemble_fit import direct_fit
-
+            raise RuntimeError("direct ensemble fit stays in phridge.legacy until Plan I")
             result = direct_fit(
                 i_obs_a,
                 sig_a,
@@ -389,7 +363,7 @@ def ensemble_scores(
     roles: Optional[Any] = None,
 ) -> dict[str, Any]:
     """E-step and score update for one or more datasets with modes held fixed."""
-    from phridge.legacy.ensemble_fit import _e_step, _mu_field
+    raise RuntimeError("ensemble E-step stays in phridge.legacy until Plan I")
     from phridge.r.generators.perturbation_modes.mstep import expand_shells, solve_scores_torch, work_weights
     from phridge.tools.ensemble.options import EnsembleOptions
 

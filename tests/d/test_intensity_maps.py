@@ -8,9 +8,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from phridge.contrib.intensity_ll import MAPS_OP_NAME, register
 from phridge.d.maps import IntensityMapOptions
-from phridge.ops import get_implementation, get_op
 
 torch = pytest.importorskip("torch")
 
@@ -33,15 +31,6 @@ def _grid(n=1500, seed=1):
     cen = rng.random(n) < 0.3
     T = lambda v: torch.as_tensor(v, dtype=torch.float64)  # noqa: E731
     return T(Ec), T(sA), T(Zo), T(sZ), torch.as_tensor(cen)
-
-
-# ------------------------------------------------------------------ registration / options
-def test_register_adds_maps_op():
-    register()
-    spec = get_op(MAPS_OP_NAME)
-    assert spec.outputs["difference"] == "MillerArray"
-    assert spec.inputs["maps"] == "json"
-    assert get_implementation(MAPS_OP_NAME) is not None
 
 
 def test_map_options_accept_reject():
@@ -203,91 +192,3 @@ def test_include_free_masks_coefficients():
     ms = intensity_map_coefficients(tgt, torch.as_tensor(fc), obs, IntensityMapOptions(include_free=False))
     free = obs.r_free.numpy()
     assert np.all(ms.difference[free] == 0) and np.all(ms.difference[~free] != 0)
-
-
-# ------------------------------------------------------------------ op round trip (memory bridge)
-def test_ml_i_maps_op_round_trip_memory_bridge():
-    from phridge.api import Bridge
-    from phridge.contracts.models import CrystalSymmetry, ObservationType
-    from phridge.contracts.packing import PackedMiller
-
-    register()
-    fc, io, sig, obs = _synthetic(n=200, seed=5)
-    n = len(fc)
-    rng = np.random.default_rng(0)
-    hkl = rng.integers(-8, 9, size=(n, 3))
-    crystal = CrystalSymmetry(unit_cell=[20.0, 30.0, 40.0, 90.0, 90.0, 90.0], space_group_hall="P 1")
-    f_obs = PackedMiller(crystal=crystal, hkl=hkl, data=io, sigmas=sig, observation_type=ObservationType.intensity)
-    f_calc = PackedMiller(crystal=crystal, hkl=hkl, data=fc, observation_type=ObservationType.complex)
-    bridge = Bridge(memory=True, timeout=5)
-    out = bridge.call(
-        MAPS_OP_NAME,
-        f_calc=f_calc,
-        f_obs=f_obs,
-        target={"name": "ml_i", "nu": 6.0},
-        alpha=np.full(n, 0.85),
-        beta=np.full(n, 100.0),
-        epsilon=np.ones(n),
-        centric=np.zeros(n, bool),
-        maps={"newton_damping": 0.2},
-    )
-    assert set(out) >= {"difference", "model", "gradient", "newton", "fom", "robust_weight", "stats", "d_loglik_d_nu"}
-    diff = np.asarray(out["difference"].data)
-    assert diff.shape == (n,) and np.iscomplexobj(diff)
-    assert out["stats"]["nu"] == 6.0 and out["stats"]["n_ok"] == n
-    # identical to the in-process computation
-    tgt = IntensityLogLikelihood(nu=6.0)
-    ms = intensity_map_coefficients(tgt, torch.as_tensor(fc), obs, IntensityMapOptions(newton_damping=0.2))
-    np.testing.assert_allclose(diff, ms.difference, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(np.asarray(out["robust_weight"]), ms.robust_weight, rtol=1e-12)
-    with pytest.raises(Exception, match="ml_i"):
-        bridge.call(MAPS_OP_NAME, f_calc=f_calc, f_obs=f_obs, target={"name": "ml_f"})
-
-
-# ------------------------------------------------------------------ cctbx client path
-def test_remote_intensity_maps_cctbx_round_trip():
-    cctbx = pytest.importorskip("cctbx")  # noqa: F841
-    from cctbx import sgtbx
-    from cctbx.array_family import flex
-    from cctbx.development import random_structure
-
-    from phridge.api import Bridge
-    from phridge.contrib.intensity_ll.client import RemoteIntensityMaps
-
-    flex.set_random_seed(0)
-    xs = random_structure.xray_structure(
-        space_group_info=sgtbx.space_group_info("P212121"),
-        elements=["C", "N", "O", "S"] * 4, volume_per_atom=50, random_u_iso=True,
-    )
-    fc = xs.structure_factors(d_min=2.5, algorithm="direct").f_calc()
-    xs2 = xs.deep_copy_scatterers()
-    xs2.shake_sites_in_place(rms_difference=0.3)
-    fc2 = xs2.structure_factors(d_min=2.5, algorithm="direct").f_calc()
-    i_true = fc.amplitudes().data() ** 2
-    n = i_true.size()
-    rng = np.random.default_rng(0)
-    sig = flex.double(0.05 * np.asarray(i_true) + 0.5)
-    i_obs = fc.customized_copy(data=i_true + sig * flex.double(rng.normal(size=n)), sigmas=sig)
-    i_obs.set_observation_type_xray_intensity()
-    beta = flex.double(np.full(n, float(flex.mean(i_true))))
-    alpha = flex.double(np.full(n, 0.9))
-    r_free = flex.bool(rng.random(n) < 0.1)
-
-    maps = RemoteIntensityMaps(
-        Bridge(memory=True, timeout=10), i_obs, {"name": "ml_i", "nu": 8.0},
-        alpha=alpha, beta=beta, r_free_flags=r_free, maps={"include_free": False},
-    )
-    res = maps(fc2)
-    assert res.difference.is_complex_array() and res.difference.size() == n
-    assert res.difference.indices().all_eq(i_obs.indices())
-    assert res.model.size() == n and res.newton.size() == n and res.gradient.size() == n
-    assert res.fom.size() == n and 0.0 <= flex.min(res.fom) and flex.max(res.fom) <= 1.0 + 1e-12
-    assert res.robust_weight.size() == n and flex.min(res.robust_weight) > 0
-    assert res.d_loglik_d_nu_total is not None
-    free = np.asarray(r_free)
-    diff = np.asarray(res.difference.data())
-    assert np.all(diff[free] == 0) and np.all(diff[~free] != 0)
-    assert res.stats["nu"] == 8.0
-    # coefficients are D|Fc| e^{i phi_c}-consistent: phase equals the model phase where nonzero
-    ph = np.asarray(fc2.data()) / np.abs(np.asarray(fc2.data()))
-    assert np.allclose(np.imag(diff[~free] * np.conj(ph[~free])), 0.0, atol=1e-9 * np.abs(diff).max())

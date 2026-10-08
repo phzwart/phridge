@@ -23,14 +23,14 @@ from phridge.legacy.intensity_refine import IntensityRefineMixin
 def test_intensity_package_exports():
     """Verify clean exports and identity with backward-compat shim."""
     assert intensity.IntensityModel is IntensityModel
-    assert intensity.IntensityModel is intensity_tool.IntensityModel
+    assert issubclass(intensity_tool.IntensityModel, IntensityModel)
+    assert issubclass(intensity_tool.IntensityModel, IntensityRefineMixin)
     assert intensity.IntensityMapMixin is IntensityMapMixin
-    assert intensity.IntensityRefineMixin is IntensityRefineMixin
     assert intensity.tv_denoise_1d is tv_denoise_1d
     assert intensity.isotonic_non_increasing is isotonic_non_increasing
-    assert intensity.parse_omit_selection is parse_omit_selection
+    assert callable(parse_omit_selection)
     assert issubclass(IntensityModel, IntensityMapMixin)
-    assert issubclass(IntensityModel, IntensityRefineMixin)
+    assert not issubclass(IntensityModel, IntensityRefineMixin)
 
 
 def test_tv_denoise_1d():

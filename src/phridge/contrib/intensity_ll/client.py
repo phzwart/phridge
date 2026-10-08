@@ -23,8 +23,9 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.legacy.intensity_ll_ops import OP_NAME, register_ops
 from phridge.tools.intensity.omit_windows import OMIT_OP_NAME, OmitWindowStore
+
+MAPS_OP_NAME = "ml_i_maps"
 from phridge.sfcalc.client import RemoteTargetFunctor, _flex
 
 
@@ -115,7 +116,6 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
         maps: Optional[dict] = None,
         **kwargs: Any,
     ) -> None:
-        register_ops()
         if target_spec.get("name") != "ml_i":
             raise ValueError("RemoteIntensityMaps needs an ml_i target spec")
         super().__init__(bridge, f_obs, target_spec, **kwargs)
@@ -140,7 +140,7 @@ class RemoteIntensityMaps(RemoteTargetFunctor):
                 kw["d_spacings"] = np.asarray(self.f_obs.d_spacings().data(), dtype=np.float64)
             except Exception:
                 pass
-        raw = self.bridge.call(OP_NAME, f_calc=miller_from_cctbx(f_calc), **kw)
+        raw = self.bridge.call(MAPS_OP_NAME, f_calc=miller_from_cctbx(f_calc), **kw)
         return RemoteIntensityMapResult(raw)
 
 
@@ -156,7 +156,6 @@ class RemoteOmitWindowCoefficients:
         omit: Optional[dict] = None,
         **kwargs: Any,
     ) -> None:
-        register_ops()
         if target_spec.get("name") != "ml_i":
             raise ValueError("RemoteOmitWindowCoefficients needs an ml_i target spec")
         self.bridge = bridge
@@ -199,29 +198,3 @@ class RemoteOmitWindowCoefficients:
             window_ids=np.asarray(raw["window_ids"]),
             atom_to_window=np.asarray(raw["atom_to_window"]),
         )
-
-
-def __getattr__(name: str) -> Any:
-    if name in (
-        "IntensityFModel",
-        "IntensityFmodel",
-        "IntensityLikelihoodEngine",
-        "IntensityElectronDensityMap",
-        "IntensityGradients",
-    ):
-        from phridge.legacy.intensity_engine import (
-            IntensityElectronDensityMap,
-            IntensityFModel,
-            IntensityFmodel,
-            IntensityGradients,
-            IntensityLikelihoodEngine,
-        )
-
-        return {
-            "IntensityFModel": IntensityFModel,
-            "IntensityFmodel": IntensityFmodel,
-            "IntensityLikelihoodEngine": IntensityLikelihoodEngine,
-            "IntensityElectronDensityMap": IntensityElectronDensityMap,
-            "IntensityGradients": IntensityGradients,
-        }[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
