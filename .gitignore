@@ -12,6 +12,12 @@ dist/
 *.ccp4
 *.pdb
 *.mtz
+!examples/case_study/model.pdb
+!examples/case_study/data.mtz
+examples/case_study/structures/
+examples/case_study/**/cache/
+examples/case_study/**/*.npy
+examples/case_study/**/*.npz
 .DS_Store
 examples/lysozyme/1iee*
 *.patch

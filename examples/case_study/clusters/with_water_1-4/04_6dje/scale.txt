@@ -1,0 +1,8 @@
+id kind r_before r_after reference
+6dje amplitude 0.0000 0.0000 6dje
+6dim amplitude 0.1363 0.1204 6dje
+6djd amplitude 0.1900 0.1795 6dje
+6djh amplitude 1.5690 0.1549 6dje
+6mj5 french_wilson 1.7322 0.2793 6dje
+6myz french_wilson 1.5918 0.1235 6dje
+6n0o amplitude 0.2646 0.2123 6dje

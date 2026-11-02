@@ -1,0 +1,12 @@
+id kind r_before r_after reference
+1rgu amplitude 0.0000 0.0000 1rgu
+1mu7 amplitude 0.4188 0.3129 1rgu
+1mu9 amplitude 0.2374 0.2021 1rgu
+1nop amplitude 0.2812 0.2278 1rgu
+1rff amplitude 0.3466 0.1637 1rgu
+1rfi amplitude 0.2462 0.1833 1rgu
+1rg1 amplitude 0.1858 0.1493 1rgu
+1rg2 amplitude 0.2973 0.1097 1rgu
+1rgt amplitude 0.3506 0.1289 1rgu
+1rh0 amplitude 0.1942 0.1984 1rgu
+6n0n french_wilson 1.6921 0.4549 1rgu

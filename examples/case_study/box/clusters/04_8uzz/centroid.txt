@@ -1,0 +1,4 @@
+centroid 8uzz
+n 9
+distance_to_center 0.2517
+umap_center 0.5086 -0.5077

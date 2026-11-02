@@ -1,0 +1,6 @@
+centroid 1rgu
+n 11
+distance_to_center 0.0559
+umap_center 15.6123 4.2984
+phases PHWT of the centroid FWT map
+amplitudes FWT of each member

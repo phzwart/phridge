@@ -1,0 +1,17 @@
+id kind r_before r_after reference
+6dji amplitude 0.0000 0.0000 6dji
+6dhu french_wilson 1.8239 0.2019 6dji
+6die amplitude 0.3044 0.3244 6dji
+6dih amplitude 0.1885 0.1636 6dji
+6djf amplitude 0.2491 0.2315 6dji
+6djg amplitude 0.3165 0.2906 6dji
+6djj amplitude 0.2729 0.2654 6dji
+6mz0 amplitude 0.3370 0.4205 6dji
+6n0d french_wilson 1.7831 0.2412 6dji
+6n0r amplitude 0.2602 0.2579 6dji
+6n17 french_wilson 1.8945 0.1385 6dji
+6n19 french_wilson 1.8051 0.3060 6dji
+6w7k amplitude 0.2382 0.2467 6dji
+7ufy amplitude 0.3778 0.4167 6dji
+8v0b french_wilson 1.9399 0.3693 6dji
+9b3b amplitude 0.3366 0.3468 6dji

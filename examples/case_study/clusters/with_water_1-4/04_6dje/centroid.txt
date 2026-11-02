@@ -1,0 +1,6 @@
+centroid 6dje
+n 7
+distance_to_center 0.1353
+umap_center 5.1576 -6.6998
+phases PHWT of the centroid FWT map
+amplitudes FWT of each member

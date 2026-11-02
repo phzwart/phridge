@@ -1,0 +1,11 @@
+id kind r_before r_after reference
+7ufz amplitude 0.0000 0.0000 7ufz
+6w4r amplitude 0.2919 0.2945 7ufz
+6w7j amplitude 0.2203 0.2026 7ufz
+6w7l amplitude 0.4282 0.2582 7ufz
+8cvq amplitude 0.2008 0.1951 7ufz
+8cw2 amplitude 0.3001 0.3159 7ufz
+8uv1 amplitude 0.2815 0.3122 7ufz
+8uzv french_wilson 1.9491 0.1959 7ufz
+8uzz amplitude 0.2189 0.2131 7ufz
+8v0c french_wilson 1.9158 0.1941 7ufz

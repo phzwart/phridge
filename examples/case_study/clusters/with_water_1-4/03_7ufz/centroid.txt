@@ -1,0 +1,6 @@
+centroid 7ufz
+n 10
+distance_to_center 0.2279
+umap_center 12.7365 0.7958
+phases PHWT of the centroid FWT map
+amplitudes FWT of each member

@@ -73,10 +73,25 @@ def _compile_flags() -> tuple[list[str], list[str]]:
     return ["-O3", "-std=c++17", "-march=native"], []
 
 
+def _ensure_ninja_on_path() -> None:
+    """``cpp_extension.load`` finds ``ninja`` on ``PATH``, not beside this interpreter."""
+    import os
+    import shutil
+    import sys
+
+    if shutil.which("ninja"):
+        return
+    bindir = os.path.dirname(os.path.realpath(sys.executable))
+    candidate = os.path.join(bindir, "ninja")
+    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+        os.environ["PATH"] = bindir + os.pathsep + os.environ.get("PATH", "")
+
+
 def _module():
     global _MOD
     if _MOD is not None:
         return _MOD
+    _ensure_ninja_on_path()
     from torch.utils.cpp_extension import load
 
     here = Path(__file__).resolve().parent

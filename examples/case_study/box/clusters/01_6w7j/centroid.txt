@@ -1,0 +1,4 @@
+centroid 6w7j
+n 13
+distance_to_center 0.2852
+umap_center 2.3603 -2.1994

@@ -13,7 +13,12 @@ from typing import Any, Optional
 
 import numpy as np
 
-from phridge.transforms.fourier.ten_eyck.stamp_cpp import _frac_scale, _pack, _reduce_expanded
+from phridge.transforms.fourier.ten_eyck.stamp_cpp import (
+    _ensure_ninja_on_path,
+    _frac_scale,
+    _pack,
+    _reduce_expanded,
+)
 
 _CUDA_OK: bool | None = None
 _MOD = None
@@ -48,6 +53,7 @@ def _module():
     global _MOD
     if _MOD is not None:
         return _MOD
+    _ensure_ninja_on_path()
     from torch.utils.cpp_extension import load
 
     here = Path(__file__).resolve().parent
